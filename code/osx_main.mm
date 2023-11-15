@@ -1,14 +1,6 @@
 #include <stdio.h>
 
-// #include <AppKit/AppKit.h>
-
-#define NS_PRIVATE_IMPLEMENTATION
-#define CA_PRIVATE_IMPLEMENTATION
-#define MTL_PRIVATE_IMPLEMENTATION
-
-#include <Foundation/Foundation.hpp>
-#include <Metal/Metal.hpp>
-#include <QuartzCore/QuartzCore.hpp>
+#import <Metal/Metal.h>
 
 #include "utils.h"
 
@@ -18,9 +10,9 @@ global_variable b32 global_running = true;
 
 global_variable i32 arrayLength = 32;
 
-void generateRandomData(MTL::Buffer *buffer)
+void generateRandomData(id<MTLBuffer> buffer)
 {
-  r32 *data = (r32 *)buffer->contents();
+  r32 *data = (r32 *)buffer.contents;
   for (i32 i=0; i < arrayLength; i++)
   {
     data[i] = (r32)rand() / (r32)RAND_MAX;
@@ -29,46 +21,47 @@ void generateRandomData(MTL::Buffer *buffer)
 
 int main(int argc, const char *argv[])
 {
-  MTL::Device *device = MTL::CreateSystemDefaultDevice();
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
 
-  MTL::Library *defaultLibrary = device->newDefaultLibrary();
-  assert(defaultLibrary);
+  id<MTLLibrary> defaultLibrary = [device newDefaultLibrary];
+  assert(defaultLibrary != nil);
 
-  MTL::Function *addFunction = defaultLibrary->newFunction((const NS::String *)@"add_arrays");
-  assert(addFunction);
+  id<MTLFunction> addFunction = [defaultLibrary newFunctionWithName:@"add_arrays"];
+  assert(addFunction != nil);
 
-  NS::Error* error = nil;
-  MTL::ComputePipelineState *addFunctionPSO = device->newComputePipelineState(addFunction, &error);
-  MTL::CommandQueue *commandQueue = device->newCommandQueue();
+  NSError *error = nil;
+  id<MTLComputePipelineState> addFunctionPSO = [device newComputePipelineStateWithFunction:addFunction error:&error];
+  id<MTLCommandQueue> commandQueue = [device newCommandQueue];
+   
 
-  MTL::Buffer *bufferA = device->newBuffer(arrayLength, MTL::ResourceStorageModeShared);
-  MTL::Buffer *bufferB = device->newBuffer(arrayLength, MTL::ResourceStorageModeShared);
-  MTL::Buffer *bufferResult = device->newBuffer(arrayLength, MTL::ResourceStorageModeShared);
+  id<MTLBuffer> bufferA = [device newBufferWithLength:arrayLength options:MTLResourceStorageModeShared];
+  id<MTLBuffer> bufferB = [device newBufferWithLength:arrayLength options:MTLResourceStorageModeShared];
+  id<MTLBuffer> bufferC = [device newBufferWithLength:arrayLength options:MTLResourceStorageModeShared];
 
   generateRandomData(bufferA);
   generateRandomData(bufferB);
 
-  MTL::CommandBuffer *commandBuffer = commandQueue->commandBuffer();
-  MTL::ComputeCommandEncoder *computeEncoder = commandBuffer->computeCommandEncoder();
-  computeEncoder->setComputePipelineState(addFunctionPSO);
-  computeEncoder->setBuffer(bufferA,0,0);
-  computeEncoder->setBuffer(bufferB,0,1);
-  computeEncoder->setBuffer(bufferResult,0,2);
+  id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+  id<MTLComputeCommandEncoder> computeEncoder = [commandBuffer computeCommandEncoder];
+  [computeEncoder setComputePipelineState:addFunctionPSO];
+  [computeEncoder setBuffer:bufferA offset:0 atIndex:0];
+  [computeEncoder setBuffer:bufferB offset:0 atIndex:1];
+  [computeEncoder setBuffer:bufferC offset:0 atIndex:2];
 
-  MTL::Size    gridSize         = MTL::Size::Make(arrayLength, 1, 1);
-  NS::UInteger threadGroupSize_ = minimum(addFunctionPSO->maxTotalThreadsPerThreadgroup(), arrayLength);
-  MTL::Size    threadgroupSize  = MTL::Size::Make(threadGroupSize_, 1, 1);
+  MTLSize    gridSize         = MTLSizeMake(arrayLength, 1, 1);
+  NSUInteger threadGroupSize_ = minimum(addFunctionPSO.maxTotalThreadsPerThreadgroup, arrayLength);
+  MTLSize    threadgroupSize  = MTLSizeMake(threadGroupSize_, 1, 1);
 
-  computeEncoder->dispatchThreads(gridSize, threadgroupSize);
-  computeEncoder->endEncoding();
+  [computeEncoder dispatchThreads:gridSize threadsPerThreadgroup:threadgroupSize];
+  [computeEncoder endEncoding];
 
-  commandBuffer->commit();
-  commandBuffer->waitUntilCompleted();
+  [commandBuffer commit];
+  [commandBuffer waitUntilCompleted];
 
   {
-    r32 *a = (r32 *)bufferA->contents();
-    r32 *b = (r32 *)bufferB->contents();
-    r32 *result = (r32 *)bufferResult->contents();
+    r32 *a = (r32 *)bufferA.contents;
+    r32 *b = (r32 *)bufferB.contents;
+    r32 *result = (r32 *)bufferC.contents;
 
     for (i32 index=0; index < arrayLength; index++)
     {
@@ -82,5 +75,5 @@ int main(int argc, const char *argv[])
     printf("Compute results as expected\n");
   }
 
-  printf("autodraw finished!\n");
+  printf("objective-c autodraw finished!\n");
 }
