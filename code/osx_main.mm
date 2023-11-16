@@ -1,78 +1,131 @@
-#include <stdio.h>
-
+#import <stdio.h>
 #import <Metal/Metal.h>
-
-#include "utils.h"
+#import <Cocoa/Cocoa.h>
+#import <AppKit/AppKit.h>
+#import <MetalKit/MetalKit.h>
+#import "utils.h"
 
 global_variable r32 global_rendering_width = 1024;
 global_variable r32 global_rendering_height = 768;
 global_variable b32 global_running = true;
 
-global_variable i32 arrayLength = 32;
+@interface AutoRenderer : NSObject<MTKViewDelegate>
 
-void generateRandomData(id<MTLBuffer> buffer)
+- (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView;
+
+@end
+
+@implementation AutoRenderer
 {
-  r32 *data = (r32 *)buffer.contents;
-  for (i32 i=0; i < arrayLength; i++)
+  id<MTLDevice> _device;
+  id<MTLCommandQueue> _commandQueue;
+}
+
+- (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
+{
+  self = [super init];
+  if (self)
   {
-    data[i] = (r32)rand() / (r32)RAND_MAX;
+    _device = mtkView.device;
+    _commandQueue = [_device newCommandQueue];
+  }
+  return self;
+}
+
+- (void)drawInMTKView:(nonnull MTKView *)view
+{
+  MTLRenderPassDescriptor *renderPassDescriptor = view.currentRenderPassDescriptor;
+  if (renderPassDescriptor)
+  {
+    id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
+    id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+    [commandEncoder endEncoding];
+    [commandBuffer presentDrawable:view.currentDrawable];
+    [commandBuffer commit];
   }
 }
 
+- (void)mtkView:(nonnull MTKView*)view drawableSizeWillChange:(CGSize)size
+{
+}
+
+@end
+
+@interface AutoViewController : NSViewController
+@end
+@implementation AutoViewController
+{
+  MTKView *_view;
+  AutoRenderer *_renderer;
+}
+
+- (void)viewDidLoad
+{
+  NSRect screen_rect = NSMakeRect(0,0,global_rendering_width,global_rendering_height);
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  _view = [[MTKView alloc] initWithFrame:screen_rect device:device];
+  self.view = _view;
+
+  _view.enableSetNeedsDisplay = YES;
+  _view.clearColor = MTLClearColorMake(0.0, .5, 1.0, 1.0);
+  _renderer = [[AutoRenderer alloc] initWithMetalKitView:_view];
+  if (_renderer)
+  {
+    [_renderer mtkView:_view drawableSizeWillChange:_view.drawableSize];
+    _view.delegate = _renderer;
+  }
+  else
+  {
+    NSLog(@"Renderer initialization failed");
+    return;
+  }
+}
+@end
+
+@interface WindowDelegate: NSObject<NSWindowDelegate>
+@end
+
+@implementation WindowDelegate
+- (void)windowWillClose: (NSNotification *)notification
+{
+  global_running = false;
+}
+@end
+
 int main(int argc, const char *argv[])
 {
-  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  NSRect screen_rect = [[NSScreen mainScreen] frame];
+  NSRect content_rect = NSMakeRect((screen_rect.size.width - global_rendering_width) * .5,
+                                   (screen_rect.size.height - global_rendering_height) * .5,
+                                   global_rendering_width,
+                                   global_rendering_height);
 
-  id<MTLLibrary> defaultLibrary = [device newDefaultLibrary];
-  assert(defaultLibrary != nil);
+  NSWindow *window = [[NSWindow alloc]
+                     initWithContentRect: content_rect
+                     styleMask: (NSWindowStyleMaskTitled |
+                                 NSWindowStyleMaskClosable |
+                                 NSWindowStyleMaskMiniaturizable |
+                                 NSWindowStyleMaskResizable) 
+                     backing: NSBackingStoreBuffered
+                     defer: NO];
+  [window setTitle: @"AutoDraw"];
+  [window makeKeyAndOrderFront: nil];
+  [window setDelegate:[[WindowDelegate alloc] init]];
+  window.contentViewController = [[AutoViewController alloc] init];
 
-  id<MTLFunction> addFunction = [defaultLibrary newFunctionWithName:@"add_arrays"];
-  assert(addFunction != nil);
-
-  NSError *error = nil;
-  id<MTLComputePipelineState> addFunctionPSO = [device newComputePipelineStateWithFunction:addFunction error:&error];
-  id<MTLCommandQueue> commandQueue = [device newCommandQueue];
-   
-
-  id<MTLBuffer> bufferA = [device newBufferWithLength:arrayLength options:MTLResourceStorageModeShared];
-  id<MTLBuffer> bufferB = [device newBufferWithLength:arrayLength options:MTLResourceStorageModeShared];
-  id<MTLBuffer> bufferC = [device newBufferWithLength:arrayLength options:MTLResourceStorageModeShared];
-
-  generateRandomData(bufferA);
-  generateRandomData(bufferB);
-
-  id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-  id<MTLComputeCommandEncoder> computeEncoder = [commandBuffer computeCommandEncoder];
-  [computeEncoder setComputePipelineState:addFunctionPSO];
-  [computeEncoder setBuffer:bufferA offset:0 atIndex:0];
-  [computeEncoder setBuffer:bufferB offset:0 atIndex:1];
-  [computeEncoder setBuffer:bufferC offset:0 atIndex:2];
-
-  MTLSize    gridSize         = MTLSizeMake(arrayLength, 1, 1);
-  NSUInteger threadGroupSize_ = minimum(addFunctionPSO.maxTotalThreadsPerThreadgroup, arrayLength);
-  MTLSize    threadgroupSize  = MTLSizeMake(threadGroupSize_, 1, 1);
-
-  [computeEncoder dispatchThreads:gridSize threadsPerThreadgroup:threadgroupSize];
-  [computeEncoder endEncoding];
-
-  [commandBuffer commit];
-  [commandBuffer waitUntilCompleted];
-
+  while (global_running)
   {
-    r32 *a = (r32 *)bufferA.contents;
-    r32 *b = (r32 *)bufferB.contents;
-    r32 *result = (r32 *)bufferC.contents;
-
-    for (i32 index=0; index < arrayLength; index++)
+    NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                      untilDate: nil
+                      inMode: NSDefaultRunLoopMode
+                      dequeue: YES];
+    switch ([event type])
     {
-      if (result[index] != (a[index] + b[index]))
+      default:
       {
-        printf("Compute ERROR: index=%d result=%g vs %g=a+b\n",
-               index, result[index], a[index] + b[index]);
-        assert(result[index] == (a[index] + b[index]));
+        [NSApp sendEvent: event];
       }
     }
-    printf("Compute results as expected\n");
   }
 
   printf("objective-c autodraw finished!\n");

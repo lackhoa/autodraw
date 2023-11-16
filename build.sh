@@ -19,7 +19,7 @@ xcrun -sdk macosx metal -o "add.ir" -c "../code/add.metal" || exit 1
 xcrun -sdk macosx metallib -o "default.metallib" "add.ir" || exit 1
 
 # Link
-LinkedLibs="-framework Metal -framework QuartzCore -framework Foundation"
+LinkedLibs="-framework cocoa -framework Metal -framework MetalKit -framework QuartzCore -framework Foundation"
 clang "autodraw.o" -o "autodraw" -lstdc++ $CommonCompilerFlags $LinkedLibs || exit 1
 
 popd
