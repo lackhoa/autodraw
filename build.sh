@@ -1,9 +1,10 @@
 #!/bin/bash
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd $HERE
+set -e
 
-mkdir build 2> /dev/null
-pushd build
+mkdir -p build 2> /dev/null
+cd build
 
 # Optimization="-Ofast -march=native"
 Optimization=-O0
@@ -13,13 +14,13 @@ Includes="-I '../libs'"
 CommonCompilerFlags="-g -mavx2 -std=gnu++20 $Optimization $Constants $Warnings $Includes"
 
 # Compile
-clang -c "../code/osx-main.mm" -o "autodraw.o" $CommonCompilerFlags $Includes || exit 1
+clang -c "../code/osx-main.mm" -o "autodraw.o" $CommonCompilerFlags $Includes
 
 # Link
 LinkedLibs=""
-Frameworks="-framework Metal -framework MetalKit -framework cocoa"
-clang "autodraw.o" -o "autodraw" -lstdc++ $LinkedLibs $Frameworks || exit 1
-
-popd
+Frameworks="-framework Metal -framework Cocoa -framework QuartzCore"
+clang "autodraw.o" -o "autodraw" -lstdc++ $LinkedLibs $Frameworks
 
 echo build complete!
+
+./autodraw

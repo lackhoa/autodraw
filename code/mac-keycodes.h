@@ -1,3 +1,6 @@
+// Apple doesn't provide the keycodes: this is the dumbest thing
+// https://boredzo.org/blog/archives/2007-05-22/virtual-key-codes
+
 #define KEY_A 0
 #define KEY_S 1
 #define KEY_D 2
