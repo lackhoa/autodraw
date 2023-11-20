@@ -1,24 +1,30 @@
+#import <metal_stdlib>
+
+using namespace metal;
+
 struct VertexInput
 {
   float2 position [[attribute(0)]];
-  float4 color    [[attribute(1)]];
+  float2 uv       [[attribute(1)]];
 };
 
-struct ShaderInOut
+struct ShaderOutput
 {
   float4 position [[position]];
-  float4 color;
+  float2 uv;
 };
 
-vertex ShaderInOut vert(VertexInput in [[stage_in]])
+vertex ShaderOutput vert(VertexInput in [[stage_in]])
 {
-  ShaderInOut out;
+  ShaderOutput out;
   out.position = float4(in.position, 0.0, 1.f);
-  out.color    = in.color;
+  out.uv       = in.uv;
   return out;
 }
 
-fragment float4 frag(ShaderInOut in [[stage_in]])
+fragment float4 frag(ShaderOutput in [[stage_in]],
+                     texture2d<float> colorTexture [[texture(0)]],
+                     sampler sam [[sampler(0)]])
 {
-  return in.color;
+  return colorTexture.sample(sam, in.uv);
 }

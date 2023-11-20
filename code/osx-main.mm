@@ -1,14 +1,16 @@
 #import <stdio.h>
-
 #import <Metal/Metal.h>
 #import <Cocoa/Cocoa.h>
-#include <QuartzCore/CAMetalLayer.h>
+#import <QuartzCore/CAMetalLayer.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #import "utils.h"
 #import "mac-keycodes.h"
 
-global_variable r32 global_rendering_width = 1024;
-global_variable r32 global_rendering_height = 768;
+global_variable f32 global_rendering_width = 1024;
+global_variable f32 global_rendering_height = 768;
 
 //
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
@@ -90,28 +92,62 @@ int main(int argc, const char *argv[])
   id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
   [mtl_library release];
 
-  float vertex_data[] = {     // x, y, r, g, b, a
-    0.5f, -0.5f, 1.f, 0.f, 0.f, 1.f,
-    0.f, 0.5f, 0.f, 1.f, 0.f, 1.f,
-    -0.5f, -0.5f, 0.f, 0.f, 1.f, 1.f,
+  f32 vertex_data[] = { // x, y, u, v
+    -0.5f,  0.5f, 0.f, 0.f,
+    -0.5f, -0.5f, 0.f, 1.f,
+    0.5f, -0.5f, 1.f, 1.f,
+    -0.5f,  0.5f, 0.f, 0.f,
+    0.5f, -0.5f, 1.f, 1.f,
+    0.5f,  0.5f, 1.f, 0.f
   };
 
   // "Private" crashes the machine
   id<MTLBuffer> vertex_buffer = [mtl_device newBufferWithBytes:vertex_data length:sizeof(vertex_data)
                                  options:MTLResourceStorageModeShared];
 
-  MTLVertexDescriptor *vertex_descriptor = [MTLVertexDescriptor new];
+  // load image
+  i32 tex_width, tex_height, tex_num_channels;
+  i32 tex_force_num_channels = 4;
+  u8 *image = stbi_load("../resources/testTexture.png", &tex_width, &tex_height,
+                        &tex_num_channels, tex_force_num_channels);
+  i32 tex_bytes_per_row = 4 * tex_width;
+
+  // create texture
+  MTLTextureDescriptor *texture_descriptor =
+    [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+     width:tex_width
+     height:tex_height
+     mipmapped:NO];
+  auto mtl_texture = [mtl_device newTextureWithDescriptor:texture_descriptor];
+  [texture_descriptor release];
+
+  // copy image to texture
+  [mtl_texture replaceRegion:MTLRegionMake2D(0,0,tex_width,tex_height)
+   mipmapLevel:0
+   withBytes:image
+   bytesPerRow:tex_bytes_per_row];
+
+  stbi_image_free(image);
+
+  // create sampler state
+  auto sampler_desc = [MTLSamplerDescriptor new];
+  sampler_desc.minFilter = MTLSamplerMinMagFilterLinear;
+  sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+  auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
+  [sampler_desc release];
+
+  auto vertex_descriptor = [MTLVertexDescriptor new];
   {
     auto v = vertex_descriptor;
     v.attributes[0].format      = MTLVertexFormatFloat2;
     v.attributes[0].offset      = 0;
     v.attributes[0].bufferIndex = 0;
 
-    v.attributes[1].format      = MTLVertexFormatFloat4;
+    v.attributes[1].format      = MTLVertexFormatFloat2;
     v.attributes[1].offset      = 2 * sizeof(float);
     v.attributes[1].bufferIndex = 0;
 
-    v.layouts[0].stride       = 6 * sizeof(float);
+    v.layouts[0].stride       = 4 * sizeof(float);
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
   }
@@ -185,7 +221,9 @@ int main(int argc, const char *argv[])
       [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
       [render_command_encoder setRenderPipelineState:render_pipeline_state];
       [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
-      [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+      [render_command_encoder setFragmentTexture:mtl_texture atIndex:0];
+      [render_command_encoder setFragmentSamplerState:sampler_state atIndex:0];
+      [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
       [render_command_encoder endEncoding];
 
       [command_buffer presentDrawable:ca_metal_drawable];

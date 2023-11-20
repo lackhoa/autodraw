@@ -10,7 +10,7 @@ cd build
 Optimization=-O0
 Constants="-DReaMac -DREA_INTERNAL=1 -DREA_DIAGNOSTICS=1"
 Warnings="-Wall -Wunused-parameter -Wimplicit-int-float-conversion -Wno-unused-function -Wno-missing-braces -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-variable -Wno-switch -Wno-writable-strings -Wno-c++17-extensions -Wno-pointer-to-int-cast -Wno-tautological-constant-out-of-range-compare -Wno-reorder-init-list -Wno-macro-redefined -Wno-deprecated-declarations"
-Includes="-I '../libs'"
+Includes="-I ../libs"
 CommonCompilerFlags="-g -mavx2 -std=gnu++20 $Optimization $Constants $Warnings $Includes"
 
 # Turn on Metal API Validation. Great for catching API misuse, remove for Release build

@@ -43,13 +43,14 @@ void * bufGrow_(void *buffer, size_t new_len, size_t item_size);
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef int32_t  i32;
+typedef long     i64;
 typedef int8_t   b8;
 typedef int32_t  b32;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
 typedef float    r32;
-typedef long     i64;
+typedef float    f32;  // todo Not sure why we don't just use this?
 
 #define kiloBytes(value) ((value)*1024LL)
 #define megaBytes(value) (kiloBytes(value)*1024LL)
