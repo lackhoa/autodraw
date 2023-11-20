@@ -1,4 +1,4 @@
-#if !defined(INTRINSICS_H)
+#pragma once
 
 #include "utils.h"
 #include <string.h>
@@ -20,6 +20,3 @@ absoluteValue(i32 in)
 {
     return ((in >= 0) ? in : -in);
 }
-
-#define INTRINSICS_H
-#endif

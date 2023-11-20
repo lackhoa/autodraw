@@ -13,8 +13,15 @@ Warnings="-Wall -Wunused-parameter -Wimplicit-int-float-conversion -Wno-unused-f
 Includes="-I '../libs'"
 CommonCompilerFlags="-g -mavx2 -std=gnu++20 $Optimization $Constants $Warnings $Includes"
 
+# Turn on Metal API Validation. Great for catching API misuse, remove for Release build
+METAL_DEVICE_WRAPPER_TYPE=1
+
 # Compile
 clang -c "../code/osx-main.mm" -o "autodraw.o" $CommonCompilerFlags $Includes
+
+# Metal
+xcrun -sdk macosx metal -c ../code/shaders.metal -o shaders.air
+xcrun -sdk macosx metallib shaders.air -o shaders.metallib
 
 # Link
 LinkedLibs=""
