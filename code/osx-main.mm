@@ -3,16 +3,14 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#import "utils.h"
+#import "kv_utils.h"
+#import "kv_math.h"
 #import "mac-keycodes.h"
+#import "shader-interface.h"
 
-global_variable f32 global_rendering_width = 1024;
-global_variable f32 global_rendering_height = 768;
+global_variable f32 global_rendering_width = 1920;
+global_variable f32 global_rendering_height = 1080;
 
-//
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
 
@@ -37,6 +35,36 @@ global_variable f32 global_rendering_height = 768;
 @end
 
 ///////////////////////////////////////////////////////////////////////
+
+u8 *allocateVirtualMemory(size_t size)
+{
+    u8 *data = 0;
+ 
+    assert(size != 0);
+    assert((size % 4096) == 0);  // VM page alignment (we should align automatically)
+ 
+    // Allocate directly from VM
+    kern_return_t err = vm_allocate((vm_map_t) mach_task_self(),
+                                    (vm_address_t*) &data,
+                                    size,
+                                    VM_FLAGS_ANYWHERE);
+    assert(err == KERN_SUCCESS);
+ 
+    return data;
+}
+
+void pushRect(Arena *arena, f32 min_x, f32 min_y, f32 width, f32 height, i32 type)
+{
+  VertexInput *rect = (VertexInput *) pushSize(arena, (6)*sizeof(VertexInput));
+  f32 max_x = min_x + width;
+  f32 max_y = min_y + height;
+  rect[0] = {{min_x, max_y}, type};
+  rect[1] = {{min_x, min_y}, type};
+  rect[2] = {{max_x, min_y}, type};
+  rect[3] = {{min_x, max_y}, type};
+  rect[4] = {{max_x, min_y}, type};
+  rect[5] = {{max_x, max_y}, type};
+}
 
 int main(int argc, const char *argv[])
 {
@@ -63,7 +91,7 @@ int main(int argc, const char *argv[])
                            backing: NSBackingStoreBuffered
                            defer: NO];
   main_window.backgroundColor = NSColor.purpleColor;
-  main_window.contentAspectRatio = NSMakeSize(4,3);
+  // main_window.contentAspectRatio = NSMakeSize(4,3);
   main_window.title = @"AutoDraw";
   main_window.delegate = osx_main_delegate;
   main_window.contentView.wantsLayer = YES;
@@ -92,62 +120,43 @@ int main(int argc, const char *argv[])
   id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
   [mtl_library release];
 
-  f32 vertex_data[] = { // x, y, u, v
-    -0.5f,  0.5f, 0.f, 0.f,
-    -0.5f, -0.5f, 0.f, 1.f,
-    0.5f, -0.5f, 1.f, 1.f,
-    -0.5f,  0.5f, 0.f, 0.f,
-    0.5f, -0.5f, 1.f, 1.f,
-    0.5f,  0.5f, 1.f, 0.f
-  };
+  // Allocate a big block of memory
+  size_t memory_cap = gigaBytes(1);
+  u8 *memory = allocateVirtualMemory(memory_cap);
+  Arena arena_ = newArena(memory_cap, memory);
+  Arena *arena = &arena_;
+
+  i32 cursor_x = 2;
+  i32 cursor_y = 1;
+  i32 grid_x = 80;
+  i32 grid_y = 80;
+
+  auto vertex_input = (VertexInput *)arena->base;
+  pushRect(arena, -1.f, -2.f, +2.f, +1.f, 0);
+  f32 cell_width  = 2.f / (f32)grid_x;
+  f32 cell_height = 2.f / (f32)grid_y;
+  pushRect(arena,
+           -1.f + (f32)cursor_x * cell_width,
+           +1.f - (f32)(cursor_y+1) * cell_height,
+           cell_width, cell_height, 1);
 
   // "Private" crashes the machine
-  id<MTLBuffer> vertex_buffer = [mtl_device newBufferWithBytes:vertex_data length:sizeof(vertex_data)
+  id<MTLBuffer> vertex_buffer = [mtl_device newBufferWithBytes:vertex_input length:arena->used
                                  options:MTLResourceStorageModeShared];
-
-  // load image
-  i32 tex_width, tex_height, tex_num_channels;
-  i32 tex_force_num_channels = 4;
-  u8 *image = stbi_load("../resources/testTexture.png", &tex_width, &tex_height,
-                        &tex_num_channels, tex_force_num_channels);
-  i32 tex_bytes_per_row = 4 * tex_width;
-
-  // create texture
-  MTLTextureDescriptor *texture_descriptor =
-    [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-     width:tex_width
-     height:tex_height
-     mipmapped:NO];
-  auto mtl_texture = [mtl_device newTextureWithDescriptor:texture_descriptor];
-  [texture_descriptor release];
-
-  // copy image to texture
-  [mtl_texture replaceRegion:MTLRegionMake2D(0,0,tex_width,tex_height)
-   mipmapLevel:0
-   withBytes:image
-   bytesPerRow:tex_bytes_per_row];
-
-  stbi_image_free(image);
-
-  // create sampler state
-  auto sampler_desc = [MTLSamplerDescriptor new];
-  sampler_desc.minFilter = MTLSamplerMinMagFilterLinear;
-  sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
-  auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
-  [sampler_desc release];
 
   auto vertex_descriptor = [MTLVertexDescriptor new];
   {
     auto v = vertex_descriptor;
+    // position
     v.attributes[0].format      = MTLVertexFormatFloat2;
     v.attributes[0].offset      = 0;
     v.attributes[0].bufferIndex = 0;
-
-    v.attributes[1].format      = MTLVertexFormatFloat2;
-    v.attributes[1].offset      = 2 * sizeof(float);
+    // type
+    v.attributes[1].format      = MTLVertexFormatInt;
+    v.attributes[1].offset      = sizeof(simd_float2);
     v.attributes[1].bufferIndex = 0;
-
-    v.layouts[0].stride       = 4 * sizeof(float);
+    // layout
+    v.layouts[0].stride       = sizeof(VertexInput);
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
   }
@@ -213,7 +222,7 @@ int main(int argc, const char *argv[])
       render_pass_descriptor.colorAttachments[0].texture     = ca_metal_drawable.texture;
       render_pass_descriptor.colorAttachments[0].loadAction  = MTLLoadActionClear;
       render_pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-      render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.1, .2, .6, 1.f);
+      render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.1f, .2f, .6f, 1.f);
 
       auto command_buffer = [command_queue commandBuffer];
 
@@ -221,9 +230,8 @@ int main(int argc, const char *argv[])
       [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
       [render_command_encoder setRenderPipelineState:render_pipeline_state];
       [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
-      [render_command_encoder setFragmentTexture:mtl_texture atIndex:0];
-      [render_command_encoder setFragmentSamplerState:sampler_state atIndex:0];
-      [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+      i32 vertex_count = 12;  // todo how do you know the number of vertices?
+      [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertex_count];
       [render_command_encoder endEncoding];
 
       [command_buffer presentDrawable:ca_metal_drawable];

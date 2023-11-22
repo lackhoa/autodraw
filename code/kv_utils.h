@@ -81,7 +81,7 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #define invalidDefaultCase default: { assert(false) };
 #define breakhere  { int x = 5; (void)x; }
 
-#include "intrinsics.h"
+#include "kv_intrinsics.h"
 
 // source: https://groups.google.com/g/comp.std.c/c/d-6Mj5Lko_s
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__,PP_RSEQ_N())
@@ -217,21 +217,22 @@ checkArena(Arena *arena)
     assert(arena->temp_count == 0);
 }
 
-inline void
-resetArena(Arena *arena, b32 zero=false)
-{
-  arena->used = 0;
-  if (zero)
-    zeroMemory(arena->base, arena->cap);
-}
+// TODO re-implement these
+// inline void
+// resetArena(Arena *arena, b32 zero=false)
+// {
+//   arena->used = 0;
+//   if (zero)
+//     zeroMemory(arena->base, arena->cap);
+// }
 
-inline void *
-copySize(Arena *arena, void *src, size_t size)
-{
-  void *dst = pushSize(arena, size);
-  copyMemory(dst, src, size);
-  return dst;
-}
+// inline void *
+// copySize(Arena *arena, void *src, size_t size)
+// {
+//   void *dst = pushSize(arena, size);
+//   copyMemory(dst, src, size);
+//   return dst;
+// }
 
 #if COMPILER_MSVC
 #    define mytypeof decltype
@@ -243,11 +244,11 @@ copySize(Arena *arena, void *src, size_t size)
 /* #define copyStructNoCast(arena, src) copySize(arena, src, sizeof(*(src))) */
 #define copyArray(arena, count, src) (mytypeof(src)) copySize(arena, (src), count*sizeof(*(src)))
 
-inline b32
-inRange(i32 min, i32 val, i32 max)
-{
-    return (min <= val) && (val <= max);
-}
+// inline b32
+// inRange(i32 min, i32 val, i32 max)
+// {
+//     return (min <= val) && (val <= max);
+// }
 
 inline i32
 stringLength(char *string)
@@ -517,14 +518,15 @@ inArena(Arena *arena, void *p)
   return ((u64)p >= (u64)arena->base && (u64)p < (u64)arena->base+arena->cap);
 }
 
-inline String
-copyString(Arena *buffer, String src)
-{
-  String out;
-  out.chars  = copyArray(buffer, src.length, src.chars);
-  out.length = src.length;
-  return out;
-}
+// todo Reimplement
+// inline String
+// copyString(Arena *buffer, String src)
+// {
+//   String out;
+//   out.chars  = copyArray(buffer, src.length, src.chars);
+//   out.length = src.length;
+//   return out;
+// }
 
 inline void
 concat(String *a, String b)

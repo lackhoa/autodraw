@@ -1,30 +1,26 @@
 #import <metal_stdlib>
+#import "shader-interface.h"
 
 using namespace metal;
 
-struct VertexInput
-{
-  float2 position [[attribute(0)]];
-  float2 uv       [[attribute(1)]];
-};
-
-struct ShaderOutput
+struct VertexOutput
 {
   float4 position [[position]];
-  float2 uv;
+  int    type;
 };
 
-vertex ShaderOutput vert(VertexInput in [[stage_in]])
+vertex VertexOutput vert(VertexInput in [[stage_in]])
 {
-  ShaderOutput out;
+  VertexOutput out;
   out.position = float4(in.position, 0.0, 1.f);
-  out.uv       = in.uv;
+  out.type     = in.type;
   return out;
 }
 
-fragment float4 frag(ShaderOutput in [[stage_in]],
-                     texture2d<float> colorTexture [[texture(0)]],
-                     sampler sam [[sampler(0)]])
+fragment float4 frag(VertexOutput in [[stage_in]])
 {
-  return colorTexture.sample(sam, in.uv);
+  if (in.type == 0)
+    return float4(0,0,0,1);  // background
+  else
+    return float4(1,0,0,1);  // cursor
 }
