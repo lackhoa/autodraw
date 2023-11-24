@@ -3,11 +3,19 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <mach/mach_time.h>
+#include <sys/stat.h>
 
 #import "kv_utils.h"
 #import "kv_math.h"
 #import "mac-keycodes.h"
 #import "shader-interface.h"
+#import "platform.h"
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "imstb_truetype.h"
+#pragma clang diagnostic pop
 
 global_variable f32 global_rendering_width = 1920;
 global_variable f32 global_rendering_height = 1080;
@@ -38,12 +46,14 @@ global_variable mach_timebase_info_data_t timebase;
 
 ///////////////////////////////////////////////////////////////////////
 
-u8 *allocateVirtualMemory(size_t size)
+u8 *virtualAlloc(size_t size)
 {
     u8 *data = 0;
  
     assert(size != 0);
-    assert((size % 4096) == 0);  // VM page alignment (we should align automatically)
+    size_t new_size = 4096 * ((size / 4096) + 1);
+    assert(new_size >= size);
+    size = new_size;
  
     // Allocate directly from VM
     kern_return_t err = vm_allocate((vm_map_t) mach_task_self(),
@@ -60,12 +70,12 @@ void pushRect(Arena *arena, f32 min_x, f32 min_y, f32 width, f32 height, i32 typ
   VertexInput *rect = (VertexInput *) pushSize(arena, (6)*sizeof(VertexInput));
   f32 max_x = min_x + width;
   f32 max_y = min_y + height;
-  rect[0] = {{min_x, max_y}, type};
-  rect[1] = {{min_x, min_y}, type};
-  rect[2] = {{max_x, min_y}, type};
-  rect[3] = {{min_x, max_y}, type};
-  rect[4] = {{max_x, min_y}, type};
-  rect[5] = {{max_x, max_y}, type};
+  rect[0] = {{min_x, max_y}, type, {0,0}};
+  rect[1] = {{min_x, min_y}, type, {0,1}};
+  rect[2] = {{max_x, min_y}, type, {1,1}};
+  rect[3] = {{min_x, max_y}, type, {0,0}};
+  rect[4] = {{max_x, min_y}, type, {1,1}};
+  rect[5] = {{max_x, max_y}, type, {1,0}};
 }
 
 double osxGetCurrentTimeInSeconds()
@@ -85,6 +95,99 @@ enum GameAction {
   GameActionMoveDown,
   GameActionCount,
 };
+
+void platformFreeFileMemory(u8 *memory) {
+  if (memory) {
+    todoIncomplete;  // #test
+    vm_deallocate((vm_map_t) mach_task_self(), (vm_address_t) memory, 0);
+  }
+}
+
+ReadFileResult platformReadEntireFile(const char *file_name)
+{
+  ReadFileResult out = {};
+
+  int fd = open(file_name, O_RDONLY);
+  if (fd == -1) {
+    printf("platformReadEntireFile %s: open error: %d: %s\n",
+           file_name, errno, strerror(errno));
+  } else {
+    struct stat file_stat;
+    if (fstat(fd, &file_stat) != 0) {
+      printf("platformReadEntireFile %s: fstat error: %d: %s\n",
+             file_name, errno, strerror(errno));
+    } else {
+      i64 file_size = file_stat.st_size;
+      out.content = virtualAlloc(file_size);
+      if (!out.content) {
+        printf("platformReadEntireFile %s:  vm_allocate error: %d: %s\n",
+               file_name, errno, strerror(errno));
+      }
+      ssize_t bytes_read;
+      bytes_read = read(fd, out.content, file_size);
+      if (bytes_read == file_size) {
+        out.content_size = file_size;
+      } else {
+        platformFreeFileMemory(out.content);
+        out.content = 0;
+        printf("platformReadEntireFile %s:  couldn't read file: %d: %s\n",
+               file_name, errno, strerror(errno));
+      }
+    }
+  }
+
+  close(fd);
+  return out;
+}
+
+internal id<MTLTexture>
+makeNothingsTexture(id<MTLDevice> mtl_device)
+{
+  id<MTLTexture> texture;
+  auto read_file = platformReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
+  u8 *ttf_buffer = read_file.content;
+  if (!ttf_buffer) {
+    todoErrorReport;
+    return 0;
+  } else {
+    stbtt_fontinfo font;
+    stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
+    f32 pixel_height = stbtt_ScaleForPixelHeight(&font, 128.f);
+    i32 width, height, xoff, yoff;
+    u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, 'N',
+                                               &width, &height, &xoff, &yoff);
+
+    // Create Texture
+    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatA8Unorm
+                         width:width height:height mipmapped:NO];
+    texture = [mtl_device newTextureWithDescriptor:texture_desc];
+    [texture_desc release];
+    // Copy loaded image into MTLTextureObject
+    [texture replaceRegion:MTLRegionMake2D(0,0,width,height)
+                mipmapLevel:0
+                withBytes:mono_bitmap
+                bytesPerRow:width];
+
+    // Create a Sampler State
+    auto sampler_desc = [MTLSamplerDescriptor new];
+    sampler_desc.minFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
+    [sampler_desc release];
+
+    f32 vertex_input_nothings[] = { // x, y, u, v
+      -0.5f,  0.5f, 3, 0.f, 0.f,
+      -0.5f, -0.5f, 3, 0.f, 1.f,
+      0.5f , -0.5f, 3, 1.f, 1.f,
+      -0.5f,  0.5f, 3, 0.f, 0.f,
+      0.5f , -0.5f, 3, 1.f, 1.f,
+      0.5f ,  0.5f, 3, 1.f, 0.f,
+    };
+
+    stbtt_FreeBitmap(mono_bitmap, 0);
+  }
+  return texture;
+}
 
 int main(int argc, const char *argv[])
 {
@@ -146,7 +249,7 @@ int main(int argc, const char *argv[])
 
   // Allocate a big block of memory
   size_t memory_cap = gigaBytes(1);
-  u8 *memory = allocateVirtualMemory(memory_cap);
+  u8 *memory = virtualAlloc(memory_cap);
   Arena arena_ = newArena(memory_cap, memory);
   Arena *arena = &arena_;
 
@@ -155,20 +258,29 @@ int main(int argc, const char *argv[])
   auto vertex_descriptor = [MTLVertexDescriptor new];
   {
     auto v = vertex_descriptor;
+    u64 offset = 0;
     // position
     v.attributes[0].format      = MTLVertexFormatFloat2;
-    v.attributes[0].offset      = 0;
+    v.attributes[0].offset      = offset;
     v.attributes[0].bufferIndex = 0;
+    offset += sizeof(simd_float2);
     // type
     v.attributes[1].format      = MTLVertexFormatInt;
-    v.attributes[1].offset      = sizeof(simd_float2);
+    v.attributes[1].offset      = offset;
     v.attributes[1].bufferIndex = 0;
+    offset += sizeof(int);
+    // uv
+    v.attributes[2].format      = MTLVertexFormatFloat2;
+    v.attributes[2].offset      = offset;
+    v.attributes[2].bufferIndex = 0;
+    offset += sizeof(simd_float2);
     // layout
     v.layouts[0].stride       = sizeof(VertexInput);
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
   }
 
+  auto texture = makeNothingsTexture(mtl_device);
 
   auto render_pipeline_descriptor = [MTLRenderPipelineDescriptor new];
   render_pipeline_descriptor.vertexFunction   = vert_func;
@@ -210,15 +322,14 @@ int main(int argc, const char *argv[])
                                inMode: NSDefaultRunLoopMode
                                dequeue: YES])
       {
-        switch (event.type)
-        {
+        switch (event.type) {
           case NSEventTypeKeyUp:
           case NSEventTypeKeyDown: {
             bool is_down = (event.type == NSEventTypeKeyDown);
             if ((event.keyCode == kVK_ANSI_Q) && is_down) {
+              // todo: this should be Cmd+Q
               osx_main_delegate->is_running = false;
-            }
-            else {
+            } else {
               switch (event.keyCode) {
                 case kVK_ANSI_H: {
                   action_state[GameActionMoveLeft].is_down = is_down;
@@ -240,8 +351,7 @@ int main(int argc, const char *argv[])
         }
       }
 
-      if (osx_main_delegate->window_was_resized)
-      {
+      if (osx_main_delegate->window_was_resized) {
         ca_metal_layer.frame = main_window.contentView.frame;
         ca_metal_layer.drawableSize = ca_metal_layer.frame.size;
         osx_main_delegate->window_was_resized = false;
@@ -260,7 +370,7 @@ int main(int argc, const char *argv[])
           f32 acceleration = moving_right ? da : -da;
           tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
           velocity    += acceleration * dt;
-          if (velocity > 100) {debugbreak;}  // todo: why isn't this getting hit?
+          if (velocity > 100) {debugbreak;}  // todo: why isn't this getting hit after 1s?
 
           i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
           absolute_coord += tile_offset_rounded;
@@ -280,9 +390,12 @@ int main(int argc, const char *argv[])
       }
 
       // Render ////////////////////////////////////
+      // todo: Make another arena
       auto vertex_input = (VertexInput *)arena->base;
       // draw backdrop
       pushRect(arena, -1.f, -1.f, +2.f, +2.f, 0);
+      // draw nothings
+      pushRect(arena, -0.5f, -0.5f, 1.f, 1.f, 3);
 
       i32 cursor_x = absolute_coord % screen_width_in_tiles;
       i32 cursor_y = absolute_coord / screen_width_in_tiles;
@@ -338,7 +451,8 @@ int main(int argc, const char *argv[])
         [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
         [render_command_encoder setRenderPipelineState:render_pipeline_state];
         [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
-        i32 vertex_count = 12;  // todo how do you know the number of vertices?
+        [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:1];
+        i32 vertex_count = 18;  // todo how do you know the number of vertices?
         [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertex_count];
         [render_command_encoder endEncoding];
 
