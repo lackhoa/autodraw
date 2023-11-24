@@ -58,11 +58,12 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #define teraBytes(value) (gigaBytes(value)*1024LL)
 
 #define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
+#define arrayLength arrayCount
 
 #if COMPILER_MSVC
-#  define crashTheProgram __debugbreak()
+#  define debugbreak __debugbreak()
 #else
-#  define crashTheProgram __builtin_trap()
+#  define debugbreak __builtin_trap()
 #endif
 
 #if REA_INTERNAL
@@ -70,8 +71,6 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #else
 #  define assert(claim)
 #endif
-
-#define debugbreak __debugbreak();
 
 #define invalidCodePath assert(false)
 #define todoErrorReport assert(false)

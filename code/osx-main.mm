@@ -2,6 +2,7 @@
 #import <Metal/Metal.h>
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <mach/mach_time.h>
 
 #import "kv_utils.h"
 #import "kv_math.h"
@@ -10,6 +11,7 @@
 
 global_variable f32 global_rendering_width = 1920;
 global_variable f32 global_rendering_height = 1080;
+global_variable mach_timebase_info_data_t timebase;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -66,8 +68,30 @@ void pushRect(Arena *arena, f32 min_x, f32 min_y, f32 width, f32 height, i32 typ
   rect[5] = {{max_x, max_y}, type};
 }
 
+double osxGetCurrentTimeInSeconds()
+{
+  u64 nano_secs = mach_absolute_time() * timebase.numer / timebase.denom;
+  return (double)nano_secs * 1.0E-9;
+}
+
+struct ActionState {
+  b32 is_down;
+};
+
+enum GameAction {
+  GameActionMoveRight,
+  GameActionMoveLeft,
+  GameActionMoveUp,
+  GameActionMoveDown,
+  GameActionCount,
+};
+
 int main(int argc, const char *argv[])
 {
+  mach_timebase_info(&timebase);
+  f32 game_update_hz = 60;
+  const f32 target_seconds_per_frame = 1.0f / game_update_hz;
+
   NSApplication *app = [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
@@ -126,23 +150,7 @@ int main(int argc, const char *argv[])
   Arena arena_ = newArena(memory_cap, memory);
   Arena *arena = &arena_;
 
-  i32 cursor_x = 2;
-  i32 cursor_y = 1;
-  i32 grid_x = 80;
-  i32 grid_y = 80;
-
-  auto vertex_input = (VertexInput *)arena->base;
-  pushRect(arena, -1.f, -2.f, +2.f, +1.f, 0);
-  f32 cell_width  = 2.f / (f32)grid_x;
-  f32 cell_height = 2.f / (f32)grid_y;
-  pushRect(arena,
-           -1.f + (f32)cursor_x * cell_width,
-           +1.f - (f32)(cursor_y+1) * cell_height,
-           cell_width, cell_height, 1);
-
-  // "Private" crashes the machine
-  id<MTLBuffer> vertex_buffer = [mtl_device newBufferWithBytes:vertex_input length:arena->used
-                                 options:MTLResourceStorageModeShared];
+  i32 screen_width_in_tiles = 80;
 
   auto vertex_descriptor = [MTLVertexDescriptor new];
   {
@@ -160,6 +168,7 @@ int main(int argc, const char *argv[])
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
   }
+
 
   auto render_pipeline_descriptor = [MTLRenderPipelineDescriptor new];
   render_pipeline_descriptor.vertexFunction   = vert_func;
@@ -180,25 +189,52 @@ int main(int argc, const char *argv[])
 
   auto command_queue = [mtl_device newCommandQueue];
 
+  ActionState action_state[GameActionCount] = {};
+  b32 new_direction_key_press = false;
+  f32 velocity = {};
+  f32 tile_offset = {};
+  i32 absolute_coord = {};
+
+  // Main loop
+  f32 frame_start_sec = osxGetCurrentTimeInSeconds();
   osx_main_delegate->is_running = true;
   while (osx_main_delegate->is_running)
   {
+    auto frame_temp_memory = beginTemporaryMemory(arena);
     @autoreleasepool
     {
+      // Process events
+      new_direction_key_press = false;
       while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                untilDate: nil
                                inMode: NSDefaultRunLoopMode
                                dequeue: YES])
       {
-        switch ([event type])
+        switch (event.type)
         {
-          case NSEventTypeKeyDown:
-          {
-            if (event.keyCode == KEY_Q) osx_main_delegate->is_running = false;
+          case NSEventTypeKeyUp:
+          case NSEventTypeKeyDown: {
+            bool is_down = (event.type == NSEventTypeKeyDown);
+            if ((event.keyCode == kVK_ANSI_Q) && is_down) {
+              osx_main_delegate->is_running = false;
+            }
+            else {
+              switch (event.keyCode) {
+                case kVK_ANSI_H: {
+                  action_state[GameActionMoveLeft].is_down = is_down;
+                  new_direction_key_press = true;
+                  break;
+                }
+                case kVK_ANSI_L: {
+                  action_state[GameActionMoveRight].is_down = is_down;
+                  new_direction_key_press = true;
+                  break;
+                }
+              }
+            }
           } break;
 
-          default:
-          {
+          default: {
             [NSApp sendEvent: event];
           }
         }
@@ -211,32 +247,106 @@ int main(int argc, const char *argv[])
         osx_main_delegate->window_was_resized = false;
       }
 
-      auto ca_metal_drawable = [ca_metal_layer nextDrawable];
-      if (!ca_metal_drawable)
-      {
-        printf("ERROR: nextDrawable timed out!\n");
-        continue;
+      // Game logic
+      auto &dt = target_seconds_per_frame;
+      b32 moving_right = action_state[GameActionMoveRight].is_down;
+      b32 moving_left  = action_state[GameActionMoveLeft].is_down;
+      if (moving_right || moving_left) {
+        if (new_direction_key_press) {
+          absolute_coord += moving_right ? 1 : -1;
+        } else {
+          // unit of movement: object
+          const f32 da = 100.f;
+          f32 acceleration = moving_right ? da : -da;
+          tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
+          velocity    += acceleration * dt;
+          if (velocity > 100) {debugbreak;}  // todo: why isn't this getting hit?
+
+          i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
+          absolute_coord += tile_offset_rounded;
+          tile_offset -= (f32)tile_offset_rounded;
+        }
+      } else {
+        velocity    = 0.f;
+        tile_offset = 0.f;
       }
 
-      auto render_pass_descriptor = [[MTLRenderPassDescriptor new] autorelease];
-      render_pass_descriptor.colorAttachments[0].texture     = ca_metal_drawable.texture;
-      render_pass_descriptor.colorAttachments[0].loadAction  = MTLLoadActionClear;
-      render_pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-      render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.1f, .2f, .6f, 1.f);
+      // clamp
+      if (absolute_coord <= 0) {
+        absolute_coord = 0;
+        if (tile_offset < 0) {
+          tile_offset = 0;
+        }
+      }
 
-      auto command_buffer = [command_queue commandBuffer];
+      // Render ////////////////////////////////////
+      auto vertex_input = (VertexInput *)arena->base;
+      // draw backdrop
+      pushRect(arena, -1.f, -1.f, +2.f, +2.f, 0);
 
-      auto render_command_encoder = [command_buffer renderCommandEncoderWithDescriptor:render_pass_descriptor];
-      [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
-      [render_command_encoder setRenderPipelineState:render_pipeline_state];
-      [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
-      i32 vertex_count = 12;  // todo how do you know the number of vertices?
-      [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertex_count];
-      [render_command_encoder endEncoding];
+      i32 cursor_x = absolute_coord % screen_width_in_tiles;
+      i32 cursor_y = absolute_coord / screen_width_in_tiles;
+      f32 tile_width  = 2.f / (f32)screen_width_in_tiles;
+      f32 tile_height = tile_width;
+      // draw cursor
+      pushRect(arena,
+               -1.f + ((f32)cursor_x + tile_offset) * tile_width,
+               +1.f - (f32)(cursor_y+1) * tile_height,
+               tile_width, tile_height, 1);
 
-      [command_buffer presentDrawable:ca_metal_drawable];
-      [command_buffer commit];
+      // "Private" mode crashes the machine
+      id<MTLBuffer> vertex_buffer = [[mtl_device newBufferWithBytes:vertex_input length:arena->used
+                                      options:MTLResourceStorageModeShared] autorelease];
+
+      /////////////////////////////////////
+
+      // sleep
+      r32 sleep_sec;
+      r32 seconds_elapsed_for_frame = osxGetCurrentTimeInSeconds() - frame_start_sec;
+      if (seconds_elapsed_for_frame < target_seconds_per_frame) {
+        sleep_sec = .8f * (target_seconds_per_frame - seconds_elapsed_for_frame);
+        if (sleep_sec > 0) {
+          sleep(sleep_sec);
+        }
+        seconds_elapsed_for_frame += sleep_sec;
+
+        // busy wait
+        while (seconds_elapsed_for_frame < target_seconds_per_frame) {
+          seconds_elapsed_for_frame = osxGetCurrentTimeInSeconds() - frame_start_sec;
+        }
+      }
+
+      frame_start_sec = osxGetCurrentTimeInSeconds();
+
+      {// drawing
+        auto ca_metal_drawable = [ca_metal_layer nextDrawable];
+        if (!ca_metal_drawable)
+        {
+          printf("ERROR: nextDrawable timed out!\n");
+          continue;
+        }
+
+        auto render_pass_descriptor = [[MTLRenderPassDescriptor new] autorelease];
+        render_pass_descriptor.colorAttachments[0].texture     = ca_metal_drawable.texture;
+        render_pass_descriptor.colorAttachments[0].loadAction  = MTLLoadActionClear;
+        render_pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+        render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.6f, .0f, .6f, 1.f);
+
+        auto command_buffer = [command_queue commandBuffer];
+
+        auto render_command_encoder = [command_buffer renderCommandEncoderWithDescriptor:render_pass_descriptor];
+        [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
+        [render_command_encoder setRenderPipelineState:render_pipeline_state];
+        [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
+        i32 vertex_count = 12;  // todo how do you know the number of vertices?
+        [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertex_count];
+        [render_command_encoder endEncoding];
+
+        [command_buffer presentDrawable:ca_metal_drawable];
+        [command_buffer commit];
+      }
     }
+    endTemporaryMemory(frame_temp_memory);
   }
 
   printf("objective-c autodraw finished!\n");
