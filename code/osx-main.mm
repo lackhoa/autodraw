@@ -19,6 +19,8 @@
 
 global_variable f32 global_rendering_width = 1920;
 global_variable f32 global_rendering_height = 1080;
+global_variable f32 pixel_to_clip_x = 2.f / global_rendering_width;
+global_variable f32 pixel_to_clip_y = 2.f / global_rendering_height;
 global_variable mach_timebase_info_data_t timebase;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
@@ -65,17 +67,24 @@ u8 *virtualAlloc(size_t size)
     return data;
 }
 
-void pushRect(Arena *arena, f32 min_x, f32 min_y, f32 width, f32 height, i32 type)
+struct Renderer {
+  Arena arena;
+  i32 vertex_count;
+};
+
+internal void
+pushRect(Renderer &renderer, f32 min_x, f32 min_y, f32 width, f32 height, i32 type)
 {
-  VertexInput *rect = (VertexInput *) pushSize(arena, (6)*sizeof(VertexInput));
+  auto rect = (VertexInput *) pushSize(&renderer.arena, (6)*sizeof(VertexInput));
   f32 max_x = min_x + width;
   f32 max_y = min_y + height;
-  rect[0] = {{min_x, max_y}, type, {0,0}};
-  rect[1] = {{min_x, min_y}, type, {0,1}};
-  rect[2] = {{max_x, min_y}, type, {1,1}};
-  rect[3] = {{min_x, max_y}, type, {0,0}};
-  rect[4] = {{max_x, min_y}, type, {1,1}};
-  rect[5] = {{max_x, max_y}, type, {1,0}};
+  rect[0] = {{min_x, max_y}, {0.f, 0.f}, type};
+  rect[1] = {{min_x, min_y}, {0.f, 1.f}, type};
+  rect[2] = {{max_x, min_y}, {1.f, 1.f}, type};
+  rect[3] = {{min_x, max_y}, {0.f, 0.f}, type};
+  rect[4] = {{max_x, min_y}, {1.f, 1.f}, type};
+  rect[5] = {{max_x, max_y}, {1.f, 0.f}, type};
+  renderer.vertex_count += 6;
 }
 
 double osxGetCurrentTimeInSeconds()
@@ -140,53 +149,58 @@ ReadFileResult platformReadEntireFile(const char *file_name)
   return out;
 }
 
-internal id<MTLTexture>
-makeNothingsTexture(id<MTLDevice> mtl_device)
-{
+struct Nothings {
   id<MTLTexture> texture;
+  i32 width, height, xoff, yoff;
+};
+
+#define STB_IMAGE_IMPLEMENTATION
+#import "stb_image.h"
+
+internal Nothings
+makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
+{
+  Nothings nothings = {};
   auto read_file = platformReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
-    return 0;
   } else {
     stbtt_fontinfo font;
     stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
     f32 pixel_height = stbtt_ScaleForPixelHeight(&font, 128.f);
-    i32 width, height, xoff, yoff;
     u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, 'N',
-                                               &width, &height, &xoff, &yoff);
+                                               &nothings.width, &nothings.height,
+                                               &nothings.xoff, &nothings.yoff);
+    auto width = nothings.width;
+    auto height = nothings.height;
+    u8 *bitmap = (u8 *)pushSize(arena, 4 * nothings.width * nothings.height);
+
+    // Blow it out to rgba bitmap
+    // TODO try to find the correct pixel format so we don't gotta do this
+    u32 *dst = (u32 *)bitmap;
+    u8 *src  = mono_bitmap;
+    for (i32 y=0; y < height; y++) {
+      for (i32 x=0; x < width; x++) {
+        u32 a = *src++;
+        *dst++ = (a << 24) | (a << 16) | (a << 8) | a;
+      }
+    }
+    stbtt_FreeBitmap(mono_bitmap, 0);
 
     // Create Texture
-    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatA8Unorm
+    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                          width:width height:height mipmapped:NO];
-    texture = [mtl_device newTextureWithDescriptor:texture_desc];
+    nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
     [texture_desc release];
     // Copy loaded image into MTLTextureObject
-    [texture replaceRegion:MTLRegionMake2D(0,0,width,height)
-                mipmapLevel:0
-                withBytes:mono_bitmap
-                bytesPerRow:width];
+    [nothings.texture replaceRegion:MTLRegionMake2D(0,0,width,height)
+     mipmapLevel:0
+     withBytes:bitmap
+     bytesPerRow:4*width];
 
-    // Create a Sampler State
-    auto sampler_desc = [MTLSamplerDescriptor new];
-    sampler_desc.minFilter = MTLSamplerMinMagFilterLinear;
-    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
-    auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
-    [sampler_desc release];
-
-    f32 vertex_input_nothings[] = { // x, y, u, v
-      -0.5f,  0.5f, 3, 0.f, 0.f,
-      -0.5f, -0.5f, 3, 0.f, 1.f,
-      0.5f , -0.5f, 3, 1.f, 1.f,
-      -0.5f,  0.5f, 3, 0.f, 0.f,
-      0.5f , -0.5f, 3, 1.f, 1.f,
-      0.5f ,  0.5f, 3, 1.f, 0.f,
-    };
-
-    stbtt_FreeBitmap(mono_bitmap, 0);
   }
-  return texture;
+  return nothings;
 }
 
 int main(int argc, const char *argv[])
@@ -247,11 +261,59 @@ int main(int argc, const char *argv[])
   id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
   [mtl_library release];
 
+    // Create Vertex Buffer
+    float vertexData[] = { // x, y, u, v
+        -0.5f,  0.5f, 0.f, 0.f,
+        -0.5f, -0.5f, 0.f, 1.f,
+         0.5f, -0.5f, 1.f, 1.f,
+        -0.5f,  0.5f, 0.f, 0.f,
+         0.5f, -0.5f, 1.f, 1.f,
+         0.5f,  0.5f, 1.f, 0.f
+    };
+
+    id<MTLBuffer> quadVertexBuffer = [mtl_device newBufferWithBytes:vertexData 
+                                            length:sizeof(vertexData)
+                                            options:MTLResourceOptionCPUCacheModeDefault];
+
+    // Load Image
+    int texWidth, texHeight, texNumChannels;
+    int texForceNumChannels = 4;
+    unsigned char* testTextureBytes = stbi_load("../resources/testTexture.png", &texWidth, &texHeight,
+                                                &texNumChannels, texForceNumChannels);
+    int texBytesPerRow = 4 * texWidth;
+
+    // Create Texture
+    MTLTextureDescriptor* mtlTextureDescriptor =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                              width:texWidth
+                              height:texHeight
+                              mipmapped:NO];
+    id<MTLTexture> mtlTexture = [mtl_device newTextureWithDescriptor:mtlTextureDescriptor];
+    [mtlTextureDescriptor release];
+
+    // Copy loaded image into MTLTextureObject
+    [mtlTexture replaceRegion:MTLRegionMake2D(0,0,texWidth,texHeight)
+                mipmapLevel:0
+                withBytes:testTextureBytes
+                bytesPerRow:texBytesPerRow];
+
+    stbi_image_free(testTextureBytes);
+
+  // Create a Sampler State
+  auto sampler_desc = [MTLSamplerDescriptor new];
+  sampler_desc.minFilter = MTLSamplerMinMagFilterLinear;
+  sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+  auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
+  [sampler_desc release];
+
   // Allocate a big block of memory
   size_t memory_cap = gigaBytes(1);
   u8 *memory = virtualAlloc(memory_cap);
-  Arena arena_ = newArena(memory_cap, memory);
-  Arena *arena = &arena_;
+  size_t temp_size = megaBytes(512);
+  Arena temp_arena_ = newArena(temp_size, memory);
+  Arena *temp_arena = &temp_arena_;
+  Arena perm_arena_ = newArena(memory_cap-temp_size, memory+temp_size);;
+  Arena *perm_arena = &perm_arena_;
 
   i32 screen_width_in_tiles = 80;
 
@@ -259,28 +321,34 @@ int main(int argc, const char *argv[])
   {
     auto v = vertex_descriptor;
     u64 offset = 0;
+    i32 i = 0;
+    // TODO generate for this code
     // position
-    v.attributes[0].format      = MTLVertexFormatFloat2;
-    v.attributes[0].offset      = offset;
-    v.attributes[0].bufferIndex = 0;
+    v.attributes[i].format      = MTLVertexFormatFloat2;
+    v.attributes[i].offset      = offset;
+    v.attributes[i].bufferIndex = 0;
     offset += sizeof(simd_float2);
-    // type
-    v.attributes[1].format      = MTLVertexFormatInt;
-    v.attributes[1].offset      = offset;
-    v.attributes[1].bufferIndex = 0;
-    offset += sizeof(int);
+    i++;
     // uv
-    v.attributes[2].format      = MTLVertexFormatFloat2;
-    v.attributes[2].offset      = offset;
-    v.attributes[2].bufferIndex = 0;
+    v.attributes[i].format      = MTLVertexFormatFloat2;
+    v.attributes[i].offset      = offset;
+    v.attributes[i].bufferIndex = 0;
     offset += sizeof(simd_float2);
+    i++;
+    // type
+    v.attributes[i].format      = MTLVertexFormatInt;
+    v.attributes[i].offset      = offset;
+    v.attributes[i].bufferIndex = 0;
+    offset += sizeof(int);
+    i++;
     // layout
     v.layouts[0].stride       = sizeof(VertexInput);
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
   }
 
-  auto texture = makeNothingsTexture(mtl_device);
+  auto nothings = makeNothingsTexture(perm_arena, mtl_device);
+  auto texture = nothings.texture;
 
   auto render_pipeline_descriptor = [MTLRenderPipelineDescriptor new];
   render_pipeline_descriptor.vertexFunction   = vert_func;
@@ -312,7 +380,7 @@ int main(int argc, const char *argv[])
   osx_main_delegate->is_running = true;
   while (osx_main_delegate->is_running)
   {
-    auto frame_temp_memory = beginTemporaryMemory(arena);
+    auto temp = beginTemporaryMemory(temp_arena);
     @autoreleasepool
     {
       // Process events
@@ -390,25 +458,27 @@ int main(int argc, const char *argv[])
       }
 
       // Render ////////////////////////////////////
-      // todo: Make another arena
-      auto vertex_input = (VertexInput *)arena->base;
+      Renderer renderer = {};
+      renderer.arena = subArena(temp_arena, megaBytes(128));
+
       // draw backdrop
-      pushRect(arena, -1.f, -1.f, +2.f, +2.f, 0);
-      // draw nothings
-      pushRect(arena, -0.5f, -0.5f, 1.f, 1.f, 3);
+      pushRect(renderer, -1.f, -1.f, +2.f, +2.f, 0);
+      // draw nothings text
+      pushRect(renderer, -0.f, -0.f, pixel_to_clip_x * (f32)nothings.width, pixel_to_clip_y * (f32)nothings.height, 2);
 
       i32 cursor_x = absolute_coord % screen_width_in_tiles;
       i32 cursor_y = absolute_coord / screen_width_in_tiles;
       f32 tile_width  = 2.f / (f32)screen_width_in_tiles;
       f32 tile_height = tile_width;
       // draw cursor
-      pushRect(arena,
+      pushRect(renderer,
                -1.f + ((f32)cursor_x + tile_offset) * tile_width,
                +1.f - (f32)(cursor_y+1) * tile_height,
                tile_width, tile_height, 1);
 
       // "Private" mode crashes the machine
-      id<MTLBuffer> vertex_buffer = [[mtl_device newBufferWithBytes:vertex_input length:arena->used
+      id<MTLBuffer> vertex_buffer = [[mtl_device newBufferWithBytes:renderer.arena.base
+                                      length:renderer.arena.used
                                       options:MTLResourceStorageModeShared] autorelease];
 
       /////////////////////////////////////
@@ -451,16 +521,16 @@ int main(int argc, const char *argv[])
         [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
         [render_command_encoder setRenderPipelineState:render_pipeline_state];
         [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
-        [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:1];
-        i32 vertex_count = 18;  // todo how do you know the number of vertices?
-        [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertex_count];
+        [render_command_encoder setFragmentTexture:texture atIndex:0];
+        [render_command_encoder setFragmentSamplerState:sampler_state atIndex:0];
+        [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:renderer.vertex_count];
         [render_command_encoder endEncoding];
 
         [command_buffer presentDrawable:ca_metal_drawable];
         [command_buffer commit];
       }
     }
-    endTemporaryMemory(frame_temp_memory);
+    endTemporaryMemory(temp);
   }
 
   printf("objective-c autodraw finished!\n");

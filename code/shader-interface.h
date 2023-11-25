@@ -3,6 +3,6 @@
 
 struct VertexInput {
   simd_float2 position [[attribute(0)]];
-  int         type     [[attribute(1)]];
-  simd_float2 uv       [[attribute(2)]];        
-};
+  simd_float2 uv       [[attribute(1)]];        
+  int         type     [[attribute(2)]];
+} __attribute__((packed));
