@@ -172,12 +172,12 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
     u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, 'N',
                                                &nothings.width, &nothings.height,
                                                &nothings.xoff, &nothings.yoff);
+    
     auto width = nothings.width;
     auto height = nothings.height;
-    u8 *bitmap = (u8 *)pushSize(arena, 4 * nothings.width * nothings.height);
 
+    u8 *bitmap = (u8 *)pushSize(arena, 4 * nothings.width * nothings.height);
     // Blow it out to rgba bitmap
-    // TODO try to find the correct pixel format so we don't gotta do this
     u32 *dst = (u32 *)bitmap;
     u8 *src  = mono_bitmap;
     for (i32 y=0; y < height; y++) {
@@ -188,7 +188,7 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
     }
     stbtt_FreeBitmap(mono_bitmap, 0);
 
-    // Create Texture
+    // Create Texture (NOTE: alpha is in linear space, so this whole texture is in linear)
     auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                          width:width height:height mipmapped:NO];
     nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
@@ -200,6 +200,30 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
      bytesPerRow:4*width];
 
   }
+  return nothings;
+}
+
+internal Nothings
+makeTestImageTexture(Arena *arena, id<MTLDevice> mtl_device)
+{
+  Nothings nothings = {};
+  int num_channel;
+  unsigned char* bitmap = stbi_load("../resources/blue.png",
+                                    &nothings.width, &nothings.height, &num_channel, 4);
+  assert(num_channel == 4);
+  auto width = nothings.width;
+  auto height = nothings.height;
+
+  // Create Texture
+  auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                       width:width height:height mipmapped:NO];
+  nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
+  [texture_desc release];
+  // Copy loaded image into MTLTextureObject
+  [nothings.texture replaceRegion:MTLRegionMake2D(0,0,width,height)
+   mipmapLevel:0
+   withBytes:bitmap
+   bytesPerRow:4*width];
   return nothings;
 }
 
@@ -244,9 +268,9 @@ int main(int argc, const char *argv[])
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
-  ca_metal_layer.frame = main_window.contentView.frame;
-  ca_metal_layer.device = mtl_device;
-  ca_metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+  ca_metal_layer.frame       = main_window.contentView.frame;
+  ca_metal_layer.device      = mtl_device;
+  ca_metal_layer.pixelFormat = MTLPixelFormatRGBA8Unorm_sRGB;
   [main_window.contentView.layer addSublayer:ca_metal_layer];
 
   // Load shaders
@@ -260,44 +284,6 @@ int main(int argc, const char *argv[])
   id<MTLFunction> vert_func = [mtl_library newFunctionWithName:@"vert"];
   id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
   [mtl_library release];
-
-    // Create Vertex Buffer
-    float vertexData[] = { // x, y, u, v
-        -0.5f,  0.5f, 0.f, 0.f,
-        -0.5f, -0.5f, 0.f, 1.f,
-         0.5f, -0.5f, 1.f, 1.f,
-        -0.5f,  0.5f, 0.f, 0.f,
-         0.5f, -0.5f, 1.f, 1.f,
-         0.5f,  0.5f, 1.f, 0.f
-    };
-
-    id<MTLBuffer> quadVertexBuffer = [mtl_device newBufferWithBytes:vertexData 
-                                            length:sizeof(vertexData)
-                                            options:MTLResourceOptionCPUCacheModeDefault];
-
-    // Load Image
-    int texWidth, texHeight, texNumChannels;
-    int texForceNumChannels = 4;
-    unsigned char* testTextureBytes = stbi_load("../resources/testTexture.png", &texWidth, &texHeight,
-                                                &texNumChannels, texForceNumChannels);
-    int texBytesPerRow = 4 * texWidth;
-
-    // Create Texture
-    MTLTextureDescriptor* mtlTextureDescriptor =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                              width:texWidth
-                              height:texHeight
-                              mipmapped:NO];
-    id<MTLTexture> mtlTexture = [mtl_device newTextureWithDescriptor:mtlTextureDescriptor];
-    [mtlTextureDescriptor release];
-
-    // Copy loaded image into MTLTextureObject
-    [mtlTexture replaceRegion:MTLRegionMake2D(0,0,texWidth,texHeight)
-                mipmapLevel:0
-                withBytes:testTextureBytes
-                bytesPerRow:texBytesPerRow];
-
-    stbi_image_free(testTextureBytes);
 
   // Create a Sampler State
   auto sampler_desc = [MTLSamplerDescriptor new];
@@ -322,7 +308,6 @@ int main(int argc, const char *argv[])
     auto v = vertex_descriptor;
     u64 offset = 0;
     i32 i = 0;
-    // TODO generate for this code
     // position
     v.attributes[i].format      = MTLVertexFormatFloat2;
     v.attributes[i].offset      = offset;
