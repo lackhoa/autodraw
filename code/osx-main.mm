@@ -1,3 +1,8 @@
+/*
+  Rules for the renderer:
+  - Bitmaps use premultiplied-alpha
+ */
+
 #import <stdio.h>
 #import <Metal/Metal.h>
 #import <Cocoa/Cocoa.h>
@@ -182,13 +187,18 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
     u8 *src  = mono_bitmap;
     for (i32 y=0; y < height; y++) {
       for (i32 x=0; x < width; x++) {
-        u32 a = *src++;
-        *dst++ = (a << 24) | (a << 16) | (a << 8) | a;
+        u32 au = *src++;
+        f32 c = (f32)au / 255.f;
+        // pre-multiplied alpha (NOTE: we assume color is white)
+        c = square(c);
+        u32 cu = (u32)(255.f * c) ;
+        *dst++ = (cu << 24) | (cu << 16) | (cu << 8) | au;
       }
     }
     stbtt_FreeBitmap(mono_bitmap, 0);
 
-    // Create Texture (NOTE: alpha is in linear space, so this whole texture is in linear)
+    // Create Texture (NOTE: alpha is in linear space, so the rgb is linear too)
+    // But since the color is white it doesn't matter (why is it so complicated?)
     auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                          width:width height:height mipmapped:NO];
     nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
@@ -198,7 +208,6 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
      mipmapLevel:0
      withBytes:bitmap
      bytesPerRow:4*width];
-
   }
   return nothings;
 }
@@ -335,12 +344,21 @@ int main(int argc, const char *argv[])
   auto nothings = makeNothingsTexture(perm_arena, mtl_device);
   auto texture = nothings.texture;
 
-  auto render_pipeline_descriptor = [MTLRenderPipelineDescriptor new];
-  render_pipeline_descriptor.vertexFunction   = vert_func;
-  render_pipeline_descriptor.fragmentFunction = frag_func;
-  render_pipeline_descriptor.vertexDescriptor = vertex_descriptor;
-  render_pipeline_descriptor.colorAttachments[0].pixelFormat = ca_metal_layer.pixelFormat;
-  auto render_pipeline_state = [mtl_device newRenderPipelineStateWithDescriptor:render_pipeline_descriptor error:&error];
+  auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
+  render_pipeline_desc.vertexFunction   = vert_func;
+  render_pipeline_desc.fragmentFunction = frag_func;
+  render_pipeline_desc.vertexDescriptor = vertex_descriptor;
+  auto attachment = render_pipeline_desc.colorAttachments[0];
+  attachment.pixelFormat                 = ca_metal_layer.pixelFormat;
+  attachment.blendingEnabled             = YES;
+  // pre-multiplied alpha blending 
+  attachment.rgbBlendOperation           = MTLBlendOperationAdd;
+  attachment.alphaBlendOperation         = MTLBlendOperationAdd;
+  attachment.sourceRGBBlendFactor        = MTLBlendFactorOne;
+  attachment.sourceAlphaBlendFactor      = MTLBlendFactorOne;
+  attachment.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+  attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;  // NOTE: This works when dst alpha=1, but idk about compositing with a translucent destination
+  auto render_pipeline_state = [mtl_device newRenderPipelineStateWithDescriptor:render_pipeline_desc error:&error];
   if (!render_pipeline_state)
   {
     printf("failed to create render pipeline state: %s\n", error.localizedDescription.UTF8String);
@@ -350,7 +368,7 @@ int main(int argc, const char *argv[])
   [vert_func release];
   [frag_func release];
   [vertex_descriptor release];
-  [render_pipeline_descriptor release];
+  [render_pipeline_desc release];
 
   auto command_queue = [mtl_device newCommandQueue];
 
