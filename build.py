@@ -23,7 +23,8 @@ try:
     os.makedirs('build', exist_ok=True)
     os.chdir('build')
 
-    run_only = (len(sys.argv) > 1 and sys.argv[1] == 'run')
+    run_only     = (len(sys.argv) > 1 and sys.argv[1] == 'run')
+    full_rebuild = (len(sys.argv) > 1 and sys.argv[1] == 'full')
     if not run_only:
         # Set compiler and linker flags
         optimization = ['-O0']
@@ -39,12 +40,12 @@ try:
         run(['xcrun', '-sdk', 'macosx', 'metallib', 'shaders.air', '-o', 'shaders.metallib'])
 
         # Link
-        linked_libs = []
+        linked_libs = ['-lstdc++']
         frameworks=['Metal', 'Cocoa', 'QuartzCore']
         framework_flags=[]
         for framework in frameworks:
             framework_flags += ["-framework", framework]
-        run(['clang', 'autodraw.o', '-o', 'autodraw', '-lstdc++'] + linked_libs + framework_flags)
+        run(['clang', 'autodraw.o', '-o', 'autodraw'] + linked_libs + framework_flags)
         print('Build complete!')
 
     run(['./autodraw'])

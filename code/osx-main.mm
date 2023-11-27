@@ -4,6 +4,9 @@
   - Colors are in linear range, alpha=1 (so pma doesn't matter)
   - Packed colors are rgba in memory order (i.e abgr in u32 register order)
   pma = pre-multiplied alpha
+
+  TODO:
+  - draw the debug info
  */
 
 #import <stdio.h>
@@ -177,9 +180,11 @@ ReadFileResult platformReadEntireFile(const char *file_name)
   return out;
 }
 
-struct Nothings {
+struct Codepoint {
   id<MTLTexture> texture;
-  i32 width, height, xoff, yoff;
+  i32 width, height;
+  f32 width_over_height;
+  i32 xoff, yoff;
 };
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -207,25 +212,31 @@ pack8x4(V4 color)
 }
 
 internal id<MTLTexture>
+sRGBATexture(void *bitmap, i32 width, i32 height)
+{
+  auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                       width:width height:height mipmapped:NO];
+  auto texture = [mtl_device newTextureWithDescriptor:texture_desc];
+  [texture_desc release];
+  [texture replaceRegion:MTLRegionMake2D(0,0,width,height)
+   mipmapLevel:0
+   withBytes:bitmap
+   bytesPerRow:4*width];
+  return texture;
+}
+
+inline id<MTLTexture>
 makeColorTexture(V4 color)
 {
   V4 srgb = linearToSrgb(color);
   u32 packed = pack8x4(srgb);
-  // TODO #cleanup texture creation
-  auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
-                       width:1 height:1 mipmapped:NO];
-  auto texture = [mtl_device newTextureWithDescriptor:texture_desc];
-  [texture_desc release];
-  [texture replaceRegion:MTLRegionMake2D(0,0,1,1)
-   mipmapLevel:0
-   withBytes:&packed
-   bytesPerRow:4];
-  return texture;
+  return sRGBATexture(&packed, 1, 1);
 }
 
-internal Nothings
-makeNothingsTexture(Arena &arena, id<MTLDevice> mtl_device) {
-  Nothings nothings = {};
+internal Codepoint codepoints[128];
+
+internal void
+makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
   auto temp = beginTemporaryMemory(arena);
   auto read_file = platformReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
@@ -235,67 +246,65 @@ makeNothingsTexture(Arena &arena, id<MTLDevice> mtl_device) {
     stbtt_fontinfo font;
     stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
     f32 pixel_height = stbtt_ScaleForPixelHeight(&font, 128.f);
-    u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, 'N',
-                                               &nothings.width, &nothings.height,
-                                               &nothings.xoff, &nothings.yoff);
-    
-    auto width = nothings.width;
-    auto height = nothings.height;
 
-    u8 *bitmap = (u8 *)pushSize(arena, 4 * nothings.width * nothings.height);
-    // Blow it out to rgba bitmap
-    u32 *dst = (u32 *)bitmap;
-    u8 *src  = mono_bitmap;
-    for (i32 y=0; y < height; y++) {
-      for (i32 x=0; x < width; x++) {
-        u32 au = *src++;
-        f32 c = (f32)au / 255.f;
-        // pre-multiplied alpha (NOTE: we assume color is white)
-        c = square(c);
-        u32 cu = (u32)(255.f*c + 0.5f) ;
-        *dst++ = (cu << 24) | (cu << 16) | (cu << 8) | au;
+    for (i32 ascii_char=33; ascii_char < 127; ascii_char++) {
+      i32 width, height, xoff, yoff;
+      u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
+                                                 &width, &height, &xoff, &yoff);
+      assert(width != 0 && height != 0);
+      u8 *bitmap = (u8 *)pushSize(arena, 4 * width * height);
+      // Blow it out to rgba bitmap
+      u32 *dst = (u32 *)bitmap;
+      u8 *src  = mono_bitmap;
+      for (i32 y=0; y < height; y++) {
+        for (i32 x=0; x < width; x++) {
+          u32 au = *src++;
+          // assert(au < 256);
+          f32 c = (f32)au / 255.f;
+          // pre-multiplied alpha (NOTE: we assume color is white)
+          c = square(c);
+          u32 cu = (u32)(255.f*c + 0.5f) ;
+          *dst++ = (au << 24) | (cu << 16) | (cu << 8) | (cu << 0);
+        }
       }
-    }
-    stbtt_FreeBitmap(mono_bitmap, 0);
 
-    // Create Texture
-    // The color is white so srgb doesn't matter
-    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
-                         width:width height:height mipmapped:NO];
-    nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
-    [texture_desc release];
-    // Copy loaded image into MTLTextureObject
-    [nothings.texture replaceRegion:MTLRegionMake2D(0,0,width,height)
-     mipmapLevel:0
-     withBytes:bitmap
-     bytesPerRow:4*width];
+      stbtt_FreeBitmap(mono_bitmap, 0);
+      // Note: The color is white so srgb doesn't matter
+      auto texture = sRGBATexture(bitmap, width, height);
+      codepoints[ascii_char] = {texture, width, height, (r32)width/(r32)height, xoff, yoff};}
   }
   endTemporaryMemory(temp);
-  return nothings;
 }
 
-internal Nothings
+internal id<MTLTexture>
 makeTestImageTexture(id<MTLDevice> mtl_device)
 {
-  Nothings nothings = {};
+  i32 width, height;
   int num_channel;
   unsigned char* bitmap = stbi_load("../resources/testTexture.png",
-                                    &nothings.width, &nothings.height, &num_channel, 4);
-  assert(num_channel == 4);
-  auto width = nothings.width;
-  auto height = nothings.height;
+                                    &width, &height, &num_channel, 4);
+  assert(bitmap && num_channel == 4);
 
-  // Create Texture
-  auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
-                       width:width height:height mipmapped:NO];
-  nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
-  [texture_desc release];
-  // Copy loaded image into MTLTextureObject
-  [nothings.texture replaceRegion:MTLRegionMake2D(0,0,width,height)
-   mipmapLevel:0
-   withBytes:bitmap
-   bytesPerRow:4*width];
-  return nothings;
+  return sRGBATexture(bitmap, width, height);
+}
+
+inline f32
+pushLetter(RenderGroup &rgroup, f32 min_x, f32 min_y, char character)
+{
+  auto codepoint = codepoints[(u8)character];
+  auto width  = pixel_to_clip_x * (f32)codepoint.width;
+  auto height = pixel_to_clip_y * (f32)codepoint.height;
+  pushRect(rgroup, min_x, min_y, width, height, codepoint.texture);
+  return width;
+}
+
+inline void
+pushString(RenderGroup &rgroup, f32 min_x, f32 min_y, char *cstring)
+{
+  auto x = min_x;
+  while (char c = *cstring++) {
+    x += pushLetter(rgroup, x, min_y, c);
+  }
 }
 
 int main(int argc, const char *argv[])
@@ -389,23 +398,18 @@ int main(int argc, const char *argv[])
     v.attributes[i].bufferIndex = 0;
     offset += sizeof(simd_float2);
     i++;
-    // type
-    v.attributes[i].format      = MTLVertexFormatInt;
-    v.attributes[i].offset      = offset;
-    v.attributes[i].bufferIndex = 0;
-    offset += sizeof(int);
-    i++;
     // layout
     v.layouts[0].stride       = sizeof(VertexInput);
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+
+    assert(offset == sizeof(VertexInput));
   }
 
-  auto nothings = makeNothingsTexture(perm_arena, mtl_device);
-  auto nothings_texture = nothings.texture;
-  // auto image_texture = makeTestImageTexture(mtl_device).texture;
+  makeCodepointTextures(temp_arena, mtl_device);
   internal auto red_texture = makeColorTexture(v4(1,0,0,1));
-  internal auto bg_texture  = makeColorTexture(v4(0,0.25f,0.25f,1));
+  // internal auto bg_texture  = makeColorTexture(v4(0,0.25f,0.25f,1));
+  internal auto bg_texture  = makeColorTexture(v4(0,0.f,0.f,1));
 
   auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
   render_pipeline_desc.vertexFunction   = vert_func;
@@ -523,7 +527,7 @@ int main(int argc, const char *argv[])
         }
       }
 
-      // Render ////////////////////////////////////
+      // Draw stuff ////////////////////////////////////
       RenderGroup rgroup = {};
       rgroup.arena = subArena(temp_arena, megaBytes(128));
 
@@ -531,12 +535,7 @@ int main(int argc, const char *argv[])
       pushRect(rgroup, -1.f, -1.f, +2.f, +2.f, bg_texture);
 
       // draw nothings text
-      f32 horizontal = -1.f;
-      f32 nwidth  = pixel_to_clip_x * (f32)nothings.width;
-      f32 nheight = pixel_to_clip_y * (f32)nothings.height;
-      pushRect(rgroup, horizontal, -1.f, nwidth, nheight, nothings_texture);
-      horizontal += nwidth;
-      pushRect(rgroup, horizontal, -1.f, nwidth, nheight, nothings_texture);
+      pushString(rgroup, -1.f, -1.f, "nothings");
 
       // draw cursor
       i32 cursor_x = absolute_coord % screen_width_in_tiles;
@@ -610,14 +609,13 @@ int main(int argc, const char *argv[])
                 auto min_y = entry->rect.min.y;
                 auto max_y = entry->rect.max.y;
 
-                // TODO get rid of "type"
                 VertexInput *verts = pushArray(vertex_arena, (6), VertexInput);
-                verts[0] = {{min_x, max_y}, {0.f, 0.f}, 0};
-                verts[1] = {{min_x, min_y}, {0.f, 1.f}, 0};
-                verts[2] = {{max_x, min_y}, {1.f, 1.f}, 0};
-                verts[3] = {{min_x, max_y}, {0.f, 0.f}, 0};
-                verts[4] = {{max_x, min_y}, {1.f, 1.f}, 0};
-                verts[5] = {{max_x, max_y}, {1.f, 0.f}, 0};
+                verts[0] = {{min_x, max_y}, {0.f, 0.f}};
+                verts[1] = {{min_x, min_y}, {0.f, 1.f}};
+                verts[2] = {{max_x, min_y}, {1.f, 1.f}};
+                verts[3] = {{min_x, max_y}, {0.f, 0.f}};
+                verts[4] = {{max_x, min_y}, {1.f, 1.f}};
+                verts[5] = {{max_x, max_y}, {1.f, 0.f}};
 
                 break;
               }
@@ -656,20 +654,6 @@ int main(int argc, const char *argv[])
             }
           }
         }
-
-        // [command_encoder setFragmentTexture:bg_texture atIndex:0];
-        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
-        // vstart += 6;
-
-        // [command_encoder setFragmentTexture:nothings_texture atIndex:0];
-        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
-        // vstart += 6;
-        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
-        // vstart += 6;
-
-        // [command_encoder setFragmentTexture:red_texture atIndex:0];
-        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
-        // vstart += 6;
 
         [command_encoder endEncoding];
 
