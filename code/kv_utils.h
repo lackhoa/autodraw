@@ -77,7 +77,7 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #define todoIncomplete  assert(false)
 #define todoOutlaw      assert(false)
 #define todoUnknown     assert(false)
-#define invalidDefaultCase default: { assert(false) };
+#define invalidDefaultCase default: { assert(false); };
 #define breakhere  { int x = 5; (void)x; }
 
 #include "kv_intrinsics.h"
@@ -145,17 +145,18 @@ getArenaFree(Arena *arena)
 }
 
 inline void *
-pushSize(Arena *arena, size_t size, b32 zero = false)
+pushSize(Arena &arena, size_t size, b32 zero = false)
 {
-    void *out = (arena->base + arena->used);
-    arena->used += size;
+    void *out = (arena.base + arena.used);
+    arena.used += size;
     assert(arena->used <= arena->cap);
     if (zero) zeroSize(out, size);
     return(out);
 }
 
-#define pushStruct(arena, type, ...) (type *) pushSize(arena, sizeof(type), __VA_ARGS__)
-#define pushArray(arena, count, type, ...) (type *) pushSize(arena, (count)*sizeof(type), __VA_ARGS__)
+// TODO: clang broke __VA_ARGS__!
+#define pushStruct(arena, type) (type *) pushSize(arena, sizeof(type))
+#define pushArray(arena, count, type) (type *) pushSize(arena, (count)*sizeof(type))
 #define allocate(arena, x, ...) x = (mytypeof(x)) pushSize(arena, sizeof(*x), __VA_ARGS__)
 #define allocateArray(arena, count, x, ...) x = (mytypeof(x)) pushSize(arena, (count)*sizeof(*x), __VA_ARGS__)
 
@@ -172,7 +173,7 @@ pushSize(Arena *arena, size_t size, b32 zero = false)
   auto pushItems(__VA_ARGS__)
 
 inline Arena
-subArena(Arena *parent, size_t size)
+subArena(Arena &parent, size_t size)
 {
     Arena result = {};
     result.base = (u8 *)pushSize(parent, size);
@@ -180,34 +181,43 @@ subArena(Arena *parent, size_t size)
     return result;
 }
 
+inline Arena
+subArenaWithRemainingMemory(Arena &parent)
+{
+    Arena result = {};
+    auto size = parent.cap - parent.used;
+    result.base = (u8 *)pushSize(parent, size);
+    result.cap  = size;
+    return result;
+}
+
 struct TemporaryMemory
 {
-    Arena *arena;
-    size_t       original_used;
+    Arena  &arena;
+    size_t  original_used;
 };
 
+
 inline TemporaryMemory
-beginTemporaryMemory(Arena *arena)
+beginTemporaryMemory(Arena &arena)
 {
-  TemporaryMemory out = {};
-  out.arena         = arena;
-  out.original_used = arena->used;
-  arena->temp_count++;
+  TemporaryMemory out = {arena, arena.used};
+  arena.temp_count++;
   return out;
 }
 
 inline void
 endTemporaryMemory(TemporaryMemory temp)
 {
-  temp.arena->temp_count--;
+  temp.arena.temp_count--;
   assert(temp.arena->used >= temp.original_used);
-  temp.arena->used = temp.original_used;
+  temp.arena.used = temp.original_used;
 }
 
 inline void
 commitTemporaryMemory(TemporaryMemory temp)
 {
-  temp.arena->temp_count--;
+  temp.arena.temp_count--;
 }
 
 inline void
@@ -455,6 +465,7 @@ print(Arena *buffer, String s)
 }
 #endif
 
+// todo #cleanup same as "inArena"?
 inline b32
 belongsToArena(Arena *arena, u8 *memory)
 {

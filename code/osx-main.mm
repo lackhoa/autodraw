@@ -1,6 +1,9 @@
 /*
   Rules for the renderer:
-  - Bitmaps use premultiplied-alpha
+  - Textures and bitmaps are srgb premultiplied-alpha
+  - Colors are in linear range, alpha=1 (so pma doesn't matter)
+  - Packed colors are rgba in memory order (i.e abgr in u32 register order)
+  pma = pre-multiplied alpha
  */
 
 #import <stdio.h>
@@ -22,11 +25,12 @@
 #include "imstb_truetype.h"
 #pragma clang diagnostic pop
 
-global_variable f32 global_rendering_width = 1920;
-global_variable f32 global_rendering_height = 1080;
-global_variable f32 pixel_to_clip_x = 2.f / global_rendering_width;
-global_variable f32 pixel_to_clip_y = 2.f / global_rendering_height;
+global_variable id<MTLDevice> mtl_device;
 global_variable mach_timebase_info_data_t timebase;
+internal f32 global_rendering_width = 1920;
+internal f32 global_rendering_height = 1080;
+internal f32 pixel_to_clip_x = 2.f / global_rendering_width;
+internal f32 pixel_to_clip_y = 2.f / global_rendering_height;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -72,24 +76,43 @@ u8 *virtualAlloc(size_t size)
     return data;
 }
 
-struct Renderer {
-  Arena arena;
-  i32 vertex_count;
+enum RenderEntryType {
+  // todo: Is there a fast way to clear the buffer in metal?
+  RenderEntryTypeRectangle,
 };
 
-internal void
-pushRect(Renderer &renderer, f32 min_x, f32 min_y, f32 width, f32 height, i32 type)
+struct RenderEntryHeader {
+    RenderEntryType type;
+};
+
+struct RenderGroup {
+  Arena arena;
+};
+
+struct RenderEntryRectangle {
+  Rect2          rect;
+  id<MTLTexture> texture;
+};
+
+inline void *
+pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
 {
-  auto rect = (VertexInput *) pushSize(&renderer.arena, (6)*sizeof(VertexInput));
+  RenderEntryHeader *header = pushStruct(rgroup.arena, RenderEntryHeader);
+  header->type = type;
+  void *entry = pushSize(rgroup.arena, size);
+  return entry;
+}
+
+#define pushRenderEntry(rgroup, type) (RenderEntry##type *) pushRenderEntry_(rgroup, sizeof(RenderEntry##type), RenderEntryType##type)
+
+internal void
+pushRect(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, id<MTLTexture>texture)
+{
+  RenderEntryRectangle &entry = *pushRenderEntry(rgroup, Rectangle);
   f32 max_x = min_x + width;
   f32 max_y = min_y + height;
-  rect[0] = {{min_x, max_y}, {0.f, 0.f}, type};
-  rect[1] = {{min_x, min_y}, {0.f, 1.f}, type};
-  rect[2] = {{max_x, min_y}, {1.f, 1.f}, type};
-  rect[3] = {{min_x, max_y}, {0.f, 0.f}, type};
-  rect[4] = {{max_x, min_y}, {1.f, 1.f}, type};
-  rect[5] = {{max_x, max_y}, {1.f, 0.f}, type};
-  renderer.vertex_count += 6;
+  entry.rect    = {min_x, min_y, max_x, max_y};
+  entry.texture = texture;
 }
 
 double osxGetCurrentTimeInSeconds()
@@ -162,10 +185,48 @@ struct Nothings {
 #define STB_IMAGE_IMPLEMENTATION
 #import "stb_image.h"
 
-internal Nothings
-makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
+inline V4
+linearToSrgb(V4 linear)
 {
+    V4 result;
+    result.r = squareRoot(linear.r);
+    result.g = squareRoot(linear.g);
+    result.b = squareRoot(linear.b);
+    result.a = linear.a;
+    return result;
+}
+
+inline u32
+pack8x4(V4 color)
+{
+  u32 result = ((u32)(color.a*255.0f + 0.5f) << 24
+                | (u32)(color.b*255.0f + 0.5f) << 16
+                | (u32)(color.g*255.0f + 0.5f) << 8
+                | (u32)(color.r*255.0f + 0.5f));
+  return result;
+}
+
+internal id<MTLTexture>
+makeColorTexture(V4 color)
+{
+  V4 srgb = linearToSrgb(color);
+  u32 packed = pack8x4(srgb);
+  // TODO #cleanup texture creation
+  auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                       width:1 height:1 mipmapped:NO];
+  auto texture = [mtl_device newTextureWithDescriptor:texture_desc];
+  [texture_desc release];
+  [texture replaceRegion:MTLRegionMake2D(0,0,1,1)
+   mipmapLevel:0
+   withBytes:&packed
+   bytesPerRow:4];
+  return texture;
+}
+
+internal Nothings
+makeNothingsTexture(Arena &arena, id<MTLDevice> mtl_device) {
   Nothings nothings = {};
+  auto temp = beginTemporaryMemory(arena);
   auto read_file = platformReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
@@ -191,15 +252,15 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
         f32 c = (f32)au / 255.f;
         // pre-multiplied alpha (NOTE: we assume color is white)
         c = square(c);
-        u32 cu = (u32)(255.f * c) ;
+        u32 cu = (u32)(255.f*c + 0.5f) ;
         *dst++ = (cu << 24) | (cu << 16) | (cu << 8) | au;
       }
     }
     stbtt_FreeBitmap(mono_bitmap, 0);
 
-    // Create Texture (NOTE: alpha is in linear space, so the rgb is linear too)
-    // But since the color is white it doesn't matter (why is it so complicated?)
-    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+    // Create Texture
+    // The color is white so srgb doesn't matter
+    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
                          width:width height:height mipmapped:NO];
     nothings.texture = [mtl_device newTextureWithDescriptor:texture_desc];
     [texture_desc release];
@@ -209,15 +270,16 @@ makeNothingsTexture(Arena *arena, id<MTLDevice> mtl_device)
      withBytes:bitmap
      bytesPerRow:4*width];
   }
+  endTemporaryMemory(temp);
   return nothings;
 }
 
 internal Nothings
-makeTestImageTexture(Arena *arena, id<MTLDevice> mtl_device)
+makeTestImageTexture(id<MTLDevice> mtl_device)
 {
   Nothings nothings = {};
   int num_channel;
-  unsigned char* bitmap = stbi_load("../resources/blue.png",
+  unsigned char* bitmap = stbi_load("../resources/testTexture.png",
                                     &nothings.width, &nothings.height, &num_channel, 4);
   assert(num_channel == 4);
   auto width = nothings.width;
@@ -273,7 +335,7 @@ int main(int argc, const char *argv[])
 
   [NSApp finishLaunching];
 
-  id<MTLDevice> mtl_device = MTLCreateSystemDefaultDevice();
+  mtl_device = MTLCreateSystemDefaultDevice();
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
@@ -305,10 +367,8 @@ int main(int argc, const char *argv[])
   size_t memory_cap = gigaBytes(1);
   u8 *memory = virtualAlloc(memory_cap);
   size_t temp_size = megaBytes(512);
-  Arena temp_arena_ = newArena(temp_size, memory);
-  Arena *temp_arena = &temp_arena_;
-  Arena perm_arena_ = newArena(memory_cap-temp_size, memory+temp_size);;
-  Arena *perm_arena = &perm_arena_;
+  Arena temp_arena = newArena(temp_size, memory);
+  Arena perm_arena = newArena(memory_cap-temp_size, memory+temp_size);
 
   i32 screen_width_in_tiles = 80;
 
@@ -342,7 +402,10 @@ int main(int argc, const char *argv[])
   }
 
   auto nothings = makeNothingsTexture(perm_arena, mtl_device);
-  auto texture = nothings.texture;
+  auto nothings_texture = nothings.texture;
+  // auto image_texture = makeTestImageTexture(mtl_device).texture;
+  internal auto red_texture = makeColorTexture(v4(1,0,0,1));
+  internal auto bg_texture  = makeColorTexture(v4(0,0.25f,0.25f,1));
 
   auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
   render_pipeline_desc.vertexFunction   = vert_func;
@@ -441,7 +504,7 @@ int main(int argc, const char *argv[])
           f32 acceleration = moving_right ? da : -da;
           tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
           velocity    += acceleration * dt;
-          if (velocity > 100) {debugbreak;}  // todo: why isn't this getting hit after 1s?
+          if (velocity > 100) {debugbreak;}  // TODO: why isn't this getting hit after 1s?
 
           i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
           absolute_coord += tile_offset_rounded;
@@ -461,28 +524,29 @@ int main(int argc, const char *argv[])
       }
 
       // Render ////////////////////////////////////
-      Renderer renderer = {};
-      renderer.arena = subArena(temp_arena, megaBytes(128));
+      RenderGroup rgroup = {};
+      rgroup.arena = subArena(temp_arena, megaBytes(128));
 
       // draw backdrop
-      pushRect(renderer, -1.f, -1.f, +2.f, +2.f, 0);
-      // draw nothings text
-      pushRect(renderer, -0.f, -0.f, pixel_to_clip_x * (f32)nothings.width, pixel_to_clip_y * (f32)nothings.height, 2);
+      pushRect(rgroup, -1.f, -1.f, +2.f, +2.f, bg_texture);
 
+      // draw nothings text
+      f32 horizontal = -1.f;
+      f32 nwidth  = pixel_to_clip_x * (f32)nothings.width;
+      f32 nheight = pixel_to_clip_y * (f32)nothings.height;
+      pushRect(rgroup, horizontal, -1.f, nwidth, nheight, nothings_texture);
+      horizontal += nwidth;
+      pushRect(rgroup, horizontal, -1.f, nwidth, nheight, nothings_texture);
+
+      // draw cursor
       i32 cursor_x = absolute_coord % screen_width_in_tiles;
       i32 cursor_y = absolute_coord / screen_width_in_tiles;
       f32 tile_width  = 2.f / (f32)screen_width_in_tiles;
       f32 tile_height = tile_width;
-      // draw cursor
-      pushRect(renderer,
+      pushRect(rgroup,
                -1.f + ((f32)cursor_x + tile_offset) * tile_width,
                +1.f - (f32)(cursor_y+1) * tile_height,
-               tile_width, tile_height, 1);
-
-      // "Private" mode crashes the machine
-      id<MTLBuffer> vertex_buffer = [[mtl_device newBufferWithBytes:renderer.arena.base
-                                      length:renderer.arena.used
-                                      options:MTLResourceStorageModeShared] autorelease];
+               tile_width, tile_height, red_texture);
 
       /////////////////////////////////////
 
@@ -505,6 +569,9 @@ int main(int argc, const char *argv[])
       frame_start_sec = osxGetCurrentTimeInSeconds();
 
       {// drawing
+        // "Private" mode crashes the machine
+
+
         auto ca_metal_drawable = [ca_metal_layer nextDrawable];
         if (!ca_metal_drawable)
         {
@@ -519,15 +586,92 @@ int main(int argc, const char *argv[])
         render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.6f, .0f, .6f, 1.f);
 
         auto command_buffer = [command_queue commandBuffer];
+        auto command_encoder = [command_buffer renderCommandEncoderWithDescriptor:render_pass_descriptor];
+        [command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
+        [command_encoder setRenderPipelineState:render_pipeline_state];
+        [command_encoder setFragmentSamplerState:sampler_state atIndex:0];
 
-        auto render_command_encoder = [command_buffer renderCommandEncoderWithDescriptor:render_pass_descriptor];
-        [render_command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
-        [render_command_encoder setRenderPipelineState:render_pipeline_state];
-        [render_command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
-        [render_command_encoder setFragmentTexture:texture atIndex:0];
-        [render_command_encoder setFragmentSamplerState:sampler_state atIndex:0];
-        [render_command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:renderer.vertex_count];
-        [render_command_encoder endEncoding];
+        // todo Tell the render group to keep track of frame buffer size, but that's platform-specific.
+        auto vertex_arena = subArena(temp_arena, megaBytes(64));
+        {// render group processing 1.: build vertex buffer
+          u8 *next = rgroup.arena.base;
+          u8 *end  = rgroup.arena.base + rgroup.arena.used;
+          while (next != end) {
+            auto header = (RenderEntryHeader *)next;
+            next += sizeof(RenderEntryHeader);
+
+            switch (header->type) {
+              case RenderEntryTypeRectangle: {
+                auto entry = (RenderEntryRectangle *)next;
+                next += sizeof(RenderEntryRectangle);
+
+                auto min_x = entry->rect.min.x;
+                auto max_x = entry->rect.max.x;
+                auto min_y = entry->rect.min.y;
+                auto max_y = entry->rect.max.y;
+
+                // TODO get rid of "type"
+                VertexInput *verts = pushArray(vertex_arena, (6), VertexInput);
+                verts[0] = {{min_x, max_y}, {0.f, 0.f}, 0};
+                verts[1] = {{min_x, min_y}, {0.f, 1.f}, 0};
+                verts[2] = {{max_x, min_y}, {1.f, 1.f}, 0};
+                verts[3] = {{min_x, max_y}, {0.f, 0.f}, 0};
+                verts[4] = {{max_x, min_y}, {1.f, 1.f}, 0};
+                verts[5] = {{max_x, max_y}, {1.f, 0.f}, 0};
+
+                break;
+              }
+
+                invalidDefaultCase;
+            }
+          }
+        }
+        auto vertex_buffer = [[mtl_device newBufferWithBytes:vertex_arena.base
+                               length:vertex_arena.used
+                               options:MTLResourceStorageModeShared] autorelease];
+
+        [command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
+
+        {// render group processing 2.: send commands (todo: because apparently we can't do this before setVertexBuffer?)
+          i32 vstart = 0;
+          u8 *next = rgroup.arena.base;
+          u8 *end  = rgroup.arena.base + rgroup.arena.used;
+          while (next != end) {
+            auto header = (RenderEntryHeader *)next;
+            next += sizeof(RenderEntryHeader);
+
+            switch (header->type) {
+              case RenderEntryTypeRectangle: {
+                auto entry = (RenderEntryRectangle *)next;
+                next += sizeof(RenderEntryRectangle);
+
+                [command_encoder setFragmentTexture:entry->texture atIndex:0];
+                [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
+                vstart += 6;
+
+                break;
+              }
+
+                invalidDefaultCase;
+            }
+          }
+        }
+
+        // [command_encoder setFragmentTexture:bg_texture atIndex:0];
+        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
+        // vstart += 6;
+
+        // [command_encoder setFragmentTexture:nothings_texture atIndex:0];
+        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
+        // vstart += 6;
+        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
+        // vstart += 6;
+
+        // [command_encoder setFragmentTexture:red_texture atIndex:0];
+        // [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
+        // vstart += 6;
+
+        [command_encoder endEncoding];
 
         [command_buffer presentDrawable:ca_metal_drawable];
         [command_buffer commit];
