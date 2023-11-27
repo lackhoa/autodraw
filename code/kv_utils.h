@@ -2,7 +2,8 @@
 
 #include <cstdint>
 #include <stdio.h>
-#include "stdlib.h"
+#include <stdarg.h>
+// #include "stdlib.h"
 
 struct BufferHeader {
   size_t len;
@@ -280,23 +281,20 @@ struct String
 };
 
 inline void *
-getNext(Arena *buffer)
+getNext(Arena &buffer)
 {
-  if (buffer)
-    return (buffer->base + buffer->used);
-  else
-    return 0;
+  return (buffer.base + buffer.used);
 }
 
 struct StartString {
-  StringBuffer *buffer;
+  StringBuffer &buffer;
   char         *chars;
 };
 
 inline StartString
-startString(StringBuffer *buffer)
+startString(StringBuffer &buffer)
 {
-  char *start = (char *)(buffer->base + buffer->used);
+  char *start = (char *)(buffer.base + buffer.used);
   return {.buffer=buffer, .chars=start};
 };
 
@@ -304,11 +302,8 @@ inline String
 endString(StartString start)
 {
   String out = {};
-  if (start.buffer)
-  {
-    out.chars = start.chars;
-    out.length = (i32)((char*)getNext(start.buffer) - start.chars);
-  }
+  out.chars = start.chars;
+  out.length = (i32)((char*)getNext(start.buffer) - start.chars);
   return out;
 }
 
@@ -408,45 +403,38 @@ equal(char *s1, char *s2)
   return out;
 }
 
-#if 0
 internal String
-printVA(Arena *buffer, char *format, va_list arg_list)
+printVA(Arena &buffer, char *format, va_list arg_list)
 {
   char *at = (char *)getNext(buffer);
-  int printed = vsprintf_s(at, (buffer->cap - buffer->used), format, arg_list);
-  buffer->used += printed;
+  int printed = vsnprintf(at, (buffer.cap - buffer.used), format, arg_list);
+  buffer.used += printed;
   return String{at, printed};
 }
 
 internal String
-print(Arena *buffer, char *format, ...)
+print(Arena &buffer, char *format, ...)
 {
   String out = {};
 
-   va_list arg_list;
-  __crt_va_start(arg_list, format);
+  va_list arg_list;
+  va_start(arg_list, format);
 
-  if (buffer)
-  {
-    out.chars = (char *)getNext(buffer);
-    auto printed = vsprintf_s(out.chars, (buffer->cap-1 - buffer->used), format, arg_list);
-    buffer->used += printed;
-    out.length    = printed;
-    buffer->base[buffer->used] = 0; // nil-termination
-  }
-  else
-    vprintf_s(format, arg_list);
+  out.chars = (char *)getNext(buffer);
+  auto printed = vsnprintf(out.chars, (buffer.cap-1 - buffer.used), format, arg_list);
+  buffer.used += printed;
+  out.length   = printed;
+  buffer.base[buffer.used] = 0; // nil-termination
 
-  __crt_va_end(arg_list);
+  va_end(arg_list);
 
   return out;
 }
 
 inline String
-print(Arena *buffer, String s)
+print(Arena &buffer, String s)
 {
   String out = {};
-  if (buffer)
   {
     out.chars = (char *)getNext(buffer);
     char *at = out.chars;
@@ -455,15 +443,18 @@ print(Arena *buffer, String s)
       *at++ = *c++;
     *at = 0;
     out.length = (i32)(at - out.chars);
-    buffer->used += out.length;
+    buffer.used += out.length;
     assert(buffer->used <= buffer->cap);
   }
-  else
-    printf("%.*s", s.length, s.chars);
 
   return out;
 }
-#endif
+
+inline void
+print(String s)
+{
+  printf("%.*s", s.length, s.chars);
+}
 
 // todo #cleanup same as "inArena"?
 inline b32

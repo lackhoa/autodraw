@@ -6,7 +6,7 @@
   pma = pre-multiplied alpha
 
   TODO:
-  - draw the debug info
+  - draw cursor velocity
  */
 
 #import <stdio.h>
@@ -30,6 +30,7 @@
 
 global_variable id<MTLDevice> mtl_device;
 global_variable mach_timebase_info_data_t timebase;
+internal f32 debug_font_height = 128.f;
 internal f32 global_rendering_width = 1920;
 internal f32 global_rendering_height = 1080;
 internal f32 pixel_to_clip_x = 2.f / global_rendering_width;
@@ -245,9 +246,9 @@ makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
   } else {
     stbtt_fontinfo font;
     stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
-    f32 pixel_height = stbtt_ScaleForPixelHeight(&font, 128.f);
+    f32 pixel_height = stbtt_ScaleForPixelHeight(&font, debug_font_height);
 
-    for (i32 ascii_char=33; ascii_char < 127; ascii_char++) {
+    for (i32 ascii_char=33; ascii_char <= 126; ascii_char++) {
       i32 width, height, xoff, yoff;
       u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
                                                  &width, &height, &xoff, &yoff);
@@ -291,6 +292,7 @@ makeTestImageTexture(id<MTLDevice> mtl_device)
 inline f32
 pushLetter(RenderGroup &rgroup, f32 min_x, f32 min_y, char character)
 {
+  assert(33 <= character && character <= 126);
   auto codepoint = codepoints[(u8)character];
   auto width  = pixel_to_clip_x * (f32)codepoint.width;
   auto height = pixel_to_clip_y * (f32)codepoint.height;
@@ -298,20 +300,52 @@ pushLetter(RenderGroup &rgroup, f32 min_x, f32 min_y, char character)
   return width;
 }
 
-inline void
-pushString(RenderGroup &rgroup, f32 min_x, f32 min_y, char *cstring)
+internal void
+pushText(RenderGroup &rgroup, f32 min_x, f32 min_y, String string)
 {
   auto x = min_x;
-  while (char c = *cstring++) {
-    x += pushLetter(rgroup, x, min_y, c);
+  for (i32 i=0; i < string.length; i++) {
+    char c = string.chars[i];
+    if (c == ' ') {
+      x += pixel_to_clip_x * 12.f;
+    } else {
+      x += pushLetter(rgroup, x, min_y, c);
+    }
   }
+}
+
+inline void
+pushTextFormat(Arena &arena, RenderGroup &rgroup, f32 min_x, f32 min_y, char *format, ...)
+{
+  va_list args;
+  va_start(args, format);
+  auto string = printVA(arena, format, args);
+  pushText(rgroup, min_x, min_y, string);
+  va_end(args);
+}
+
+struct DebugDrawer {
+  Arena       &arena;
+  RenderGroup &rgroup;
+  f32          y = -1.f;
+};
+
+inline void
+pushDebugText(DebugDrawer &drawer, char *format, ...)
+{
+  va_list args;
+  va_start(args, format);
+  auto string = printVA(drawer.arena, format, args);
+  pushText(drawer.rgroup, -1.f, drawer.y, string);
+  drawer.y += pixel_to_clip_y * debug_font_height;
+  va_end(args);
 }
 
 int main(int argc, const char *argv[])
 {
   mach_timebase_info(&timebase);
   f32 game_update_hz = 60;
-  const f32 target_seconds_per_frame = 1.0f / game_update_hz;
+  const f32 target_frame_time_sec = 1.0f / game_update_hz;
 
   NSApplication *app = [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -447,7 +481,9 @@ int main(int argc, const char *argv[])
 
   // Main loop
   f32 frame_start_sec = osxGetCurrentTimeInSeconds();
+  f32 frame_time_sec  = 0;
   osx_main_delegate->is_running = true;
+  u32 debug_counter = 0;
   while (osx_main_delegate->is_running)
   {
     auto temp = beginTemporaryMemory(temp_arena);
@@ -463,6 +499,9 @@ int main(int argc, const char *argv[])
         switch (event.type) {
           case NSEventTypeKeyUp:
           case NSEventTypeKeyDown: {
+            // We'd like to handle repeat ourselves
+            b32 is_repeat = [event isARepeat];
+
             bool is_down = (event.type == NSEventTypeKeyDown);
             if ((event.keyCode == kVK_ANSI_Q) && is_down) {
               // todo: this should be Cmd+Q
@@ -471,12 +510,12 @@ int main(int argc, const char *argv[])
               switch (event.keyCode) {
                 case kVK_ANSI_H: {
                   action_state[GameActionMoveLeft].is_down = is_down;
-                  new_direction_key_press = true;
+                  new_direction_key_press = !is_repeat;
                   break;
                 }
                 case kVK_ANSI_L: {
                   action_state[GameActionMoveRight].is_down = is_down;
-                  new_direction_key_press = true;
+                  new_direction_key_press = !is_repeat;
                   break;
                 }
               }
@@ -496,19 +535,21 @@ int main(int argc, const char *argv[])
       }
 
       // Game logic
-      auto &dt = target_seconds_per_frame;
+      auto &dt = target_frame_time_sec;
       b32 moving_right = action_state[GameActionMoveRight].is_down;
       b32 moving_left  = action_state[GameActionMoveLeft].is_down;
       if (moving_right || moving_left) {
         if (new_direction_key_press) {
+          velocity = 0;
           absolute_coord += moving_right ? 1 : -1;
+          debug_counter = 0;
         } else {
+          debug_counter++;
           // unit of movement: object
-          const f32 da = 100.f;
+          const f32 da = 10 * (f32)screen_width_in_tiles;
           f32 acceleration = moving_right ? da : -da;
           tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
           velocity    += acceleration * dt;
-          if (velocity > 100) {debugbreak;}  // TODO: why isn't this getting hit after 1s?
 
           i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
           absolute_coord += tile_offset_rounded;
@@ -519,7 +560,7 @@ int main(int argc, const char *argv[])
         tile_offset = 0.f;
       }
 
-      // clamp
+      // clamp cursor coordinate
       if (absolute_coord <= 0) {
         absolute_coord = 0;
         if (tile_offset < 0) {
@@ -534,8 +575,11 @@ int main(int argc, const char *argv[])
       // draw backdrop
       pushRect(rgroup, -1.f, -1.f, +2.f, +2.f, bg_texture);
 
-      // draw nothings text
-      pushString(rgroup, -1.f, -1.f, "nothings");
+      // draw debug text
+      DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
+      pushDebugText(debug_drawer, "frame time: %.3f ms", frame_time_sec * 1000);
+      pushDebugText(debug_drawer, "cursor velocity: %.3f unit/s", velocity);
+      pushDebugText(debug_drawer, "debug counter: %d", debug_counter);
 
       // draw cursor
       i32 cursor_x = absolute_coord % screen_width_in_tiles;
@@ -550,18 +594,18 @@ int main(int argc, const char *argv[])
       /////////////////////////////////////
 
       // sleep
-      r32 sleep_sec;
-      r32 seconds_elapsed_for_frame = osxGetCurrentTimeInSeconds() - frame_start_sec;
-      if (seconds_elapsed_for_frame < target_seconds_per_frame) {
-        sleep_sec = .8f * (target_seconds_per_frame - seconds_elapsed_for_frame);
+      frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
+      f32 diff = (target_frame_time_sec - frame_time_sec);
+      if (diff > 0) {
+        f32 sleep_sec = .8f * diff;
         if (sleep_sec > 0) {
           sleep(sleep_sec);
         }
-        seconds_elapsed_for_frame += sleep_sec;
 
         // busy wait
-        while (seconds_elapsed_for_frame < target_seconds_per_frame) {
-          seconds_elapsed_for_frame = osxGetCurrentTimeInSeconds() - frame_start_sec;
+        frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
+        while (frame_time_sec < target_frame_time_sec) {
+          frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
         }
       }
 
