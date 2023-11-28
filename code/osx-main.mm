@@ -1,4 +1,6 @@
 /*
+  The platform layer shouldn't know about the game, except for platform
+
   Rules for the renderer:
   - Textures and bitmaps are srgb premultiplied-alpha
   - Colors are in linear range, alpha=1 (so pma doesn't matter)
@@ -21,6 +23,7 @@
 #import "mac-keycodes.h"
 #import "shader-interface.h"
 #import "platform.h"
+#import "game.cpp"  // TODO: We must load this dynamically
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
@@ -28,13 +31,9 @@
 #include "imstb_truetype.h"
 #pragma clang diagnostic pop
 
-global_variable id<MTLDevice> mtl_device;
-global_variable mach_timebase_info_data_t timebase;
-internal f32 debug_font_height = 128.f;
-internal f32 global_rendering_width = 1920;
-internal f32 global_rendering_height = 1080;
-internal f32 pixel_to_clip_x = 2.f / global_rendering_width;
-internal f32 pixel_to_clip_y = 2.f / global_rendering_height;
+internal id<MTLDevice> mtl_device;
+internal mach_timebase_info_data_t timebase;
+internal Arena temp_arena;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -80,62 +79,11 @@ u8 *virtualAlloc(size_t size)
     return data;
 }
 
-enum RenderEntryType {
-  // todo: Is there a fast way to clear the buffer in metal?
-  RenderEntryTypeRectangle,
-};
-
-struct RenderEntryHeader {
-    RenderEntryType type;
-};
-
-struct RenderGroup {
-  Arena arena;
-};
-
-struct RenderEntryRectangle {
-  Rect2          rect;
-  id<MTLTexture> texture;
-};
-
-inline void *
-pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
-{
-  RenderEntryHeader *header = pushStruct(rgroup.arena, RenderEntryHeader);
-  header->type = type;
-  void *entry = pushSize(rgroup.arena, size);
-  return entry;
-}
-
-#define pushRenderEntry(rgroup, type) (RenderEntry##type *) pushRenderEntry_(rgroup, sizeof(RenderEntry##type), RenderEntryType##type)
-
-internal void
-pushRect(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, id<MTLTexture>texture)
-{
-  RenderEntryRectangle &entry = *pushRenderEntry(rgroup, Rectangle);
-  f32 max_x = min_x + width;
-  f32 max_y = min_y + height;
-  entry.rect    = {min_x, min_y, max_x, max_y};
-  entry.texture = texture;
-}
-
 double osxGetCurrentTimeInSeconds()
 {
   u64 nano_secs = mach_absolute_time() * timebase.numer / timebase.denom;
   return (double)nano_secs * 1.0E-9;
 }
-
-struct ActionState {
-  b32 is_down;
-};
-
-enum GameAction {
-  GameActionMoveRight,
-  GameActionMoveLeft,
-  GameActionMoveUp,
-  GameActionMoveDown,
-  GameActionCount,
-};
 
 void platformFreeFileMemory(u8 *memory) {
   if (memory) {
@@ -180,13 +128,6 @@ ReadFileResult platformReadEntireFile(const char *file_name)
   close(fd);
   return out;
 }
-
-struct Codepoint {
-  id<MTLTexture> texture;
-  i32 width, height;
-  f32 width_over_height;
-  i32 xoff, yoff;
-};
 
 #define STB_IMAGE_IMPLEMENTATION
 #import "stb_image.h"
@@ -234,6 +175,7 @@ makeColorTexture(V4 color)
   return sRGBATexture(&packed, 1, 1);
 }
 
+internal id<MTLTexture> metal_textures[TextureIdCount];
 internal Codepoint codepoints[128];
 
 internal void
@@ -271,8 +213,9 @@ makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
 
       stbtt_FreeBitmap(mono_bitmap, 0);
       // Note: The color is white so srgb doesn't matter
-      auto texture = sRGBATexture(bitmap, width, height);
-      codepoints[ascii_char] = {texture, width, height, (r32)width/(r32)height, xoff, yoff};}
+      metal_textures[ascii_char] = sRGBATexture(bitmap, width, height);
+      codepoints[ascii_char]     = {width, height, (r32)width/(r32)height, xoff, yoff};
+    }
   }
   endTemporaryMemory(temp);
 }
@@ -289,64 +232,15 @@ makeTestImageTexture(id<MTLDevice> mtl_device)
   return sRGBATexture(bitmap, width, height);
 }
 
-inline f32
-pushLetter(RenderGroup &rgroup, f32 min_x, f32 min_y, char character)
-{
-  assert(33 <= character && character <= 126);
-  auto codepoint = codepoints[(u8)character];
-  auto width  = pixel_to_clip_x * (f32)codepoint.width;
-  auto height = pixel_to_clip_y * (f32)codepoint.height;
-  pushRect(rgroup, min_x, min_y, width, height, codepoint.texture);
-  return width;
-}
-
-internal void
-pushText(RenderGroup &rgroup, f32 min_x, f32 min_y, String string)
-{
-  auto x = min_x;
-  for (i32 i=0; i < string.length; i++) {
-    char c = string.chars[i];
-    if (c == ' ') {
-      x += pixel_to_clip_x * 12.f;
-    } else {
-      x += pushLetter(rgroup, x, min_y, c);
-    }
-  }
-}
-
-inline void
-pushTextFormat(Arena &arena, RenderGroup &rgroup, f32 min_x, f32 min_y, char *format, ...)
-{
-  va_list args;
-  va_start(args, format);
-  auto string = printVA(arena, format, args);
-  pushText(rgroup, min_x, min_y, string);
-  va_end(args);
-}
-
-struct DebugDrawer {
-  Arena       &arena;
-  RenderGroup &rgroup;
-  f32          y = -1.f;
-};
-
-inline void
-pushDebugText(DebugDrawer &drawer, char *format, ...)
-{
-  va_list args;
-  va_start(args, format);
-  auto string = printVA(drawer.arena, format, args);
-  pushText(drawer.rgroup, -1.f, drawer.y, string);
-  drawer.y += pixel_to_clip_y * debug_font_height;
-  va_end(args);
-}
-
 int main(int argc, const char *argv[])
 {
   mach_timebase_info(&timebase);
-  f32 game_update_hz = 60;
-  const f32 target_frame_time_sec = 1.0f / game_update_hz;
-
+  {
+    auto cap = megaBytes(64);
+    auto memory = virtualAlloc(cap);
+    temp_arena = newArena(cap, memory);
+  }
+  
   NSApplication *app = [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
@@ -381,6 +275,10 @@ int main(int argc, const char *argv[])
   mtl_device = MTLCreateSystemDefaultDevice();
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
 
+  // Setup texture array
+  metal_textures[TextureIdBackground] = makeColorTexture(v4(0,0.f,0.f,1));
+  metal_textures[TextureIdCursor]     = makeColorTexture(v4(1,0,0,1));
+
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
   ca_metal_layer.frame       = main_window.contentView.frame;
   ca_metal_layer.device      = mtl_device;
@@ -407,13 +305,12 @@ int main(int argc, const char *argv[])
   [sampler_desc release];
 
   // Allocate a big block of memory
-  size_t memory_cap = gigaBytes(1);
-  u8 *memory = virtualAlloc(memory_cap);
-  size_t temp_size = megaBytes(512);
-  Arena temp_arena = newArena(temp_size, memory);
-  Arena perm_arena = newArena(memory_cap-temp_size, memory+temp_size);
-
-  i32 screen_width_in_tiles = 80;
+  size_t game_memory_cap     = gigaBytes(1);
+  size_t platform_memory_cap = gigaBytes(1);
+  u8 *total_memory = virtualAlloc(game_memory_cap + platform_memory_cap);
+  auto platform_arena = newArena(platform_memory_cap, total_memory + game_memory_cap);
+  auto temp_memory_cap = platform_memory_cap;
+  temp_arena = subArena(platform_arena, temp_memory_cap);
 
   auto vertex_descriptor = [MTLVertexDescriptor new];
   {
@@ -441,9 +338,6 @@ int main(int argc, const char *argv[])
   }
 
   makeCodepointTextures(temp_arena, mtl_device);
-  internal auto red_texture = makeColorTexture(v4(1,0,0,1));
-  // internal auto bg_texture  = makeColorTexture(v4(0,0.25f,0.25f,1));
-  internal auto bg_texture  = makeColorTexture(v4(0,0.f,0.f,1));
 
   auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
   render_pipeline_desc.vertexFunction   = vert_func;
@@ -473,24 +367,22 @@ int main(int argc, const char *argv[])
 
   auto command_queue = [mtl_device newCommandQueue];
 
-  ActionState action_state[GameActionCount] = {};
-  b32 new_direction_key_press = false;
-  f32 velocity = {};
-  f32 tile_offset = {};
-  i32 absolute_coord = {};
+  GameMemory game_memory = {
+    .arena=newArena(game_memory_cap, total_memory),
+    .codepoints=codepoints,
+  };
 
   // Main loop
   f32 frame_start_sec = osxGetCurrentTimeInSeconds();
-  f32 frame_time_sec  = 0;
+  f32 &frame_time_sec  = game_memory.frame_time_sec;
   osx_main_delegate->is_running = true;
-  u32 debug_counter = 0;
   while (osx_main_delegate->is_running)
   {
-    auto temp = beginTemporaryMemory(temp_arena);
+    auto temp_marker = beginTemporaryMemory(temp_arena);
     @autoreleasepool
     {
       // Process events
-      new_direction_key_press = false;
+      game_memory.new_direction_key_press = false;
       while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                untilDate: nil
                                inMode: NSDefaultRunLoopMode
@@ -509,13 +401,13 @@ int main(int argc, const char *argv[])
             } else {
               switch (event.keyCode) {
                 case kVK_ANSI_H: {
-                  action_state[GameActionMoveLeft].is_down = is_down;
-                  new_direction_key_press = !is_repeat;
+                  game_memory.action_states[GameActionMoveLeft].is_down = is_down;
+                  game_memory.new_direction_key_press = !is_repeat;
                   break;
                 }
                 case kVK_ANSI_L: {
-                  action_state[GameActionMoveRight].is_down = is_down;
-                  new_direction_key_press = !is_repeat;
+                  game_memory.action_states[GameActionMoveRight].is_down = is_down;
+                  game_memory.new_direction_key_press = !is_repeat;
                   break;
                 }
               }
@@ -534,64 +426,7 @@ int main(int argc, const char *argv[])
         osx_main_delegate->window_was_resized = false;
       }
 
-      // Game logic
-      auto &dt = target_frame_time_sec;
-      b32 moving_right = action_state[GameActionMoveRight].is_down;
-      b32 moving_left  = action_state[GameActionMoveLeft].is_down;
-      if (moving_right || moving_left) {
-        if (new_direction_key_press) {
-          velocity = 0;
-          absolute_coord += moving_right ? 1 : -1;
-          debug_counter = 0;
-        } else {
-          debug_counter++;
-          // unit of movement: object
-          const f32 da = 10 * (f32)screen_width_in_tiles;
-          f32 acceleration = moving_right ? da : -da;
-          tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
-          velocity    += acceleration * dt;
-
-          i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
-          absolute_coord += tile_offset_rounded;
-          tile_offset -= (f32)tile_offset_rounded;
-        }
-      } else {
-        velocity    = 0.f;
-        tile_offset = 0.f;
-      }
-
-      // clamp cursor coordinate
-      if (absolute_coord <= 0) {
-        absolute_coord = 0;
-        if (tile_offset < 0) {
-          tile_offset = 0;
-        }
-      }
-
-      // Draw stuff ////////////////////////////////////
-      RenderGroup rgroup = {};
-      rgroup.arena = subArena(temp_arena, megaBytes(128));
-
-      // draw backdrop
-      pushRect(rgroup, -1.f, -1.f, +2.f, +2.f, bg_texture);
-
-      // draw debug text
-      DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
-      pushDebugText(debug_drawer, "frame time: %.3f ms", frame_time_sec * 1000);
-      pushDebugText(debug_drawer, "cursor velocity: %.3f unit/s", velocity);
-      pushDebugText(debug_drawer, "debug counter: %d", debug_counter);
-
-      // draw cursor
-      i32 cursor_x = absolute_coord % screen_width_in_tiles;
-      i32 cursor_y = absolute_coord / screen_width_in_tiles;
-      f32 tile_width  = 2.f / (f32)screen_width_in_tiles;
-      f32 tile_height = tile_width;
-      pushRect(rgroup,
-               -1.f + ((f32)cursor_x + tile_offset) * tile_width,
-               +1.f - (f32)(cursor_y+1) * tile_height,
-               tile_width, tile_height, red_texture);
-
-      /////////////////////////////////////
+      updateAndRender(game_memory);
 
       // sleep
       frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
@@ -611,9 +446,7 @@ int main(int argc, const char *argv[])
 
       frame_start_sec = osxGetCurrentTimeInSeconds();
 
-      {// drawing
-        // "Private" mode crashes the machine
-
+      {// drawing to the screen
 
         auto ca_metal_drawable = [ca_metal_layer nextDrawable];
         if (!ca_metal_drawable)
@@ -634,8 +467,8 @@ int main(int argc, const char *argv[])
         [command_encoder setRenderPipelineState:render_pipeline_state];
         [command_encoder setFragmentSamplerState:sampler_state atIndex:0];
 
-        // todo Tell the render group to keep track of frame buffer size, but that's platform-specific.
-        auto vertex_arena = subArena(temp_arena, megaBytes(64));
+        auto &rgroup = game_memory.rgroup;
+        auto vertex_arena = subArena(temp_arena, megaBytes(64));  // TODO: don't use "game_arena"
         {// render group processing 1.: build vertex buffer
           u8 *next = rgroup.arena.base;
           u8 *end  = rgroup.arena.base + rgroup.arena.used;
@@ -668,6 +501,7 @@ int main(int argc, const char *argv[])
             }
           }
         }
+        // "MTLResourceStorageModePrivate" mode crashes my machine
         auto vertex_buffer = [[mtl_device newBufferWithBytes:vertex_arena.base
                                length:vertex_arena.used
                                options:MTLResourceStorageModeShared] autorelease];
@@ -687,7 +521,7 @@ int main(int argc, const char *argv[])
                 auto entry = (RenderEntryRectangle *)next;
                 next += sizeof(RenderEntryRectangle);
 
-                [command_encoder setFragmentTexture:entry->texture atIndex:0];
+                [command_encoder setFragmentTexture:metal_textures[entry->texture] atIndex:0];
                 [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
                 vstart += 6;
 
@@ -700,12 +534,11 @@ int main(int argc, const char *argv[])
         }
 
         [command_encoder endEncoding];
-
         [command_buffer presentDrawable:ca_metal_drawable];
         [command_buffer commit];
       }
     }
-    endTemporaryMemory(temp);
+    endTemporaryMemory(temp_marker);
   }
 
   printf("objective-c autodraw finished!\n");

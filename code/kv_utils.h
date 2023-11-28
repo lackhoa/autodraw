@@ -192,23 +192,23 @@ subArenaWithRemainingMemory(Arena &parent)
     return result;
 }
 
-struct TemporaryMemory
+struct TempMemoryMarker
 {
     Arena  &arena;
     size_t  original_used;
 };
 
 
-inline TemporaryMemory
+inline TempMemoryMarker
 beginTemporaryMemory(Arena &arena)
 {
-  TemporaryMemory out = {arena, arena.used};
+  TempMemoryMarker out = {arena, arena.used};
   arena.temp_count++;
   return out;
 }
 
 inline void
-endTemporaryMemory(TemporaryMemory temp)
+endTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
   assert(temp.arena->used >= temp.original_used);
@@ -216,7 +216,7 @@ endTemporaryMemory(TemporaryMemory temp)
 }
 
 inline void
-commitTemporaryMemory(TemporaryMemory temp)
+commitTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
 }
