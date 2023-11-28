@@ -12,13 +12,6 @@ f32 pixel_to_clip_y = 2.f / global_rendering_height;
 f32 game_update_hz = 60.f;
 f32 target_frame_time_sec = 1.f / game_update_hz;
 
-struct ReadFileResult {
-    u32 content_size;
-    u8 *content;
-};
-
-ReadFileResult platformReadEntireFile(const char *file_name);
-
 struct Codepoint {
   i32 width, height;
   f32 width_over_height;
@@ -82,3 +75,6 @@ struct GameMemory {
   f32         tile_offset;
   i32         absolute_coord;
 };
+
+#define GAME_UPDATE_AND_RENDER(name) void name(GameMemory &memory)
+typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);

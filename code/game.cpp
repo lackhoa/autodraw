@@ -1,3 +1,8 @@
+/*
+  todo:
+  - make the tree structure
+ */
+
 #include "kv_rect2.h"
 #include "kv_utils.h"
 #include "platform.h"
@@ -75,8 +80,7 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
   va_end(args);
 }
 
-// TODO: this doesn't belong in "render-group.cpp"
-void updateAndRender(GameMemory &memory)
+extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
   Arena &temp_arena = memory.arena;
   auto temp_marker = beginTemporaryMemory(temp_arena);
@@ -102,7 +106,7 @@ void updateAndRender(GameMemory &memory)
       memory.absolute_coord += moving_right ? 1 : -1;
     } else {
       // unit of movement: object
-      const f32 da = 10 * (f32)screen_width_in_tiles;
+      const f32 da = 10.f * (f32)screen_width_in_tiles;
       f32 acceleration = moving_right ? da : -da;
       tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
       velocity    += acceleration * dt;

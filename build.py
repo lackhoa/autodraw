@@ -3,6 +3,7 @@ import os
 import subprocess
 from subprocess import PIPE, STDOUT
 import sys
+import time
 
 def run(command):
     print(' '.join(command))
@@ -25,6 +26,11 @@ try:
 
     run_only     = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild = (len(sys.argv) > 1 and sys.argv[1] == 'full')
+
+    src_mtime = os.path.getmtime("../code/osx-main.mm")
+    dst_mtime = os.path.getmtime("autodraw.o")
+    build_osx_main = src_mtime > dst_mtime
+
     if not run_only:
         # Set compiler and linker flags
         optimization = ['-O0']
@@ -32,9 +38,13 @@ try:
         warnings = ['-Wall', '-Wimplicit-int-float-conversion', '-Wno-unused-function', '-Wno-missing-braces', '-Wno-unused-parameter', '-Wno-unused-but-set-variable', '-Wno-unused-variable', '-Wno-switch', '-Wno-writable-strings', '-Wno-c++17-extensions', '-Wno-pointer-to-int-cast', '-Wno-tautological-constant-out-of-range-compare', '-Wno-reorder-init-list', '-Wno-macro-redefined', '-Wno-deprecated-declarations', '-Wno-unknown-attributes']
         common_compiler_flags = ["-g", "-mavx2", "-std=gnu++20"] + optimization + constants + warnings
 
-        # Compile
+        # Compile the game to a dll
         includes = ['-I../libs']
-        run(['clang', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] + includes + common_compiler_flags)
+        run(['clang', '-dynamiclib', '../code/game.cpp', '-o', 'libgame.dylib'] + common_compiler_flags)
+
+        # Compile the app (Apple headers is so slow to compile, we need to do it separately)
+        if build_osx_main:
+            run(['clang', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] + includes + common_compiler_flags)
 
         run(['xcrun', '-sdk', 'macosx', 'metal', '-c', '../code/shaders.metal', '-o', 'shaders.air'])
         run(['xcrun', '-sdk', 'macosx', 'metallib', 'shaders.air', '-o', 'shaders.metallib'])
@@ -45,7 +55,8 @@ try:
         framework_flags=[]
         for framework in frameworks:
             framework_flags += ["-framework", framework]
-        run(['clang', 'autodraw.o', '-o', 'autodraw'] + linked_libs + framework_flags)
+        if build_osx_main:
+            run(['clang', 'autodraw.o', '-o', 'autodraw'] + linked_libs + framework_flags)
         print('Build complete!')
 
     run(['./autodraw'])

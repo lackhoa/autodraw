@@ -6,9 +6,6 @@
   - Colors are in linear range, alpha=1 (so pma doesn't matter)
   - Packed colors are rgba in memory order (i.e abgr in u32 register order)
   pma = pre-multiplied alpha
-
-  TODO:
-  - draw cursor velocity
  */
 
 #import <stdio.h>
@@ -16,14 +13,14 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <mach/mach_time.h>
-#include <sys/stat.h>
+#import <sys/stat.h>
+#import <dlfcn.h>
 
 #import "kv_utils.h"
 #import "kv_math.h"
 #import "mac-keycodes.h"
 #import "shader-interface.h"
 #import "platform.h"
-#import "game.cpp"  // TODO: We must load this dynamically
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
@@ -60,6 +57,11 @@ internal Arena temp_arena;
 
 ///////////////////////////////////////////////////////////////////////
 
+struct ReadFileResult {
+    u32 content_size;
+    u8 *content;
+};
+
 u8 *virtualAlloc(size_t size)
 {
     u8 *data = 0;
@@ -85,14 +87,14 @@ double osxGetCurrentTimeInSeconds()
   return (double)nano_secs * 1.0E-9;
 }
 
-void platformFreeFileMemory(u8 *memory) {
+void osxFreeFileMemory(u8 *memory) {
   if (memory) {
     todoIncomplete;  // #test
     vm_deallocate((vm_map_t) mach_task_self(), (vm_address_t) memory, 0);
   }
 }
 
-ReadFileResult platformReadEntireFile(const char *file_name)
+ReadFileResult osxReadEntireFile(const char *file_name)
 {
   ReadFileResult out = {};
 
@@ -117,7 +119,7 @@ ReadFileResult platformReadEntireFile(const char *file_name)
       if (bytes_read == file_size) {
         out.content_size = file_size;
       } else {
-        platformFreeFileMemory(out.content);
+        osxFreeFileMemory(out.content);
         out.content = 0;
         printf("platformReadEntireFile %s:  couldn't read file: %d: %s\n",
                file_name, errno, strerror(errno));
@@ -181,7 +183,7 @@ internal Codepoint codepoints[128];
 internal void
 makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
   auto temp = beginTemporaryMemory(arena);
-  auto read_file = platformReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
+  auto read_file = osxReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
@@ -234,6 +236,14 @@ makeTestImageTexture(id<MTLDevice> mtl_device)
 
 int main(int argc, const char *argv[])
 {
+  GameUpdateAndRender *gameUpdateAndRender;
+  {// Loading game code
+    auto dl = dlopen("libgame.dylib", RTLD_LAZY|RTLD_GLOBAL);
+    assert(dl);
+    gameUpdateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
+    assert(gameUpdateAndRender);
+  }
+  
   mach_timebase_info(&timebase);
   {
     auto cap = megaBytes(64);
@@ -264,7 +274,6 @@ int main(int argc, const char *argv[])
                            backing: NSBackingStoreBuffered
                            defer: NO];
   main_window.backgroundColor = NSColor.purpleColor;
-  // main_window.contentAspectRatio = NSMakeSize(4,3);
   main_window.title = @"AutoDraw";
   main_window.delegate = osx_main_delegate;
   main_window.contentView.wantsLayer = YES;
@@ -426,7 +435,7 @@ int main(int argc, const char *argv[])
         osx_main_delegate->window_was_resized = false;
       }
 
-      updateAndRender(game_memory);
+      gameUpdateAndRender(game_memory);
 
       // sleep
       frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
@@ -468,7 +477,7 @@ int main(int argc, const char *argv[])
         [command_encoder setFragmentSamplerState:sampler_state atIndex:0];
 
         auto &rgroup = game_memory.rgroup;
-        auto vertex_arena = subArena(temp_arena, megaBytes(64));  // TODO: don't use "game_arena"
+        auto vertex_arena = subArena(temp_arena, megaBytes(64));
         {// render group processing 1.: build vertex buffer
           u8 *next = rgroup.arena.base;
           u8 *end  = rgroup.arena.base + rgroup.arena.used;
