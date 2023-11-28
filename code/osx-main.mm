@@ -23,7 +23,6 @@
 #pragma clang diagnostic pop
 
 internal id<MTLDevice> mtl_device;
-internal mach_timebase_info_data_t timebase;
 internal Arena temp_arena;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
@@ -56,7 +55,8 @@ struct ReadFileResult {
     u8 *content;
 };
 
-u8 *virtualAlloc(size_t size)
+internal u8 *
+virtualAlloc(size_t size)
 {
     u8 *data = 0;
  
@@ -75,11 +75,23 @@ u8 *virtualAlloc(size_t size)
     return data;
 }
 
-double osxGetCurrentTimeInSeconds()
+internal f32
+osxGetSecondsElapsed(u64 then, u64 now)
 {
-  // todo: keep the division output (also learn what "timebase" is)
-  u64 nano_secs = mach_absolute_time() * timebase.numer / timebase.denom;
+  local_persist mach_timebase_info_data_t timebase;
+  if (timebase.denom == 0) {
+    mach_timebase_info(&timebase);
+  }
+
+  u64 elapsed = now - then;
+  u64 nano_secs = elapsed * timebase.numer / timebase.denom;
   return (double)nano_secs * 1.0E-9;
+}
+
+inline f32
+osxGetSecondsElapsed(u64 then)
+{
+  return osxGetSecondsElapsed(then, mach_absolute_time());
 }
 
 void osxFreeFileMemory(u8 *memory) {
@@ -239,7 +251,6 @@ int main(int argc, const char *argv[])
     assert(gameUpdateAndRender);
   }
   
-  mach_timebase_info(&timebase);
   {
     auto cap = megaBytes(64);
     auto memory = virtualAlloc(cap);
@@ -381,8 +392,8 @@ int main(int argc, const char *argv[])
   };
 
   // Main loop
-  f32 frame_start_sec = osxGetCurrentTimeInSeconds();
-  f32 &frame_time_sec  = game_memory.frame_time_sec;
+  u64 frame_start_tick = mach_absolute_time();
+  f32 frame_time_sec  = 0;
   osx_main_delegate->is_running = true;
   while (osx_main_delegate->is_running)
   {
@@ -437,22 +448,21 @@ int main(int argc, const char *argv[])
       gameUpdateAndRender(game_memory);
 
       // sleep
-      frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
+      frame_time_sec = osxGetSecondsElapsed(frame_start_tick);
       f32 diff = (target_frame_time_sec - frame_time_sec);
       if (diff > 0) {
-        f32 sleep_sec = .8f * diff;
-        if (sleep_sec > 0) {
-          sleep(sleep_sec);
-        }
+        f32 sleep_sec = diff;  // oh man, osx sleep is awesome!
+        sleep(sleep_sec);
 
         // busy wait
-        frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
+        frame_time_sec = osxGetSecondsElapsed(frame_start_tick);
         while (frame_time_sec < target_frame_time_sec) {
-          frame_time_sec = osxGetCurrentTimeInSeconds() - frame_start_sec;
+          frame_time_sec = osxGetSecondsElapsed(frame_start_tick);
         }
       }
 
-      frame_start_sec = osxGetCurrentTimeInSeconds();
+      game_memory.last_frame_time_sec = frame_time_sec;
+      frame_start_tick = mach_absolute_time();
 
       {// drawing to the screen
 

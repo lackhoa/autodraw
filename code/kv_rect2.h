@@ -45,6 +45,13 @@ rectCenterDim(V2 center, V2 dim)
 }
 
 inline Rect2
+rectMinDim(V2 min, V2 dim)
+{
+  Rect2 out = Rect2{.min=min, .max=min+dim};
+  return out;
+}
+
+inline Rect2
 intersect(Rect2 a, Rect2 b)
 {
     Rect2 result;

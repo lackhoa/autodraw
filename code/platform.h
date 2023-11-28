@@ -68,7 +68,7 @@ struct GameMemory {
 
   ActionState action_states[GameActionCount];
   b32         new_direction_key_press;
-  f32         frame_time_sec;
+  f32         last_frame_time_sec;
 
   RenderGroup rgroup;
   f32         velocity;

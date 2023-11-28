@@ -155,7 +155,7 @@ pushSize(Arena &arena, size_t size, b32 zero = false)
     return(out);
 }
 
-// TODO: clang broke __VA_ARGS__!
+// todo: clang broke __VA_ARGS__!
 #define pushStruct(arena, type) (type *) pushSize(arena, sizeof(type))
 #define pushArray(arena, count, type) (type *) pushSize(arena, (count)*sizeof(type))
 #define allocate(arena, x, ...) x = (mytypeof(x)) pushSize(arena, sizeof(*x), __VA_ARGS__)
@@ -227,7 +227,7 @@ checkArena(Arena *arena)
     assert(arena->temp_count == 0);
 }
 
-// TODO re-implement these
+// todo re-implement these
 // inline void
 // resetArena(Arena *arena, b32 zero=false)
 // {

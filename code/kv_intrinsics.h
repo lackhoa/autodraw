@@ -199,5 +199,5 @@ rotateRight(u32 value, i32 rotateAmount)
 #  define writeBarrier _WriteBarrier()
 #  define atomicCompareExchange _InterlockedCompareExchange
 #else
-// TODO: Other platforms
+// todo: Other platforms
 #endif
