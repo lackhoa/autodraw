@@ -1,11 +1,11 @@
 #pragma once
 
 #include "kv_utils.h"
-#include "kv_rect2.h"
+#include "kv_math.h"
 
 i32 screen_width_in_tiles = 80;
 f32 debug_font_height = 128.f;
-f32 global_rendering_width  = 1920;  // TODO: this could change
+f32 global_rendering_width  = 1920;
 f32 global_rendering_height = 1080;
 f32 pixel_to_clip_x = 2.f / global_rendering_width;
 f32 pixel_to_clip_y = 2.f / global_rendering_height;
@@ -25,8 +25,7 @@ struct RenderGroup {
 
 enum TextureId {
   // 0-127 are reserved for ascii glyphs
-  TextureIdBackground = 128,
-  TextureIdCursor     = 129,
+  TextureIdWhite = 128,
   TextureIdCount,
 };
 
@@ -46,6 +45,7 @@ struct RenderEntryHeader {
 struct RenderEntryRectangle {
   Rect2     rect;
   TextureId texture;
+  V3        color;
 };
 
 struct ActionState {
@@ -64,7 +64,7 @@ struct GameMemory {
   b32 initialized;
 
   Arena      arena;
-  Codepoint *codepoints;        // TODO: can you do reference here?
+  Codepoint *codepoints;
 
   ActionState action_states[GameActionCount];
   b32         new_direction_key_press;

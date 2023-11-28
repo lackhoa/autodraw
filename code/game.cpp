@@ -1,11 +1,22 @@
 /*
+  Rules for the renderer:
+  - Textures and bitmaps are srgb premultiplied-alpha
+  - Colors are in linear range, alpha=1 (so pma doesn't matter)
+  - Packed colors are rgba in memory order (i.e abgr in u32 register order)
+  pma = pre-multiplied alpha
+
   todo:
   - make the tree structure
  */
 
-#include "kv_rect2.h"
+#include "kv_math.h"  // IWYU pragma: keep
 #include "kv_utils.h"
 #include "platform.h"
+
+struct DocumentTree {
+  String        root;
+  DocumentTree *children;
+};
 
 inline void *
 pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
@@ -19,13 +30,36 @@ pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
 #define pushRenderEntry(rgroup, type) (RenderEntry##type *) pushRenderEntry_(rgroup, sizeof(RenderEntry##type), RenderEntryType##type)
 
 internal void
-pushRect(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, TextureId texture)
+pushRect(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, TextureId texture, V3 color)
 {
   RenderEntryRectangle &entry = *pushRenderEntry(rgroup, Rectangle);
   f32 max_x = min_x + width;
   f32 max_y = min_y + height;
   entry.rect    = {min_x, min_y, max_x, max_y};
   entry.texture = texture;
+  entry.color   = color;
+}
+
+inline void
+pushRect(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, V3 color)
+{
+  pushRect(rgroup, min_x, min_y, width, height, TextureIdWhite, color);
+}
+
+inline void
+pushRect(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, TextureId texture)
+{
+  pushRect(rgroup, min_x, min_y, width, height, texture, V3{1,1,1});
+}
+
+internal void
+pushRectOutline(RenderGroup &rgroup, f32 min_x, f32 min_y, f32 width, f32 height, V3 color)
+{
+  // RenderEntryRectOutline &entry = *pushRenderEntry(rgroup, Rectangle);
+  // f32 max_x = min_x + width;
+  // f32 max_y = min_y + height;
+  // entry.rect    = {min_x, min_y, max_x, max_y};
+  // entry.texture = texture;
 }
 
 struct DebugDrawer {
@@ -106,7 +140,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
       memory.absolute_coord += moving_right ? 1 : -1;
     } else {
       // unit of movement: object
-      const f32 da = 10.f * (f32)screen_width_in_tiles;
+      const f32 da = 4.f * (f32)screen_width_in_tiles;
       f32 acceleration = moving_right ? da : -da;
       tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
       velocity    += acceleration * dt;
@@ -120,6 +154,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     tile_offset = 0.f;
   }
 
+  DocumentTree uncle  = {.root=toString("uncle"), .children=0};
+  DocumentTree myself = {.root=toString("myself")};
+  DocumentTree mom    = {.root=toString("mom"), .children=&myself};
+  DocumentTree grandma_children[] = {mom, uncle};
+  DocumentTree tree = {
+    .root = toString("grandma"),
+    .children = grandma_children,
+  };
+
   // clamp cursor coordinate
   if (absolute_coord <= 0) {
     absolute_coord = 0;
@@ -132,7 +175,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   // Draw stuff ////////////////////////////////////
 
   // draw backdrop
-  pushRect(rgroup, -1.f, -1.f, +2.f, +2.f, TextureIdBackground);
+  pushRect(rgroup, -1.f, -1.f, +2.f, +2.f, V3{0,0,0});
 
   // draw cursor
   i32 cursor_x = absolute_coord % screen_width_in_tiles;
@@ -142,7 +185,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   pushRect(rgroup,
            -1.f + ((f32)cursor_x + tile_offset) * tile_width,
            +1.f - (f32)(cursor_y+1) * tile_height,
-           tile_width, tile_height, TextureIdCursor);
+           tile_width, tile_height, V3{1,0,0});
+
+  // Draw the tree
+  pushRectOutline(rgroup, -0.5f, -0.5f, 1.f, 1.f, V3{1,1,1});
 
   // draw debug text
   DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};

@@ -1,11 +1,5 @@
 /*
   The platform layer shouldn't know about the game, except for platform
-
-  Rules for the renderer:
-  - Textures and bitmaps are srgb premultiplied-alpha
-  - Colors are in linear range, alpha=1 (so pma doesn't matter)
-  - Packed colors are rgba in memory order (i.e abgr in u32 register order)
-  pma = pre-multiplied alpha
  */
 
 #import <stdio.h>
@@ -83,6 +77,7 @@ u8 *virtualAlloc(size_t size)
 
 double osxGetCurrentTimeInSeconds()
 {
+  // todo: keep the division output (also learn what "timebase" is)
   u64 nano_secs = mach_absolute_time() * timebase.numer / timebase.denom;
   return (double)nano_secs * 1.0E-9;
 }
@@ -285,8 +280,7 @@ int main(int argc, const char *argv[])
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
 
   // Setup texture array
-  metal_textures[TextureIdBackground] = makeColorTexture(v4(0,0.f,0.f,1));
-  metal_textures[TextureIdCursor]     = makeColorTexture(v4(1,0,0,1));
+  metal_textures[TextureIdWhite] = makeColorTexture(V4{1,1,1,1});
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
   ca_metal_layer.frame       = main_window.contentView.frame;
@@ -338,11 +332,16 @@ int main(int argc, const char *argv[])
     v.attributes[i].bufferIndex = 0;
     offset += sizeof(simd_float2);
     i++;
+    // color
+    v.attributes[i].format      = MTLVertexFormatFloat3;
+    v.attributes[i].offset      = offset;
+    v.attributes[i].bufferIndex = 0;
+    offset += sizeof(simd_float3);
+    i++;
     // layout
     v.layouts[0].stride       = sizeof(VertexInput);
     v.layouts[0].stepRate     = 1;
     v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-
     assert(offset == sizeof(VertexInput));
   }
 
@@ -496,12 +495,14 @@ int main(int argc, const char *argv[])
                 auto max_y = entry->rect.max.y;
 
                 VertexInput *verts = pushArray(vertex_arena, (6), VertexInput);
-                verts[0] = {{min_x, max_y}, {0.f, 0.f}};
-                verts[1] = {{min_x, min_y}, {0.f, 1.f}};
-                verts[2] = {{max_x, min_y}, {1.f, 1.f}};
-                verts[3] = {{min_x, max_y}, {0.f, 0.f}};
-                verts[4] = {{max_x, min_y}, {1.f, 1.f}};
-                verts[5] = {{max_x, max_y}, {1.f, 0.f}};
+                auto c = entry->color;
+                auto color = simd_float3{c.r, c.g, c.b};
+                verts[0] = {{min_x, max_y}, {0.f, 0.f}, color};
+                verts[1] = {{min_x, min_y}, {0.f, 1.f}, color};
+                verts[2] = {{max_x, min_y}, {1.f, 1.f}, color};
+                verts[3] = {{min_x, max_y}, {0.f, 0.f}, color};
+                verts[4] = {{max_x, min_y}, {1.f, 1.f}, color};
+                verts[5] = {{max_x, max_y}, {1.f, 0.f}, color};
 
                 break;
               }
