@@ -6,24 +6,25 @@
   pma = pre-multiplied alpha
 
   todo:
-  - make the tree structure
+  - navigate the tree
  */
 
 // #include "kv_math.h"
 #include "kv_utils.h"
 #include "platform.h"
 
-struct DocumentTree {
-  String        root;
-  DocumentTree *children;
+struct UITree {
+  String  data;
+  UITree *children;
+  i32     count;
 };
 
 inline void *
 pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
 {
-  RenderEntryHeader *header = pushStruct(rgroup.arena, RenderEntryHeader);
+  RenderEntryHeader *header = pushStruct(rgroup.commands, RenderEntryHeader);
   header->type = type;
-  void *entry = pushSize(rgroup.arena, size);
+  void *entry = pushSize(rgroup.commands, size);
   return entry;
 }
 
@@ -80,34 +81,36 @@ pushLetter(RenderGroup &rgroup, V2 min, char character)
 {
   assert(33 <= character && character <= 126);
   auto codepoint = rgroup.codepoints[(u8)character];
-  auto dim = V2{pixel_to_clip_x * (f32)codepoint.width,
+  auto dim = V2{rgroup.monospaced_width,
                 pixel_to_clip_y * (f32)codepoint.height};
   pushRect(rgroup, rectMinDim(min, dim), codepointTexture(character));
-  return dim.x;
+  return dim.y;
 }
 
-internal void
+internal f32
 pushText(RenderGroup &rgroup, V2 min, String string)
 {
+  f32 max_dim_y = 0;
   auto x = min.x;
   for (i32 i=0; i < string.length; i++) {
     char c = string.chars[i];
-    if (c == ' ') {
-      x += pixel_to_clip_x * 12.f;
-    } else {
-      x += pushLetter(rgroup, {x, min.y}, c);
+    if (c != ' ') {
+      f32 dim_y = pushLetter(rgroup, {x, min.y}, c);
+      max_dim_y = maximum(max_dim_y, dim_y);
     }
+    x += rgroup.monospaced_width;
   }
+  return min.y + max_dim_y;
 }
 
-inline void
-pushTextFormat(Arena &arena, RenderGroup &rgroup, V2 min, char *format, ...)
+inline f32
+pushTextFormat(RenderGroup &rgroup, V2 min, char *format, ...)
 {
   va_list args;
   va_start(args, format);
-  auto string = printVA(arena, format, args);
-  pushText(rgroup, min, string);
+  auto string = printVA(*rgroup.temp, format, args);
   va_end(args);
+  return pushText(rgroup, min, string);
 }
 
 inline void
@@ -121,17 +124,42 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
   va_end(args);
 }
 
+internal V2
+drawTree(RenderGroup &rgroup, UITree &tree, V2 min)
+{
+  f32 margin = 0.01;  // todo cleanup
+  f32 data_dim_x = rgroup.monospaced_width * (f32)tree.data.length;
+  f32 max_y = pushText(rgroup, min, tree.data);
+  f32 max_x = min.x + data_dim_x;
+
+  for (i32 i=0; i < tree.count; i++) {
+    V2 child_min = {max_x + margin, min.y + margin};
+    V2 child_max = drawTree(rgroup, tree.children[i], child_min);
+    max_y = maximum(max_y, child_max.y);
+    max_x = child_max.x + margin;
+  }
+
+  if (tree.count) {
+    max_y += margin;
+  }
+  pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, 2, V3{1,1,1});
+
+  return V2{max_x, max_y};
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
   Arena &temp_arena = memory.arena;
   auto temp_marker = beginTemporaryMemory(temp_arena);
+  auto &rgroup = memory.rgroup;
   if (!memory.initialized) {
     // ... setting startup parameters here
+    rgroup.codepoints = memory.codepoints;
+    rgroup.monospaced_width = pixel_to_clip_x * (f32)rgroup.codepoints[(u8)'a'].width;
     memory.initialized = true;
   }
-  auto &rgroup = memory.rgroup;
-  rgroup.arena       = subArena(temp_arena, megaBytes(128));
-  rgroup.codepoints  = memory.codepoints;
+  rgroup.commands = subArena(temp_arena, megaBytes(8));
+  rgroup.temp     = &temp_arena;
 
   // Game logic //////////////////////////////////////
   auto &tile_offset    = memory.tile_offset;
@@ -161,13 +189,14 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     tile_offset = 0.f;
   }
 
-  DocumentTree uncle  = {.root=toString("uncle"), .children=0};
-  DocumentTree myself = {.root=toString("myself")};
-  DocumentTree mom    = {.root=toString("mom"), .children=&myself};
-  DocumentTree grandma_children[] = {mom, uncle};
-  DocumentTree tree = {
-    .root = toString("grandma"),
+  UITree uncle  = {.data=toString("uncle")};
+  UITree myself = {.data=toString("myself")};
+  UITree mom    = {.data=toString("mom"), .children=&myself, .count=1};
+  UITree grandma_children[] = {mom, uncle};
+  UITree grandma = {
+    .data     = toString("grandma"),
     .children = grandma_children,
+    .count    = 2,
   };
 
   // clamp cursor coordinate
@@ -196,8 +225,17 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   }
   
   // Draw the tree
-  pushRectOutline(rgroup, Rect2{-0.5f, -0.5f, 0.5f, 0.5f}, 4, V3{1,1,1});
+  // pushRectOutline(rgroup, Rect2{-0.5f, -0.5f, +0.5f, +0.5f}, 4, V3{1,1,1});
+  // pushRectOutline(rgroup, Rect2{-0.4f, -0.4f, -0.1f, +0.4f}, 4, V3{1,1,1});
+  // pushRectOutline(rgroup, Rect2{+0.1f, -0.4f, +0.4f, +0.4f}, 4, V3{1,1,1});
 
+  {// Draw text in box
+    f32 margin = 0.01;
+
+    V2 min = {-0.9f, -0.1f};
+    V2 dim = drawTree(rgroup, grandma, min);
+  }
+  
   // draw debug text
   DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
   pushDebugText(debug_drawer, "frame time: %.3f ms", memory.last_frame_time_sec * 1000);

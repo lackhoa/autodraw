@@ -190,7 +190,7 @@ internal Codepoint codepoints[128];
 internal void
 makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
   auto temp = beginTemporaryMemory(arena);
-  auto read_file = osxReadEntireFile("../resources/fonts/LiberationSans-Regular.ttf");
+  auto read_file = osxReadEntireFile("../resources/fonts/LiberationMono-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
@@ -488,8 +488,8 @@ int main(int argc, const char *argv[])
         auto &rgroup = game_memory.rgroup;
         auto vertex_arena = subArena(temp_arena, megaBytes(64));
         {// render group processing 1.: build vertex buffer
-          u8 *next = rgroup.arena.base;
-          u8 *end  = rgroup.arena.base + rgroup.arena.used;
+          u8 *next = rgroup.commands.base;
+          u8 *end  = rgroup.commands.base + rgroup.commands.used;
           while (next != end) {
             auto header = (RenderEntryHeader *)next;
             next += sizeof(RenderEntryHeader);
@@ -530,8 +530,8 @@ int main(int argc, const char *argv[])
 
         {// render group processing 2.: send commands (todo: because apparently we can't do this before setVertexBuffer?)
           i32 vstart = 0;
-          u8 *next = rgroup.arena.base;
-          u8 *end  = rgroup.arena.base + rgroup.arena.used;
+          u8 *next = rgroup.commands.base;
+          u8 *end  = rgroup.commands.base + rgroup.commands.used;
           while (next != end) {
             auto header = (RenderEntryHeader *)next;
             next += sizeof(RenderEntryHeader);

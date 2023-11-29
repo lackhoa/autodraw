@@ -16,6 +16,12 @@ def run(command):
         exit(1)
     return process
 
+def mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except:
+        return 0
+
 # cd to script directory
 script_dir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_dir)
@@ -27,9 +33,9 @@ try:
     run_only     = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild = (len(sys.argv) > 1 and sys.argv[1] == 'full')
 
-    src_mtime = os.path.getmtime("../code/osx-main.mm")
-    dst_mtime = os.path.getmtime("autodraw.o")
-    build_osx_main = src_mtime > dst_mtime
+    src_mtime = max(mtime("../code/osx-main.mm"), mtime("../code/platform.h"))
+    dst_mtime = mtime("autodraw.o")
+    build_osx_main = full_rebuild or src_mtime > dst_mtime
 
     if not run_only:
         # Set compiler and linker flags

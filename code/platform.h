@@ -1,3 +1,8 @@
+/*
+  Header file imported by the game and all platforms.
+  Define protocol of communication between the game and the platform.
+ */
+
 #pragma once
 
 #include "kv_utils.h"
@@ -12,6 +17,7 @@ f32 pixel_to_clip_y = 2.f / global_rendering_height;
 f32 game_update_hz = 60.f;
 f32 target_frame_time_sec = 1.f / game_update_hz;
 
+// NOTE: currently we deal with monospaced fonts only
 struct Codepoint {
   i32 width, height;
   f32 width_over_height;
@@ -19,8 +25,10 @@ struct Codepoint {
 };
 
 struct RenderGroup {
-  Arena      arena;
+  Arena      commands;
+  Arena     *temp;
   Codepoint *codepoints;
+  f32        monospaced_width;
 };
 
 enum TextureId {
