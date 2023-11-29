@@ -7,6 +7,7 @@
 
 #include "kv_utils.h"
 #include "kv_math.h"
+#include "keycodes.h"
 
 i32 screen_width_in_tiles = 80;
 f32 debug_font_height = 128.f;
@@ -60,29 +61,19 @@ struct ActionState {
   b32 is_down;
 };
 
-enum GameAction {
-  GameActionMoveRight,
-  GameActionMoveLeft,
-  GameActionMoveUp,
-  GameActionMoveDown,
-  GameActionCount,
-};
-
 struct GameMemory {
-  b32 initialized;
-
-  Arena      arena;
-  Codepoint *codepoints;
-
-  ActionState action_states[GameActionCount];
-  b32         new_direction_key_press;
+  // From platform
+  Arena arena;                  // Passing arena to show also how much space there are.
+  ActionState key_states[kVK_Count];
+  b32         new_key_press;
   f32         last_frame_time_sec;
 
+  // From game 
   RenderGroup rgroup;
-  f32         velocity;
-  f32         tile_offset;
-  i32         absolute_coord;
 };
 
 #define GAME_UPDATE_AND_RENDER(name) void name(GameMemory &memory)
 typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
+
+#define GAME_INITIALIZE_MEMORY(name) void name(GameMemory &memory, Codepoint *codepoints)
+typedef GAME_INITIALIZE_MEMORY(GameInitializeMemory);

@@ -6,7 +6,11 @@
   pma = pre-multiplied alpha
 
   todo:
+  - Do we zero memory at startup?
+  - the game should have persistent data
+  - the hot item should be a pointer
   - navigate the tree
+  - hot code reload
  */
 
 // #include "kv_math.h"
@@ -17,6 +21,7 @@ struct UITree {
   String  data;
   UITree *children;
   i32     count;
+  b32     focused;
 };
 
 inline void *
@@ -127,13 +132,14 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
 internal V2
 drawTree(RenderGroup &rgroup, UITree &tree, V2 min)
 {
-  f32 margin = 0.01;  // todo cleanup
+  f32 margin  = pixel_to_clip_x * 5;  // todo cleanup
+  f32 spacing = pixel_to_clip_x * 20;
   f32 data_dim_x = rgroup.monospaced_width * (f32)tree.data.length;
   f32 max_y = pushText(rgroup, min, tree.data);
   f32 max_x = min.x + data_dim_x;
 
   for (i32 i=0; i < tree.count; i++) {
-    V2 child_min = {max_x + margin, min.y + margin};
+    V2 child_min = {max_x + spacing, min.y + margin};
     V2 child_max = drawTree(rgroup, tree.children[i], child_min);
     max_y = maximum(max_y, child_max.y);
     max_x = child_max.x + margin;
@@ -142,37 +148,49 @@ drawTree(RenderGroup &rgroup, UITree &tree, V2 min)
   if (tree.count) {
     max_y += margin;
   }
-  pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, 2, V3{1,1,1});
+
+  if (tree.focused) {
+    pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, 2, V3{1,1,1});
+  }
 
   return V2{max_x, max_y};
 }
 
+struct GameState {
+  f32 velocity;
+  f32 tile_offset;
+  i32 absolute_coord;
+};
+
+extern "C" GAME_INITIALIZE_MEMORY(gameInitializeMemory)
+{
+  memory.rgroup.codepoints       = codepoints;
+  memory.rgroup.monospaced_width = pixel_to_clip_x * (f32)codepoints[(u8)'a'].width;
+  pushStruct(memory.arena, GameState);
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
-  Arena &temp_arena = memory.arena;
-  auto temp_marker = beginTemporaryMemory(temp_arena);
-  auto &rgroup = memory.rgroup;
-  if (!memory.initialized) {
-    // ... setting startup parameters here
-    rgroup.codepoints = memory.codepoints;
-    rgroup.monospaced_width = pixel_to_clip_x * (f32)rgroup.codepoints[(u8)'a'].width;
-    memory.initialized = true;
-  }
+  GameState &state = *(GameState *)memory.arena.base;
+  Arena &temp_arena  = memory.arena;
+  auto   temp_marker = beginTemporaryMemory(temp_arena);
+
+  auto &rgroup    = memory.rgroup;
   rgroup.commands = subArena(temp_arena, megaBytes(8));
   rgroup.temp     = &temp_arena;
 
   // Game logic //////////////////////////////////////
-  auto &tile_offset    = memory.tile_offset;
-  auto &velocity       = memory.velocity;
-  auto &absolute_coord = memory.absolute_coord;
+  auto &tile_offset    = state.tile_offset;
+  auto &velocity       = state.velocity;
+  auto &absolute_coord = state.absolute_coord;
 
   auto &dt = target_frame_time_sec;
-  b32 moving_right = memory.action_states[GameActionMoveRight].is_down;
-  b32 moving_left  = memory.action_states[GameActionMoveLeft].is_down;
+  b32 moving_right = memory.key_states[kVK_ANSI_L].is_down;
+  b32 moving_left  = memory.key_states[kVK_ANSI_H].is_down;
   if (moving_right || moving_left) {
-    if (memory.new_direction_key_press) {
-      memory.velocity = 0;
-      memory.absolute_coord += moving_right ? 1 : -1;
+    if (memory.new_key_press) {
+      velocity = 0;
+      absolute_coord += moving_right ? 1 : -1;
     } else {
       // unit of movement: object
       const f32 da = 4.f * (f32)screen_width_in_tiles;
@@ -197,6 +215,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     .data     = toString("grandma"),
     .children = grandma_children,
     .count    = 2,
+    .focused  = true,
   };
 
   // clamp cursor coordinate
@@ -224,14 +243,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     pushRect(rgroup, rect, V3{1,0,0});
   }
   
-  // Draw the tree
-  // pushRectOutline(rgroup, Rect2{-0.5f, -0.5f, +0.5f, +0.5f}, 4, V3{1,1,1});
-  // pushRectOutline(rgroup, Rect2{-0.4f, -0.4f, -0.1f, +0.4f}, 4, V3{1,1,1});
-  // pushRectOutline(rgroup, Rect2{+0.1f, -0.4f, +0.4f, +0.4f}, 4, V3{1,1,1});
-
-  {// Draw text in box
-    f32 margin = 0.01;
-
+  {// Draw the tree
     V2 min = {-0.9f, -0.1f};
     V2 dim = drawTree(rgroup, grandma, min);
   }

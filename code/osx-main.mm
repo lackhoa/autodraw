@@ -12,7 +12,6 @@
 
 #import "kv_utils.h"
 #import "kv_math.h"
-#import "mac-keycodes.h"
 #import "shader-interface.h"
 #import "platform.h"
 
@@ -22,7 +21,11 @@
 #include "imstb_truetype.h"
 #pragma clang diagnostic pop
 
-internal id<MTLDevice> mtl_device;
+// todo: This is an experiment, we'll put all global objects that can be misused when uninitialized here
+struct OsxGlobals {
+  id<MTLDevice> mtl_device;
+};
+global_variable OsxGlobals *osx_globals = 0;
 internal Arena temp_arena;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
@@ -167,7 +170,7 @@ sRGBATexture(void *bitmap, i32 width, i32 height)
 {
   auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
                        width:width height:height mipmapped:NO];
-  auto texture = [mtl_device newTextureWithDescriptor:texture_desc];
+  auto texture = [osx_globals->mtl_device newTextureWithDescriptor:texture_desc];
   [texture_desc release];
   [texture replaceRegion:MTLRegionMake2D(0,0,width,height)
    mipmapLevel:0
@@ -188,8 +191,8 @@ internal id<MTLTexture> metal_textures[TextureIdCount];
 internal Codepoint codepoints[128];
 
 internal void
-makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
-  auto temp = beginTemporaryMemory(arena);
+makeCodepointTextures() {
+  auto temp = beginTemporaryMemory(temp_arena);
   auto read_file = osxReadEntireFile("../resources/fonts/LiberationMono-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
@@ -204,7 +207,7 @@ makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
       u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
                                                  &width, &height, &xoff, &yoff);
       assert(width != 0 && height != 0);
-      u8 *bitmap = (u8 *)pushSize(arena, 4 * width * height);
+      u8 *bitmap = (u8 *)pushSize(temp_arena, 4 * width * height);
       // Blow it out to rgba bitmap
       u32 *dst = (u32 *)bitmap;
       u8 *src  = mono_bitmap;
@@ -230,7 +233,7 @@ makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device) {
 }
 
 internal id<MTLTexture>
-makeTestImageTexture(id<MTLDevice> mtl_device)
+makeTestImageTexture()
 {
   i32 width, height;
   int num_channel;
@@ -244,14 +247,26 @@ makeTestImageTexture(id<MTLDevice> mtl_device)
 int main(int argc, const char *argv[])
 {
   GameUpdateAndRender *gameUpdateAndRender;
+  GameInitializeMemory *gameInitializeMemory;
   {// Loading game code
     auto dl = dlopen("libgame.dylib", RTLD_LAZY|RTLD_GLOBAL);
     assert(dl);
-    gameUpdateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
-    assert(gameUpdateAndRender);
+    gameUpdateAndRender  = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
+    gameInitializeMemory = (GameInitializeMemory *)dlsym(dl, "gameInitializeMemory");
   }
   
-  {
+  size_t game_memory_cap     = gigaBytes(1);
+  size_t platform_memory_cap = gigaBytes(1);
+  u8 *total_memory = virtualAlloc(game_memory_cap + platform_memory_cap);
+  auto platform_arena = newArena(platform_memory_cap, total_memory + game_memory_cap);
+  auto temp_memory_cap = platform_memory_cap;
+  temp_arena = subArena(platform_arena, temp_memory_cap);
+
+  GameMemory game_memory = {
+    .arena=newArena(game_memory_cap, total_memory),
+  };
+
+  {// platform memory
     auto cap = megaBytes(64);
     auto memory = virtualAlloc(cap);
     temp_arena = newArena(cap, memory);
@@ -287,8 +302,12 @@ int main(int argc, const char *argv[])
 
   [NSApp finishLaunching];
 
-  mtl_device = MTLCreateSystemDefaultDevice();
+  id <MTLDevice> mtl_device = MTLCreateSystemDefaultDevice();
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
+
+  OsxGlobals osx_globals_ = {.mtl_device=mtl_device};
+  osx_globals = &osx_globals_;
+  makeCodepointTextures();
 
   // Setup texture array
   metal_textures[TextureIdWhite] = makeColorTexture(V4{1,1,1,1});
@@ -317,14 +336,6 @@ int main(int argc, const char *argv[])
   sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
   auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
   [sampler_desc release];
-
-  // Allocate a big block of memory
-  size_t game_memory_cap     = gigaBytes(1);
-  size_t platform_memory_cap = gigaBytes(1);
-  u8 *total_memory = virtualAlloc(game_memory_cap + platform_memory_cap);
-  auto platform_arena = newArena(platform_memory_cap, total_memory + game_memory_cap);
-  auto temp_memory_cap = platform_memory_cap;
-  temp_arena = subArena(platform_arena, temp_memory_cap);
 
   auto vertex_descriptor = [MTLVertexDescriptor new];
   {
@@ -356,8 +367,6 @@ int main(int argc, const char *argv[])
     assert(offset == sizeof(VertexInput));
   }
 
-  makeCodepointTextures(temp_arena, mtl_device);
-
   auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
   render_pipeline_desc.vertexFunction   = vert_func;
   render_pipeline_desc.fragmentFunction = frag_func;
@@ -386,10 +395,7 @@ int main(int argc, const char *argv[])
 
   auto command_queue = [mtl_device newCommandQueue];
 
-  GameMemory game_memory = {
-    .arena=newArena(game_memory_cap, total_memory),
-    .codepoints=codepoints,
-  };
+  gameInitializeMemory(game_memory, codepoints);
 
   // Main loop
   u64 frame_start_tick = mach_absolute_time();
@@ -401,7 +407,7 @@ int main(int argc, const char *argv[])
     @autoreleasepool
     {
       // Process events
-      game_memory.new_direction_key_press = false;
+      game_memory.new_key_press = false;
       while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                untilDate: nil
                                inMode: NSDefaultRunLoopMode
@@ -419,15 +425,9 @@ int main(int argc, const char *argv[])
               osx_main_delegate->is_running = false;
             } else {
               switch (event.keyCode) {
-                case kVK_ANSI_H: {
-                  game_memory.action_states[GameActionMoveLeft].is_down = is_down;
-                  game_memory.new_direction_key_press = !is_repeat;
-                  break;
-                }
-                case kVK_ANSI_L: {
-                  game_memory.action_states[GameActionMoveRight].is_down = is_down;
-                  game_memory.new_direction_key_press = !is_repeat;
-                  break;
+                default: {
+                  game_memory.key_states[event.keyCode].is_down = is_down;
+                  game_memory.new_key_press = is_down && (!is_repeat);
                 }
               }
             }
