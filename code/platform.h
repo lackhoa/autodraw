@@ -9,7 +9,6 @@
 #include "kv_math.h"
 #include "keycodes.h"
 
-i32 screen_width_in_tiles = 80;
 f32 debug_font_height = 128.f;
 f32 global_rendering_width  = 1920;
 f32 global_rendering_height = 1080;
@@ -63,9 +62,9 @@ struct ActionState {
 
 struct GameMemory {
   // From platform
-  Arena arena;                  // Passing arena to show also how much space there are.
+  Arena       arena;            // Passing arena to show also how much space there are.
   ActionState key_states[kVK_Count];
-  b32         new_key_press;
+  b32         new_key_press;    // todo: this logic is very hacky
   f32         last_frame_time_sec;
 
   // From game 

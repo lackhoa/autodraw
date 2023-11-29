@@ -6,11 +6,9 @@
   pma = pre-multiplied alpha
 
   todo:
-  - Do we zero memory at startup?
-  - the game should have persistent data
-  - the hot item should be a pointer
-  - navigate the tree
+  - navigate the tree vertically
   - hot code reload
+  - try my luck with the new llvm, see if I can fix the stupid macro bug
  */
 
 // #include "kv_math.h"
@@ -19,9 +17,11 @@
 
 struct UITree {
   String  data;
-  UITree *children;
-  i32     count;
-  b32     focused;
+
+  UITree *children;  // todo this should be double star
+  UITree *parent;
+  UITree *next_sibling;
+  UITree *prev_sibling;
 };
 
 inline void *
@@ -129,8 +129,21 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
   va_end(args);
 }
 
+struct GameState {
+  Arena perm_arena;
+
+  f32 velocity;
+  f32 cursor_tile_offset;
+  f32 tree_tile_offset;
+  i32 cursor_coord;
+
+  UITree  grandma;
+  UITree *hot_item;
+  b32     cursor_mode;
+};
+
 internal V2
-drawTree(RenderGroup &rgroup, UITree &tree, V2 min)
+drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, V2 min)
 {
   f32 margin  = pixel_to_clip_x * 5;  // todo cleanup
   f32 spacing = pixel_to_clip_x * 20;
@@ -138,35 +151,91 @@ drawTree(RenderGroup &rgroup, UITree &tree, V2 min)
   f32 max_y = pushText(rgroup, min, tree.data);
   f32 max_x = min.x + data_dim_x;
 
-  for (i32 i=0; i < tree.count; i++) {
+  UITree *childp = tree.children;
+  while (childp) {
+    auto &child = *childp;
     V2 child_min = {max_x + spacing, min.y + margin};
-    V2 child_max = drawTree(rgroup, tree.children[i], child_min);
+    V2 child_max = drawTree(state, rgroup, child, child_min);
     max_y = maximum(max_y, child_max.y);
     max_x = child_max.x + margin;
+    childp = child.next_sibling;
   }
 
-  if (tree.count) {
+  if (tree.children) {
     max_y += margin;
   }
 
-  if (tree.focused) {
-    pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, 2, V3{1,1,1});
+  f32 outline_thickness = 1;
+  if (&tree == state.hot_item) {
+    outline_thickness = 4;
   }
+  pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, outline_thickness, V3{1,1,1});
 
   return V2{max_x, max_y};
 }
 
-struct GameState {
-  f32 velocity;
-  f32 tile_offset;
-  i32 absolute_coord;
-};
+internal void
+initGameState(GameMemory &memory, GameState &state) {
+  state.perm_arena = subArena(memory.arena, megaBytes(512));
+  auto &arena = state.perm_arena;
+
+  auto grandma = &state.grandma;
+  auto myself  = pushStruct(arena, UITree);
+  auto uncle   = pushStruct(arena, UITree);
+  auto mom     = pushStruct(arena, UITree);
+
+  state.grandma = {.data=toString("grandma"), .children=uncle};
+  *uncle        = {.data=toString("uncle"), .parent=grandma, .next_sibling=mom};
+  *mom          = {.data=toString("mom"), .children=myself, .parent=grandma, .prev_sibling=uncle};
+  *myself       = {.data=toString("myself"), .parent=mom};
+
+  state.hot_item = uncle;
+}
 
 extern "C" GAME_INITIALIZE_MEMORY(gameInitializeMemory)
 {
   memory.rgroup.codepoints       = codepoints;
   memory.rgroup.monospaced_width = pixel_to_clip_x * (f32)codepoints[(u8)'a'].width;
-  pushStruct(memory.arena, GameState);
+  auto &state = *pushStruct(memory.arena, GameState);
+  initGameState(memory, state);
+}
+
+inline void
+moveTreeHorizontally(GameState &state, i32 dx)
+{
+  auto hi = state.hot_item;
+
+  if (dx > 0) {
+    for (i32 i=0; i < dx; i++) {
+      if (hi->next_sibling) {
+        hi = hi->next_sibling;
+      } else {
+        break;
+      }
+    }
+  } else {
+    for (i32 i=0; i < -dx; i++) {
+      if (hi->prev_sibling) {
+        hi = hi->prev_sibling;
+      } else {
+        break;
+      }
+    }
+  }
+  
+  state.hot_item = hi;
+}
+
+inline void
+moveCursorHorizontally(GameState &state, i32 dx)
+{
+  i32 &coord = state.cursor_coord;
+  coord += dx;
+  if (coord <= 0) {
+    // clamp cursor to left side of the screen
+    coord = 0;
+    state.cursor_tile_offset = maximum(state.cursor_tile_offset, 0);
+  }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
@@ -180,51 +249,51 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   rgroup.temp     = &temp_arena;
 
   // Game logic //////////////////////////////////////
-  auto &tile_offset    = state.tile_offset;
-  auto &velocity       = state.velocity;
-  auto &absolute_coord = state.absolute_coord;
+  f32 &velocity       = state.velocity;
+  i32 &absolute_coord = state.cursor_coord;
+  f32 &dt             = target_frame_time_sec;
 
-  auto &dt = target_frame_time_sec;
-  b32 moving_right = memory.key_states[kVK_ANSI_L].is_down;
-  b32 moving_left  = memory.key_states[kVK_ANSI_H].is_down;
-  if (moving_right || moving_left) {
+  b32 &cursor_mode = state.cursor_mode;
+  if (memory.key_states[kVK_Tab].is_down && memory.new_key_press) {
+    cursor_mode = !cursor_mode;
+  }
+
+  f32 direction_x = 0;
+  if (memory.key_states[kVK_ANSI_L].is_down) {
+    direction_x = 1;
+  } else if (memory.key_states[kVK_ANSI_H].is_down) {
+    direction_x = -1;
+  }
+
+  f32 acceleration_abs = state.cursor_mode ? 320.f : 40.f;
+
+  // abstract tiled movement update
+  f32 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
+  if (direction_x != 0) {
     if (memory.new_key_press) {
       velocity = 0;
-      absolute_coord += moving_right ? 1 : -1;
+      tile_offset += direction_x;
     } else {
       // unit of movement: object
-      const f32 da = 4.f * (f32)screen_width_in_tiles;
-      f32 acceleration = moving_right ? da : -da;
-      tile_offset += velocity * dt + 0.5f * acceleration * dt * dt;
-      velocity    += acceleration * dt;
-
-      i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
-      absolute_coord += tile_offset_rounded;
-      tile_offset -= (f32)tile_offset_rounded;
+      f32 a = direction_x * acceleration_abs;
+      tile_offset += velocity * dt + 0.5f * a * dt * dt;
+      velocity    += a * dt;
     }
   } else {
     velocity    = 0.f;
     tile_offset = 0.f;
   }
 
-  UITree uncle  = {.data=toString("uncle")};
-  UITree myself = {.data=toString("myself")};
-  UITree mom    = {.data=toString("mom"), .children=&myself, .count=1};
-  UITree grandma_children[] = {mom, uncle};
-  UITree grandma = {
-    .data     = toString("grandma"),
-    .children = grandma_children,
-    .count    = 2,
-    .focused  = true,
-  };
+  i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
+  tile_offset -= (f32)tile_offset_rounded;
 
-  // clamp cursor coordinate
-  if (absolute_coord <= 0) {
-    absolute_coord = 0;
-    if (tile_offset < 0) {
-      tile_offset = 0;
-    }
+  // update game state according to movement
+  if (state.cursor_mode) {
+    moveCursorHorizontally(state, tile_offset_rounded);
+  } else {// tree navigation
+    moveTreeHorizontally(state, tile_offset_rounded);
   }
+
   ///////////////////////////////////////////////////////
 
   // Draw stuff ////////////////////////////////////
@@ -233,11 +302,12 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   pushRect(rgroup, Rect2{-1.f, -1.f, 1.f, 1.f}, V3{0,0,0});
 
   {// draw cursor
+    i32 screen_width_in_tiles = 80;
     i32 cursor_x = absolute_coord % screen_width_in_tiles;
     i32 cursor_y = absolute_coord / screen_width_in_tiles;
     f32 tile_width = 2.f / (f32)screen_width_in_tiles;
     V2 tile_dim = {tile_width, tile_width};
-    V2 min = {-1.f + ((f32)cursor_x + tile_offset) * tile_dim.x,
+    V2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset) * tile_dim.x,
               +1.f - (f32)(cursor_y+1) * tile_dim.y};
     auto rect = rectMinDim(min, tile_dim);
     pushRect(rgroup, rect, V3{1,0,0});
@@ -245,13 +315,13 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   
   {// Draw the tree
     V2 min = {-0.9f, -0.1f};
-    V2 dim = drawTree(rgroup, grandma, min);
+    V2 dim = drawTree(state, rgroup, state.grandma, min);
   }
-  
+
   // draw debug text
   DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
   pushDebugText(debug_drawer, "frame time: %.3f ms", memory.last_frame_time_sec * 1000);
-  pushDebugText(debug_drawer, "cursor velocity: %.3f unit/s", velocity);
+  pushDebugText(debug_drawer, "cursor velocity: %.3f tiles/s", velocity);
 
   endTemporaryMemory(temp_marker);
 }

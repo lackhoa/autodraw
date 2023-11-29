@@ -33,9 +33,9 @@ try:
     run_only     = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild = (len(sys.argv) > 1 and sys.argv[1] == 'full')
 
-    src_mtime = max(mtime("../code/osx-main.mm"), mtime("../code/platform.h"))
-    dst_mtime = mtime("autodraw.o")
-    build_osx_main = full_rebuild or src_mtime > dst_mtime
+    # src_mtime = max(mtime("../code/osx-main.mm"), mtime("../code/platform.h"))
+    # dst_mtime = mtime("autodraw.o")
+    build_osx_main = full_rebuild
 
     if not run_only:
         # Set compiler and linker flags

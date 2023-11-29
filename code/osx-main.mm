@@ -61,21 +61,17 @@ struct ReadFileResult {
 internal u8 *
 virtualAlloc(size_t size)
 {
-    u8 *data = 0;
+  u8 *data = 0;
  
-    assert(size != 0);
-    size_t new_size = 4096 * ((size / 4096) + 1);
-    assert(new_size >= size);
-    size = new_size;
+  // NOTE: vm_allocate gives zerod memory.
+  // https://developer.apple.com/library/archive/documentation/Performance/Conceptual/ManagingMemory/Articles/MemoryAlloc.html
+  kern_return_t err = vm_allocate((vm_map_t) mach_task_self(),
+                                  (vm_address_t*) &data,
+                                  size,
+                                  VM_FLAGS_ANYWHERE);
+  assert(err == KERN_SUCCESS);
  
-    // Allocate directly from VM
-    kern_return_t err = vm_allocate((vm_map_t) mach_task_self(),
-                                    (vm_address_t*) &data,
-                                    size,
-                                    VM_FLAGS_ANYWHERE);
-    assert(err == KERN_SUCCESS);
- 
-    return data;
+  return data;
 }
 
 internal f32
