@@ -168,7 +168,7 @@ findLeastSignificantSetBit(u32 mask)
 
 
 inline f32
-abs(f32 x)
+absolute(f32 x)
 {
 #if COMPILER_MSVC
     f32 result = (f32)fabs(x);

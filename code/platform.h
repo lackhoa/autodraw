@@ -51,9 +51,9 @@ struct RenderEntryHeader {
 };
 
 struct RenderEntryRectangle {
-  Rect2     rect;
+  rect2     rect;
   TextureId texture;
-  V3        color;
+  v3        color;
 };
 
 struct ActionState {

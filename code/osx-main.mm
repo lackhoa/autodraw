@@ -140,10 +140,10 @@ ReadFileResult osxReadEntireFile(const char *file_name)
 #define STB_IMAGE_IMPLEMENTATION
 #import "stb_image.h"
 
-inline V4
-linearToSrgb(V4 linear)
+inline v4
+linearToSrgb(v4 linear)
 {
-    V4 result;
+    v4 result;
     result.r = squareRoot(linear.r);
     result.g = squareRoot(linear.g);
     result.b = squareRoot(linear.b);
@@ -152,7 +152,7 @@ linearToSrgb(V4 linear)
 }
 
 inline u32
-pack8x4(V4 color)
+pack8x4(v4 color)
 {
   u32 result = ((u32)(color.a*255.0f + 0.5f) << 24
                 | (u32)(color.b*255.0f + 0.5f) << 16
@@ -176,9 +176,9 @@ sRGBATexture(void *bitmap, i32 width, i32 height)
 }
 
 inline id<MTLTexture>
-makeColorTexture(V4 color)
+makeColorTexture(v4 color)
 {
-  V4 srgb = linearToSrgb(color);
+  v4 srgb = linearToSrgb(color);
   u32 packed = pack8x4(srgb);
   return sRGBATexture(&packed, 1, 1);
 }
@@ -306,7 +306,7 @@ int main(int argc, const char *argv[])
   makeCodepointTextures();
 
   // Setup texture array
-  metal_textures[TextureIdWhite] = makeColorTexture(V4{1,1,1,1});
+  metal_textures[TextureIdWhite] = makeColorTexture(v4{1,1,1,1});
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
   ca_metal_layer.frame       = main_window.contentView.frame;

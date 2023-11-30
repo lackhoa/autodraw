@@ -37,7 +37,7 @@ pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
 #define pushRenderEntry(rgroup, type) (RenderEntry##type *) pushRenderEntry_(rgroup, sizeof(RenderEntry##type), RenderEntryType##type)
 
 internal void
-pushRect(RenderGroup &rgroup, Rect2 rect, TextureId texture, V3 color)
+pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture, v3 color)
 {
   RenderEntryRectangle &entry = *pushRenderEntry(rgroup, Rectangle);
   entry.rect    = rect;
@@ -46,34 +46,34 @@ pushRect(RenderGroup &rgroup, Rect2 rect, TextureId texture, V3 color)
 }
 
 inline void
-pushRect(RenderGroup &rgroup, Rect2 rect, V3 color)
+pushRect(RenderGroup &rgroup, rect2 rect, v3 color)
 {
   pushRect(rgroup, rect, TextureIdWhite, color);
 }
 
 inline void
-pushRect(RenderGroup &rgroup, Rect2 rect, TextureId texture)
+pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
 {
-  pushRect(rgroup, rect, texture, V3{1,1,1});
+  pushRect(rgroup, rect, texture, v3{1,1,1});
 }
 
 internal void
-pushRectOutline(RenderGroup &rgroup, Rect2 outline, i32 thickness_px, V3 color)
+pushRectOutline(RenderGroup &rgroup, rect2 outline, i32 thickness_px, v3 color)
 {
-  V2 min = outline.min;
-  V2 max = outline.max;
-  V2 t = 0.5f * V2{pixel_to_clip_x * (f32)thickness_px,
+  v2 min = outline.min;
+  v2 max = outline.max;
+  v2 t = 0.5f * v2{pixel_to_clip_x * (f32)thickness_px,
                    pixel_to_clip_y * (f32)thickness_px};
-  V2 dimx = {max.x - min.x, 0};
-  V2 dimy = {0, max.y - min.y};
+  v2 dimx = {max.x - min.x, 0};
+  v2 dimy = {0, max.y - min.y};
   // left
-  pushRect(rgroup, Rect2{min-t, min+dimy+t}, color);
+  pushRect(rgroup, rect2{min-t, min+dimy+t}, color);
   // right
-  pushRect(rgroup, Rect2{min+dimx-t, max+t}, color);
+  pushRect(rgroup, rect2{min+dimx-t, max+t}, color);
   // bottom
-  pushRect(rgroup, Rect2{min-t, min+dimx+t}, color);
+  pushRect(rgroup, rect2{min-t, min+dimx+t}, color);
   // top
-  pushRect(rgroup, Rect2{min+dimy-t, max+t}, color);
+  pushRect(rgroup, rect2{min+dimy-t, max+t}, color);
 }
 
 struct DebugDrawer {
@@ -83,18 +83,18 @@ struct DebugDrawer {
 };
 
 inline f32
-pushLetter(RenderGroup &rgroup, V2 min, char character)
+pushLetter(RenderGroup &rgroup, v2 min, char character)
 {
   assert(33 <= character && character <= 126);
   auto codepoint = rgroup.codepoints[(u8)character];
-  auto dim = V2{rgroup.monospaced_width,
+  auto dim = v2{rgroup.monospaced_width,
                 pixel_to_clip_y * (f32)codepoint.height};
   pushRect(rgroup, rectMinDim(min, dim), codepointTexture(character));
   return dim.y;
 }
 
 internal f32
-pushText(RenderGroup &rgroup, V2 min, String string)
+pushText(RenderGroup &rgroup, v2 min, String string)
 {
   f32 max_dim_y = 0;
   auto x = min.x;
@@ -110,7 +110,7 @@ pushText(RenderGroup &rgroup, V2 min, String string)
 }
 
 inline f32
-pushTextFormat(RenderGroup &rgroup, V2 min, char *format, ...)
+pushTextFormat(RenderGroup &rgroup, v2 min, char *format, ...)
 {
   va_list args;
   va_start(args, format);
@@ -134,8 +134,8 @@ struct GameState {
   Arena perm_arena;
 
   f32 velocity;
-  V2  cursor_tile_offset;
-  V2  tree_tile_offset;
+  v2  cursor_tile_offset;
+  v2  tree_tile_offset;
   i32 cursor_coord;
 
   UITree  grandma;
@@ -143,8 +143,8 @@ struct GameState {
   b32     cursor_mode;
 };
 
-internal V2
-drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, V2 min)
+internal v2
+drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, v2 min)
 {
   f32 margin  = pixel_to_clip_x * 5;  // todo cleanup
   f32 spacing = pixel_to_clip_x * 20;
@@ -155,8 +155,8 @@ drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, V2 min)
   UITree *childp = tree.children;
   while (childp) {
     auto &child = *childp;
-    V2 child_min = {max_x + spacing, min.y + margin};
-    V2 child_max = drawTree(state, rgroup, child, child_min);
+    v2 child_min = {max_x + spacing, min.y + margin};
+    v2 child_max = drawTree(state, rgroup, child, child_min);
     max_y = maximum(max_y, child_max.y);
     max_x = child_max.x + margin;
     childp = child.next_sibling;
@@ -167,14 +167,14 @@ drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, V2 min)
   }
 
   f32 outline_thickness = 1;
-  V3  color             = {1,1,1};
+  v3  color             = {1,1,1};
   if (&tree == state.hot_item) {
     outline_thickness = 4;
     color = {1,0,0};
   }
-  pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, outline_thickness, color);
+  pushRectOutline(rgroup, rect2{min, v2{max_x, max_y}}, outline_thickness, color);
 
-  return V2{max_x, max_y};
+  return v2{max_x, max_y};
 }
 
 internal void
@@ -274,7 +274,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   f32 acceleration_abs = state.cursor_mode ? 320.f : 40.f;
 
   // abstract tiled movement update
-  V2 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
+  v2 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
   if (direction_x != 0) {
     if (memory.new_key_press) {
       velocity = 0;
@@ -311,23 +311,23 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   // Draw stuff ////////////////////////////////////
 
   // draw backdrop
-  pushRect(rgroup, Rect2{-1.f, -1.f, 1.f, 1.f}, V3{0,0,0});
+  pushRect(rgroup, rect2{-1.f, -1.f, 1.f, 1.f}, v3{0,0,0});
 
   {// draw cursor
     i32 screen_width_in_tiles = 80;
     i32 cursor_x = absolute_coord % screen_width_in_tiles;
     i32 cursor_y = absolute_coord / screen_width_in_tiles;
     f32 tile_width = 2.f / (f32)screen_width_in_tiles;
-    V2 tile_dim = {tile_width, tile_width};
-    V2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
+    v2 tile_dim = {tile_width, tile_width};
+    v2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
               +1.f - (f32)(cursor_y+1) * tile_dim.y};
     auto rect = rectMinDim(min, tile_dim);
-    pushRect(rgroup, rect, V3{1,0,0});
+    pushRect(rgroup, rect, v3{1,0,0});
   }
   
   {// Draw the tree
-    V2 min = {-0.9f, -0.1f};
-    V2 dim = drawTree(state, rgroup, state.grandma, min);
+    v2 min = {-0.9f, -0.1f};
+    v2 dim = drawTree(state, rgroup, state.grandma, min);
   }
 
   // draw debug text

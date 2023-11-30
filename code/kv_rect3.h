@@ -4,8 +4,8 @@
 
 struct Rect3
 {
-    V3 min;
-    V3 max;
+    v3 min;
+    v3 max;
 };
 
 inline b32
@@ -18,13 +18,13 @@ verifyRect(Rect3 rect)
 }
 
 inline Rect3
-rectRadius(V3 radius)
+rectRadius(v3 radius)
 {
     return {-radius, radius};
 }
 
 inline Rect3
-rectCenterRadius(V3 center, V3 radius)
+rectCenterRadius(v3 center, v3 radius)
 {
     assert((radius.x >= 0) && (radius.y >= 0) && (radius.z >= 0));
     Rect3 result;
@@ -34,7 +34,7 @@ rectCenterRadius(V3 center, V3 radius)
 }
 
 inline b32
-inRectangle(Rect3 rect, V3 p)
+inRectangle(Rect3 rect, v3 p)
 {
     b32 result = ((p.x >= rect.min.x)
                   && (p.y >= rect.min.y)
@@ -46,14 +46,14 @@ inRectangle(Rect3 rect, V3 p)
 }
 
 inline Rect3
-rectCenterDim(V3 center, V3 dim)
+rectCenterDim(v3 center, v3 dim)
 {
     Rect3 result = rectCenterRadius(center, 0.5f*dim);
     return result;
 }
 
 inline Rect3
-rectDim(V3 dim)
+rectDim(v3 dim)
 {
     Rect3 result = rectCenterDim(v3All(0), dim);
     return result;
@@ -63,25 +63,25 @@ inline Rect3
 minkowskiGrow(Rect3 a, Rect3 b)
 {
     Rect3 result;
-    V3 bDiameter = b.max - b.min;
-    V3 bRadius = 0.5f * bDiameter;
+    v3 bDiameter = b.max - b.min;
+    v3 bRadius = 0.5f * bDiameter;
     result.min = a.min - bRadius;
     result.max = a.max + bRadius;
     return result;
 }
 
-inline V3
+inline v3
 getRectCenter(Rect3 rect)
 {
-    V3 result;
+    v3 result;
     result = 0.5f*(rect.min + rect.max);
     return result;
 }
 
-inline V3
+inline v3
 getRectRadius(Rect3 rect)
 {
-    V3 result;
+    v3 result;
     result = 0.5f * (rect.max - rect.min);
     return result;
 }
@@ -103,17 +103,17 @@ rectInside(Rect3 in, Rect3 out)
 }
 
 inline Rect3
-addRadiusTo(Rect3 a, V3 radius)
+addRadiusTo(Rect3 a, v3 radius)
 {
     Rect3 result = Rect3{a.min - radius, a.max + radius};
     return result;
 }
 
-inline V3
-getBarycentricCoordinate(Rect3 rect, V3 pos)
+inline v3
+getBarycentricCoordinate(Rect3 rect, v3 pos)
 {
-    V3 result;
-    V3 dim = rect.max - rect.min;
+    v3 result;
+    v3 dim = rect.max - rect.min;
     result.x = ((pos.x - rect.min.x) / dim.x);
     result.y = ((pos.y - rect.min.y) / dim.y);
     result.z = ((pos.z - rect.min.z) / dim.z);
