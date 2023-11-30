@@ -37,7 +37,11 @@ try:
     # dst_mtime = mtime("autodraw.o")
     build_osx_main = full_rebuild
 
-    if not run_only:
+    if run_only:
+        command = './autodraw'
+        # run in a new process group
+        process = subprocess.Popen(command, close_fds=True, preexec_fn=os.setsid)
+    else:
         # Set compiler and linker flags
         optimization = ['-O0']
         constants = ['-DAUTO_MAC', '-DAUTO_INTERNAL=1', '-DAUTO_DIAGNOSTICS=1']
@@ -64,8 +68,6 @@ try:
         if build_osx_main:
             run(['clang', 'autodraw.o', '-o', 'autodraw'] + linked_libs + framework_flags)
         print('Build complete!')
-
-    run(['./autodraw'])
 
 except Exception as e:
     print(f'Error: {e}')

@@ -240,16 +240,57 @@ makeTestImageTexture()
   return sRGBATexture(bitmap, width, height);
 }
 
+struct GameCode {
+  char *dylib_name = "libgame.dylib";
+  void *dl;
+  GameUpdateAndRender  *updateAndRender;
+  GameInitializeMemory *initializeMemory;
+  time_t mtime;
+};
+
+internal time_t
+osxGetMtime(char* filename)
+{
+	time_t mtime = 0;
+	struct stat filestat;
+	if (stat(filename, &filestat) == 0)
+	{
+		mtime = filestat.st_mtimespec.tv_sec;
+	}
+	return mtime;
+}
+
+internal void osxLoadOrReloadGameCode(GameCode &game, b32 init) {
+  time_t mtime = osxGetMtime(game.dylib_name);
+  if (mtime != game.mtime) {
+    game.mtime = mtime;
+    auto &dl = game.dl;
+    dlclose(dl);
+
+    dl = dlopen(game.dylib_name, RTLD_LAZY|RTLD_GLOBAL);
+    if (!dl) {
+      printf("error: can't open game dylib: %s", game.dylib_name);
+      return;
+    }
+
+    game.updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
+    if (!game.updateAndRender) {
+      printf("error: can't load gameUpdateAndRender from %s", game.dylib_name);
+      return;
+    }
+
+    if (init) {
+      game.initializeMemory = (GameInitializeMemory *)dlsym(dl, "gameInitializeMemory");
+    }
+
+    printf("Hot loaded: %s", game.dylib_name);
+  }
+}
+
 int main(int argc, const char *argv[])
 {
-  GameUpdateAndRender *gameUpdateAndRender;
-  GameInitializeMemory *gameInitializeMemory;
-  {// Loading game code
-    auto dl = dlopen("libgame.dylib", RTLD_LAZY|RTLD_GLOBAL);
-    assert(dl);
-    gameUpdateAndRender  = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
-    gameInitializeMemory = (GameInitializeMemory *)dlsym(dl, "gameInitializeMemory");
-  }
+  GameCode game = {};
+  osxLoadOrReloadGameCode(game, true);
   
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
@@ -270,6 +311,7 @@ int main(int argc, const char *argv[])
   
   NSApplication *app = [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+  [app activate];  // Switch to this window, handy for development
 
   OSX_MainDelegate *osx_main_delegate = [OSX_MainDelegate new];
   app.delegate = osx_main_delegate;
@@ -391,15 +433,20 @@ int main(int argc, const char *argv[])
 
   auto command_queue = [mtl_device newCommandQueue];
 
-  gameInitializeMemory(game_memory, codepoints);
+  game.initializeMemory(game_memory, codepoints);
 
-  // Main loop
+  // NOTE: Main game loop
   u64 frame_start_tick = mach_absolute_time();
   f32 frame_time_sec  = 0;
   osx_main_delegate->is_running = true;
   while (osx_main_delegate->is_running)
   {
     auto temp_marker = beginTemporaryMemory(temp_arena);
+
+    {// hot load game code
+      osxLoadOrReloadGameCode(game, false);
+    }
+    
     @autoreleasepool
     {
       // Process events
@@ -441,7 +488,7 @@ int main(int argc, const char *argv[])
         osx_main_delegate->window_was_resized = false;
       }
 
-      gameUpdateAndRender(game_memory);
+      game.updateAndRender(game_memory);
 
       // sleep
       frame_time_sec = osxGetSecondsElapsed(frame_start_tick);

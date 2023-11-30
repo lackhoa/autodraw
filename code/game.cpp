@@ -186,10 +186,10 @@ initGameState(GameMemory &memory, GameState &state) {
   auto uncle   = pushStruct(arena, UITree);
   auto mom     = pushStruct(arena, UITree);
 
-  state.grandma = {.data=toString("grandma"), .children=uncle};
-  *uncle        = {.data=toString("uncle"), .parent=grandma, .next_sibling=mom};
-  *mom          = {.data=toString("mom"), .children=myself, .parent=grandma, .prev_sibling=uncle};
-  *myself       = {.data=toString("myself"), .parent=mom};
+  state.grandma = {.data=toString(arena, "grandma"), .children=uncle};
+  *uncle        = {.data=toString(arena, "uncle"), .parent=grandma, .next_sibling=mom};
+  *mom          = {.data=toString(arena, "mom"), .children=myself, .parent=grandma, .prev_sibling=uncle};
+  *myself       = {.data=toString(arena, "myself"), .parent=mom};
 
   state.hot_item = uncle;
 }
