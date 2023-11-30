@@ -6,8 +6,6 @@
   pma = pre-multiplied alpha
 
   todo:
-  - v2 rename
-  - cursor movement: experiment with initial velocity
   - hot code reload
   - try my luck with the new llvm, see if I can fix the stupid macro bug
  */
@@ -133,14 +131,15 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
 struct GameState {
   Arena perm_arena;
 
-  f32 velocity;
-  v2  cursor_tile_offset;
-  v2  tree_tile_offset;
   i32 cursor_coord;
-
   UITree  grandma;
   UITree *hot_item;
   b32     cursor_mode;
+
+  f32 direction_key_held_down_time;
+  f32 speed;
+  v2  cursor_tile_offset;
+  v2  tree_tile_offset;
 };
 
 internal v2
@@ -250,7 +249,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   rgroup.temp     = &temp_arena;
 
   // Game logic //////////////////////////////////////
-  f32 &velocity       = state.velocity;
+  f32 &speed          = state.speed;
   i32 &absolute_coord = state.cursor_coord;
   f32 &dt             = target_frame_time_sec;
 
@@ -259,41 +258,37 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     cursor_mode = !cursor_mode;
   }
 
-  f32 direction_x = 0;
-  f32 direction_y = 0;
+  v2 direction = {};
   if (memory.key_states[kVK_ANSI_L].is_down) {
-    direction_x = 1;
+    direction.x = 1;
   } else if (memory.key_states[kVK_ANSI_H].is_down) {
-    direction_x = -1;
+    direction.x = -1;
   } else if (memory.key_states[kVK_ANSI_K].is_down) {
-    direction_y = 1;
+    direction.y = 1;
   } else if (memory.key_states[kVK_ANSI_J].is_down) {
-    direction_y = -1;
+    direction.y = -1;
   }
 
-  f32 acceleration_abs = state.cursor_mode ? 320.f : 40.f;
+  f32 acceleration_magnitude = state.cursor_mode ? 80.f : 40.f;
 
   // abstract tiled movement update
   v2 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
-  if (direction_x != 0) {
-    if (memory.new_key_press) {
-      velocity = 0;
-      tile_offset.x += direction_x;
+  f32 &held_time = state.direction_key_held_down_time;
+  if (direction.x != 0 || direction.y != 0) {
+    if (held_time == 0.f) {
+      tile_offset += direction;
+    } else if (held_time < 0.25f) {
+      // hold right there!
     } else {
-      f32 a = direction_x * acceleration_abs;
-      tile_offset.x += velocity * dt + 0.5f * a * dt * dt;
-      velocity      += a * dt;
+      auto a = acceleration_magnitude;
+      tile_offset += direction * (speed * dt + 0.5f * a * dt * dt);
+      speed       += a * dt;
     }
-  } else if (direction_y != 0) {
-    if (memory.new_key_press) {
-      tile_offset.y += direction_y;
-    } else {
-      velocity = 2.0f;
-      tile_offset.y += velocity * dt;
-    }
+    held_time += dt;
   } else {
-    velocity    = 0.f;
+    speed       = 0.f;
     tile_offset = {};
+    held_time   = 0.f;
   }
 
   i32 tile_offset_int_x = (tile_offset.x == -0.5f) ? 0 : (i32)roundF32(tile_offset.x);
@@ -333,7 +328,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   // draw debug text
   DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
   pushDebugText(debug_drawer, "frame time: %.3f ms", memory.last_frame_time_sec * 1000);
-  pushDebugText(debug_drawer, "cursor velocity: %.3f tiles/s", velocity);
+  pushDebugText(debug_drawer, "cursor speed: %.3f tiles/s", speed);
 
   endTemporaryMemory(temp_marker);
 }
