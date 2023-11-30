@@ -6,7 +6,8 @@
   pma = pre-multiplied alpha
 
   todo:
-  - navigate the tree vertically
+  - v2 rename
+  - cursor movement: experiment with initial velocity
   - hot code reload
   - try my luck with the new llvm, see if I can fix the stupid macro bug
  */
@@ -133,8 +134,8 @@ struct GameState {
   Arena perm_arena;
 
   f32 velocity;
-  f32 cursor_tile_offset;
-  f32 tree_tile_offset;
+  V2  cursor_tile_offset;
+  V2  tree_tile_offset;
   i32 cursor_coord;
 
   UITree  grandma;
@@ -166,10 +167,12 @@ drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, V2 min)
   }
 
   f32 outline_thickness = 1;
+  V3  color             = {1,1,1};
   if (&tree == state.hot_item) {
     outline_thickness = 4;
+    color = {1,0,0};
   }
-  pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, outline_thickness, V3{1,1,1});
+  pushRectOutline(rgroup, Rect2{min, V2{max_x, max_y}}, outline_thickness, color);
 
   return V2{max_x, max_y};
 }
@@ -201,26 +204,24 @@ extern "C" GAME_INITIALIZE_MEMORY(gameInitializeMemory)
 }
 
 inline void
-moveTreeHorizontally(GameState &state, i32 dx)
+moveTree(GameState &state, i32 dx, i32 dy)
 {
   auto hi = state.hot_item;
+  assert(dx == 0 || dy == 0);
+  i32 iterations = maximum(abs(dx), abs(dy));
+  if (dy != 0) {
+    breakhere;
+  }
 
-  if (dx > 0) {
-    for (i32 i=0; i < dx; i++) {
-      if (hi->next_sibling) {
-        hi = hi->next_sibling;
-      } else {
-        break;
-      }
-    }
-  } else {
-    for (i32 i=0; i < -dx; i++) {
-      if (hi->prev_sibling) {
-        hi = hi->prev_sibling;
-      } else {
-        break;
-      }
-    }
+  for (i32 i=0; i < iterations; i++) {
+    UITree *next = 0;
+    if (dx > 0) next = hi->next_sibling;
+    else if (dx < 0) next = hi->prev_sibling;
+    else if (dy > 0) next = hi->parent;
+    else if (dy < 0) next = hi->children;
+
+    if (next) hi = next;
+    else break;
   }
   
   state.hot_item = hi;
@@ -234,7 +235,7 @@ moveCursorHorizontally(GameState &state, i32 dx)
   if (coord <= 0) {
     // clamp cursor to left side of the screen
     coord = 0;
-    state.cursor_tile_offset = maximum(state.cursor_tile_offset, 0);
+    if (state.cursor_tile_offset.x < 0) state.cursor_tile_offset.x = 0;
   }
 }
 
@@ -259,42 +260,53 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   }
 
   f32 direction_x = 0;
+  f32 direction_y = 0;
   if (memory.key_states[kVK_ANSI_L].is_down) {
     direction_x = 1;
   } else if (memory.key_states[kVK_ANSI_H].is_down) {
     direction_x = -1;
+  } else if (memory.key_states[kVK_ANSI_K].is_down) {
+    direction_y = 1;
+  } else if (memory.key_states[kVK_ANSI_J].is_down) {
+    direction_y = -1;
   }
 
   f32 acceleration_abs = state.cursor_mode ? 320.f : 40.f;
 
   // abstract tiled movement update
-  f32 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
+  V2 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
   if (direction_x != 0) {
     if (memory.new_key_press) {
       velocity = 0;
-      tile_offset += direction_x;
+      tile_offset.x += direction_x;
     } else {
-      // unit of movement: object
       f32 a = direction_x * acceleration_abs;
-      tile_offset += velocity * dt + 0.5f * a * dt * dt;
-      velocity    += a * dt;
+      tile_offset.x += velocity * dt + 0.5f * a * dt * dt;
+      velocity      += a * dt;
+    }
+  } else if (direction_y != 0) {
+    if (memory.new_key_press) {
+      tile_offset.y += direction_y;
+    } else {
+      velocity = 2.0f;
+      tile_offset.y += velocity * dt;
     }
   } else {
     velocity    = 0.f;
-    tile_offset = 0.f;
+    tile_offset = {};
   }
 
-  i32 tile_offset_rounded = (tile_offset == -0.5f) ? 0 : roundF32ToI32(tile_offset);
-  tile_offset -= (f32)tile_offset_rounded;
+  i32 tile_offset_int_x = (tile_offset.x == -0.5f) ? 0 : (i32)roundF32(tile_offset.x);
+  i32 tile_offset_int_y = (tile_offset.y == -0.5f) ? 0 : (i32)roundF32(tile_offset.y);
+  tile_offset.x -= (f32)tile_offset_int_x;
+  tile_offset.y -= (f32)tile_offset_int_y;
 
   // update game state according to movement
   if (state.cursor_mode) {
-    moveCursorHorizontally(state, tile_offset_rounded);
+    moveCursorHorizontally(state, tile_offset_int_x);
   } else {// tree navigation
-    moveTreeHorizontally(state, tile_offset_rounded);
+    moveTree(state, tile_offset_int_x, tile_offset_int_y);
   }
-
-  ///////////////////////////////////////////////////////
 
   // Draw stuff ////////////////////////////////////
 
@@ -307,7 +319,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     i32 cursor_y = absolute_coord / screen_width_in_tiles;
     f32 tile_width = 2.f / (f32)screen_width_in_tiles;
     V2 tile_dim = {tile_width, tile_width};
-    V2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset) * tile_dim.x,
+    V2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
               +1.f - (f32)(cursor_y+1) * tile_dim.y};
     auto rect = rectMinDim(min, tile_dim);
     pushRect(rgroup, rect, V3{1,0,0});

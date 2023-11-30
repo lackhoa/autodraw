@@ -17,7 +17,7 @@
 // }
 
 inline i32
-absoluteValue(i32 in)
+abs(i32 in)
 {
     return ((in >= 0) ? in : -in);
 }
@@ -51,16 +51,28 @@ roundF32ToU32(f32 Real32)
     return(Result);
 }
 
-inline i32
-roundF32ToI32(f32 Real32)
+inline f32
+roundF32(f32 Real32)
 {
 #if COMPILER_MSVC
-    i32 Result = (i32)roundf(Real32);
+    f32 Result = roundf(Real32);
 #else
-    i32 Result = (i32)__builtin_roundf(Real32);
+    f32 Result = __builtin_roundf(Real32);
 #endif
     return(Result);
 }
+
+// todo I don't like this, just do the round myself
+// inline i32
+// roundF32ToI32(f32 Real32)
+// {
+// #if COMPILER_MSVC
+//     i32 Result = (i32)roundf(Real32);
+// #else
+//     i32 Result = (i32)__builtin_roundf(Real32);
+// #endif
+//     return(Result);
+// }
 
 inline i32
 floorF32ToI32(f32 Real32)
@@ -156,7 +168,7 @@ findLeastSignificantSetBit(u32 mask)
 
 
 inline f32
-absoluteValue(f32 x)
+abs(f32 x)
 {
 #if COMPILER_MSVC
     f32 result = (f32)fabs(x);

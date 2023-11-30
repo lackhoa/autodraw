@@ -8,14 +8,14 @@ typedef struct
     {
         struct
         {
-            r32 x, y;
+            f32 x, y;
         };
-        r32 E[2];
+        f32 E[2];
     };
 } V2;
 
 inline V2
-v2(r32 x, r32 y)
+v2(f32 x, f32 y)
 {
     V2 result;
     result.x = x;
@@ -26,11 +26,11 @@ v2(r32 x, r32 y)
 inline V2
 v2i(i32 x, i32 y)
 {
-    return v2((r32)x, (r32)y);
+    return v2((f32)x, (f32)y);
 }
 
 inline V2
-v2All(r32 c)
+v2All(f32 c)
 {
     return v2(c, c);
 }
@@ -93,7 +93,7 @@ operator-(V2 v)
 }
 
 inline V2
-operator*(r32 c, V2 v)
+operator*(f32 c, V2 v)
 {
     V2 result;
     result.x = c * v.x;
@@ -102,21 +102,21 @@ operator*(r32 c, V2 v)
 }
 
 inline V2
-operator*(V2 v, r32 c)
+operator*(V2 v, f32 c)
 {
     V2 result = c*v;
     return result;
 }
 
 inline V2 &
-operator*=(V2 &v, r32 c)
+operator*=(V2 &v, f32 c)
 {
     v = c * v;
     return v;
 }
 
 inline V2
-operator/(V2 v, r32 c)
+operator/(V2 v, f32 c)
 {
     V2 result;
     result.x = v.x / c;
@@ -124,39 +124,39 @@ operator/(V2 v, r32 c)
     return result;
 }
 
-inline r32
+inline f32
 inner(V2 v, V2 u)
 {
-    r32 result = v.x*u.x + v.y*u.y;
+    f32 result = v.x*u.x + v.y*u.y;
     return result;
 }
 
-inline r32
+inline f32
 lengthSq(V2 v)
 {
-    r32 result = square(v.x) + square(v.y);
+    f32 result = square(v.x) + square(v.y);
     return result;
 }
 
-inline r32
+inline f32
 length(V2 v)
 {
-    r32 result = squareRoot(lengthSq(v));
+    f32 result = squareRoot(lengthSq(v));
     return result;
 }
 
-inline r32
+inline f32
 projectLen(V2 onto, V2 v)
 {
-    r32 innerProd = inner(onto, v);
-    r32 result = (innerProd / length(onto));
+    f32 innerProd = inner(onto, v);
+    f32 result = (innerProd / length(onto));
     return result;
 }
 
 inline V2
 project(V2 onto, V2 v)
 {
-    r32 innerProd = inner(onto, v);
+    f32 innerProd = inner(onto, v);
     V2 result = (innerProd / lengthSq(onto)) * onto;
     return result;
 }
@@ -174,7 +174,7 @@ inline V2
 normalize(V2 v)
 {
     V2 result;
-    r32 len = length(v);
+    f32 len = length(v);
     if (len == 0)
     {
         result = v2(0,0);
@@ -201,7 +201,7 @@ toBilateral(V2 v)
 }
 
 inline b32
-inRange(V2 v, r32 min, r32 max)
+inRange(V2 v, f32 min, f32 max)
 {
     b32 result = (inRange(v.x, min, max) && inRange(v.y, min, max));
     return result;
