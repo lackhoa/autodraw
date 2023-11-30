@@ -10,8 +10,8 @@
 #import <sys/stat.h>
 #import <dlfcn.h>
 
-#import "kv_utils.h"
-#import "kv_math.h"
+#import "kv-utils.h"
+#import "kv-math.h"
 #import "shader-interface.h"
 #import "platform.h"
 

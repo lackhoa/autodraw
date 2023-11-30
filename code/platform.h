@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "kv_utils.h"
-#include "kv_math.h"
+#include "kv-utils.h"
+#include "kv-math.h"
 #include "keycodes.h"
 
 f32 debug_font_height = 128.f;

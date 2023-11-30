@@ -82,7 +82,7 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #define invalidDefaultCase default: { assert(false); };
 #define breakhere  { int x = 5; (void)x; }
 
-#include "kv_intrinsics.h"
+#include "kv-intrinsics.h"
 
 // source: https://groups.google.com/g/comp.std.c/c/d-6Mj5Lko_s
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__,PP_RSEQ_N())

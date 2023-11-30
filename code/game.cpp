@@ -10,8 +10,8 @@
   - try my luck with the new llvm, see if I can fix the stupid macro bug
  */
 
-// #include "kv_math.h"
-#include "kv_utils.h"
+// #include "kv-math.h"
+#include "kv-utils.h"
 #include "platform.h"
 
 struct UITree {
