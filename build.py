@@ -50,23 +50,23 @@ try:
 
         # Compile the game to a dll
         includes = ['-I../libs']
-        run(['clang', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] + common_compiler_flags)
+        run(['clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] + common_compiler_flags)
 
         # Compile the app (Apple headers is so slow to compile, we need to do it separately)
         if build_osx_main:
-            run(['clang', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] + includes + common_compiler_flags)
+            run(['clang++', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] + includes + common_compiler_flags)
 
         run(['xcrun', '-sdk', 'macosx', 'metal', '-c', '../code/shaders.metal', '-o', 'shaders.air'])
         run(['xcrun', '-sdk', 'macosx', 'metallib', 'shaders.air', '-o', 'shaders.metallib'])
 
         # Link
-        linked_libs = ['-lstdc++']
+        linked_libs = []
         frameworks=['Metal', 'Cocoa', 'QuartzCore']
         framework_flags=[]
         for framework in frameworks:
             framework_flags += ["-framework", framework]
         if build_osx_main:
-            run(['clang', 'autodraw.o', '-o', 'autodraw'] + linked_libs + framework_flags)
+            run(['clang++', 'autodraw.o', '-o', 'autodraw'] + linked_libs + framework_flags)
         print('Build complete!')
 
 except Exception as e:

@@ -6,8 +6,7 @@
   pma = pre-multiplied alpha
 
   todo:
-  - check out lldb
-  - Rotated rectangle
+  - Renderer: add ability to draw rotated rectangle
   - Language: draw rectangle, rotate it
   - Make the editor, to a point where it can output things
   - Try my luck with the new llvm, see if I can fix the stupid macro bug
