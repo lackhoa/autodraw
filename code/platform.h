@@ -1,6 +1,7 @@
 /*
   Header file imported by the game and all platforms.
   Define protocol of communication between the game and the platform.
+  IMPORTANT: Minimize burden for the platform! Do not make them do work that the game can do itself.
  */
 
 #pragma once
@@ -24,8 +25,11 @@ struct Codepoint {
   i32 xoff, yoff;
 };
 
+// todo: Does the platform really need to understand everything in the render group? I doubt it.
+// But we need to keep things flexible since right now I don't understand how GPU works very well.
 struct RenderGroup {
   Arena      commands;
+  Arena      gpu_commands;
   Arena     *temp;
   Codepoint *codepoints;
   f32        monospaced_width;
@@ -53,26 +57,47 @@ struct RenderEntryHeader {
 struct RenderEntryRectangle {
   rect2     rect;
   TextureId texture;
-  v3        color;
+  v4        color;
+};
+
+enum GPUCommandType {
+  GPUCommandTypeTriangle,
+};
+
+struct GPUCommandHeader {
+  GPUCommandType type;
+};
+
+struct GPUCommands {
+  Arena commands;
+  Arena vertex_buffer;
+  i32   vertex_start;
+};
+
+struct GPUCommandTriangle {
+  i32 vertex_start;
+  i32 vertex_count;
+  TextureId texture;
 };
 
 struct ActionState {
   b32 is_down;
 };
 
-struct GameMemory {
-  // From platform
-  Arena       arena;            // Passing arena to show also how much space there are.
-  ActionState key_states[kVK_Count];
-  b32         new_key_press;    // todo: this logic is very hacky
-  f32         last_frame_time_sec;
-
-  // From game 
-  RenderGroup rgroup;
+struct GameOutput {
+  GPUCommands gcommands;
 };
 
-#define GAME_UPDATE_AND_RENDER(name) void name(GameMemory &memory)
-typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
+// NOTE: GameMemory is the communication interface between the game and platform.
+struct GameInput {
+  Arena arena;                  // All memory allocated for the game by the platform
 
-#define GAME_INITIALIZE_MEMORY(name) void name(GameMemory &memory, Codepoint *codepoints)
-typedef GAME_INITIALIZE_MEMORY(GameInitializeMemory);
+  ActionState key_states[kVK_Count];
+  f32         last_frame_time_sec;
+};
+
+#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &arena)
+typedef GAME_INITIALIZE(GameInitialize);
+
+#define GAME_UPDATE_AND_RENDER(NAME) GameOutput NAME(GameInput &input)
+typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);

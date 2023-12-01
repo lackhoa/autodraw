@@ -243,8 +243,8 @@ makeTestImageTexture()
 struct GameCode {
   char *dylib_name = "libgame.dylib";
   void *dl;
-  GameUpdateAndRender  *updateAndRender;
-  GameInitializeMemory *initializeMemory;
+  GameUpdateAndRender *updateAndRender;
+  GameInitialize      *initialize;
   time_t mtime;
 };
 
@@ -280,7 +280,8 @@ internal void osxLoadOrReloadGameCode(GameCode &game, b32 init) {
     }
 
     if (init) {
-      game.initializeMemory = (GameInitializeMemory *)dlsym(dl, "gameInitializeMemory");
+      game.initialize = (GameInitialize *)dlsym(dl, "gameInitialize");
+      assert(game.initialize);
     }
 
     printf("Hot loaded: %s", game.dylib_name);
@@ -294,14 +295,11 @@ int main(int argc, const char *argv[])
   
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
-  u8 *total_memory = virtualAlloc(game_memory_cap + platform_memory_cap);
-  auto platform_arena = newArena(platform_memory_cap, total_memory + game_memory_cap);
+  u8 *memory_base = virtualAlloc(game_memory_cap + platform_memory_cap);
+  auto platform_arena = newArena(platform_memory_cap, memory_base);
+  memory_base += platform_memory_cap;
   auto temp_memory_cap = platform_memory_cap;
   temp_arena = subArena(platform_arena, temp_memory_cap);
-
-  GameMemory game_memory = {
-    .arena=newArena(game_memory_cap, total_memory),
-  };
 
   {// platform memory
     auto cap = megaBytes(64);
@@ -393,10 +391,10 @@ int main(int argc, const char *argv[])
     offset += sizeof(simd_float2);
     i++;
     // color
-    v.attributes[i].format      = MTLVertexFormatFloat3;
+    v.attributes[i].format      = MTLVertexFormatFloat4;
     v.attributes[i].offset      = offset;
     v.attributes[i].bufferIndex = 0;
-    offset += sizeof(simd_float3);
+    offset += sizeof(simd_float4);
     i++;
     // layout
     v.layouts[0].stride       = sizeof(VertexInput);
@@ -433,7 +431,9 @@ int main(int argc, const char *argv[])
 
   auto command_queue = [mtl_device newCommandQueue];
 
-  game.initializeMemory(game_memory, codepoints);
+  GameInput game_input = {};
+  game_input.arena = newArena(game_memory_cap, memory_base);
+  game.initialize(codepoints, game_input.arena);
 
   // NOTE: Main game loop
   u64 frame_start_tick = mach_absolute_time();
@@ -442,6 +442,7 @@ int main(int argc, const char *argv[])
   while (osx_main_delegate->is_running)
   {
     auto temp_marker = beginTemporaryMemory(temp_arena);
+    defer(endTemporaryMemory(temp_marker));
 
     {// hot load game code
       osxLoadOrReloadGameCode(game, false);
@@ -450,7 +451,6 @@ int main(int argc, const char *argv[])
     @autoreleasepool
     {
       // Process events
-      game_memory.new_key_press = false;
       while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                untilDate: nil
                                inMode: NSDefaultRunLoopMode
@@ -469,8 +469,7 @@ int main(int argc, const char *argv[])
             } else {
               switch (event.keyCode) {
                 default: {
-                  game_memory.key_states[event.keyCode].is_down = is_down;
-                  game_memory.new_key_press = is_down && (!is_repeat);
+                  game_input.key_states[event.keyCode].is_down = is_down;
                 }
               }
             }
@@ -488,7 +487,7 @@ int main(int argc, const char *argv[])
         osx_main_delegate->window_was_resized = false;
       }
 
-      game.updateAndRender(game_memory);
+      GameOutput game_output = game.updateAndRender(game_input);
 
       // sleep
       frame_time_sec = osxGetSecondsElapsed(frame_start_tick);
@@ -504,7 +503,7 @@ int main(int argc, const char *argv[])
         }
       }
 
-      game_memory.last_frame_time_sec = frame_time_sec;
+      game_input.last_frame_time_sec = frame_time_sec;
       frame_start_tick = mach_absolute_time();
 
       {// drawing to the screen
@@ -522,71 +521,35 @@ int main(int argc, const char *argv[])
         render_pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.6f, .0f, .6f, 1.f);
 
-        auto command_buffer = [command_queue commandBuffer];
+        auto command_buffer  = [command_queue commandBuffer];
         auto command_encoder = [command_buffer renderCommandEncoderWithDescriptor:render_pass_descriptor];
         [command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
         [command_encoder setRenderPipelineState:render_pipeline_state];
         [command_encoder setFragmentSamplerState:sampler_state atIndex:0];
 
-        auto &rgroup = game_memory.rgroup;
-        auto vertex_arena = subArena(temp_arena, megaBytes(64));
-        {// render group processing 1.: build vertex buffer
-          u8 *next = rgroup.commands.base;
-          u8 *end  = rgroup.commands.base + rgroup.commands.used;
-          while (next != end) {
-            auto header = (RenderEntryHeader *)next;
-            next += sizeof(RenderEntryHeader);
-
-            switch (header->type) {
-              case RenderEntryTypeRectangle: {
-                auto entry = (RenderEntryRectangle *)next;
-                next += sizeof(RenderEntryRectangle);
-
-                auto min_x = entry->rect.min.x;
-                auto max_x = entry->rect.max.x;
-                auto min_y = entry->rect.min.y;
-                auto max_y = entry->rect.max.y;
-
-                VertexInput *verts = pushArray(vertex_arena, (6), VertexInput);
-                auto c = entry->color;
-                auto color = simd_float3{c.r, c.g, c.b};
-                verts[0] = {{min_x, max_y}, {0.f, 0.f}, color};
-                verts[1] = {{min_x, min_y}, {0.f, 1.f}, color};
-                verts[2] = {{max_x, min_y}, {1.f, 1.f}, color};
-                verts[3] = {{min_x, max_y}, {0.f, 0.f}, color};
-                verts[4] = {{max_x, min_y}, {1.f, 1.f}, color};
-                verts[5] = {{max_x, max_y}, {1.f, 0.f}, color};
-
-                break;
-              }
-
-                invalidDefaultCase;
-            }
-          }
-        }
+        auto &gcommands = game_output.gcommands;
         // "MTLResourceStorageModePrivate" mode crashes my machine
-        auto vertex_buffer = [[mtl_device newBufferWithBytes:vertex_arena.base
-                               length:vertex_arena.used
+        auto vertex_buffer = [[mtl_device newBufferWithBytes:gcommands.vertex_buffer.base
+                               length:gcommands.vertex_buffer.used
                                options:MTLResourceStorageModeShared] autorelease];
 
         [command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
 
-        {// render group processing 2.: send commands (todo: because apparently we can't do this before setVertexBuffer?)
-          i32 vstart = 0;
-          u8 *next = rgroup.commands.base;
-          u8 *end  = rgroup.commands.base + rgroup.commands.used;
+        {// executing gpu commands
+          auto &commands = gcommands.commands;
+          u8 *next = commands.base;
+          u8 *end  = commands.base + commands.used;
           while (next != end) {
-            auto header = (RenderEntryHeader *)next;
-            next += sizeof(RenderEntryHeader);
+            auto &header = EAT_TYPE(next, GPUCommandHeader);
 
-            switch (header->type) {
-              case RenderEntryTypeRectangle: {
-                auto entry = (RenderEntryRectangle *)next;
-                next += sizeof(RenderEntryRectangle);
+            switch (header.type) {
+              case GPUCommandTypeTriangle: {
+                auto &command = EAT_TYPE(next, GPUCommandTriangle);
 
-                [command_encoder setFragmentTexture:metal_textures[entry->texture] atIndex:0];
-                [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:vstart vertexCount:6];
-                vstart += 6;
+                [command_encoder setFragmentTexture:metal_textures[command.texture] atIndex:0];
+                [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle
+                 vertexStart:command.vertex_start
+                 vertexCount:command.vertex_count];
 
                 break;
               }
@@ -601,7 +564,6 @@ int main(int argc, const char *argv[])
         [command_buffer commit];
       }
     }
-    endTemporaryMemory(temp_marker);
   }
 
   printf("objective-c autodraw finished!\n");

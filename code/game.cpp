@@ -6,18 +6,22 @@
   pma = pre-multiplied alpha
 
   todo:
-  - hot code reload
-  - try my luck with the new llvm, see if I can fix the stupid macro bug
+  - check out lldb
+  - Rotated rectangle
+  - Language: draw rectangle, rotate it
+  - Make the editor, to a point where it can output things
+  - Try my luck with the new llvm, see if I can fix the stupid macro bug
  */
 
 // #include "kv-math.h"
 #include "kv-utils.h"
 #include "platform.h"
+#include "shader-interface.h"  // This might be a bad idea since the simd_float types might not be cross-platform
 
 struct UITree {
   String  data;
 
-  UITree *children;  // todo this should be double star
+  UITree *children;
   UITree *parent;
   UITree *next_sibling;
   UITree *prev_sibling;
@@ -35,7 +39,7 @@ pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
 #define pushRenderEntry(rgroup, type) (RenderEntry##type *) pushRenderEntry_(rgroup, sizeof(RenderEntry##type), RenderEntryType##type)
 
 internal void
-pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture, v3 color)
+pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture, v4 color)
 {
   RenderEntryRectangle &entry = *pushRenderEntry(rgroup, Rectangle);
   entry.rect    = rect;
@@ -44,7 +48,7 @@ pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture, v3 color)
 }
 
 inline void
-pushRect(RenderGroup &rgroup, rect2 rect, v3 color)
+pushRect(RenderGroup &rgroup, rect2 rect, v4 color)
 {
   pushRect(rgroup, rect, TextureIdWhite, color);
 }
@@ -52,11 +56,11 @@ pushRect(RenderGroup &rgroup, rect2 rect, v3 color)
 inline void
 pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
 {
-  pushRect(rgroup, rect, texture, v3{1,1,1});
+  pushRect(rgroup, rect, texture, v4{1,1,1,1});
 }
 
 internal void
-pushRectOutline(RenderGroup &rgroup, rect2 outline, i32 thickness_px, v3 color)
+pushRectOutline(RenderGroup &rgroup, rect2 outline, i32 thickness_px, v4 color)
 {
   v2 min = outline.min;
   v2 max = outline.max;
@@ -128,10 +132,23 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
   va_end(args);
 }
 
+inline void *
+pushGPUCommand_(GPUCommands &gcommands, u32 size, GPUCommandType type)
+{
+  GPUCommandHeader *header = pushStruct(gcommands.commands, GPUCommandHeader);
+  header->type = type;
+  void *command = pushSize(gcommands.commands, size);
+  return command;
+}
+
+#define pushGPUCommand(commands, type) (GPUCommand##type *) pushGPUCommand_(commands, sizeof(GPUCommand##type), GPUCommandType##type)
+
 struct GameState {
   Arena perm_arena;
+  Arena temp_arena;
+  Codepoint *codepoints;
 
-  i32 cursor_coord;
+  i32     cursor_coord;
   UITree  grandma;
   UITree *hot_item;
   b32     cursor_mode;
@@ -166,7 +183,7 @@ drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, v2 min)
   }
 
   f32 outline_thickness = 1;
-  v3  color             = {1,1,1};
+  v4  color             = {1,1,1,1};
   if (&tree == state.hot_item) {
     outline_thickness = 4;
     color = {1,0,0};
@@ -174,32 +191,6 @@ drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, v2 min)
   pushRectOutline(rgroup, rect2{min, v2{max_x, max_y}}, outline_thickness, color);
 
   return v2{max_x, max_y};
-}
-
-internal void
-initGameState(GameMemory &memory, GameState &state) {
-  state.perm_arena = subArena(memory.arena, megaBytes(512));
-  auto &arena = state.perm_arena;
-
-  auto grandma = &state.grandma;
-  auto myself  = pushStruct(arena, UITree);
-  auto uncle   = pushStruct(arena, UITree);
-  auto mom     = pushStruct(arena, UITree);
-
-  state.grandma = {.data=toString(arena, "grandma"), .children=uncle};
-  *uncle        = {.data=toString(arena, "uncle"), .parent=grandma, .next_sibling=mom};
-  *mom          = {.data=toString(arena, "mom"), .children=myself, .parent=grandma, .prev_sibling=uncle};
-  *myself       = {.data=toString(arena, "myself"), .parent=mom};
-
-  state.hot_item = uncle;
-}
-
-extern "C" GAME_INITIALIZE_MEMORY(gameInitializeMemory)
-{
-  memory.rgroup.codepoints       = codepoints;
-  memory.rgroup.monospaced_width = pixel_to_clip_x * (f32)codepoints[(u8)'a'].width;
-  auto &state = *pushStruct(memory.arena, GameState);
-  initGameState(memory, state);
 }
 
 inline void
@@ -238,15 +229,54 @@ moveCursorHorizontally(GameState &state, i32 dx)
   }
 }
 
+struct PushVerticesOutput {
+  VertexInput *vertices;
+  i32          vertex_start;
+};
+
+inline PushVerticesOutput
+pushVertices(GPUCommands &gcommands, i32 count)
+{
+  VertexInput *verts = pushArray(gcommands.vertex_buffer, count, VertexInput);
+  i32 vstart = gcommands.vertex_start;
+  gcommands.vertex_start += count;
+  return {verts, vstart};
+}
+
+extern "C" GAME_INITIALIZE(gameInitialize)
+{
+  auto &state = *pushStruct(arena, GameState);
+
+  state.perm_arena = subArena(arena, megaBytes(512));
+  state.temp_arena = subArenaWithRemainingMemory(arena);
+
+  auto grandma = &state.grandma;
+  auto myself  = pushStruct(arena, UITree);
+  auto uncle   = pushStruct(arena, UITree);
+  auto mom     = pushStruct(arena, UITree);
+
+  state.grandma = {.data=toString(arena, "grandma"), .children=uncle};
+  *uncle        = {.data=toString(arena, "uncle"), .parent=grandma, .next_sibling=mom};
+  *mom          = {.data=toString(arena, "mom"), .children=myself, .parent=grandma, .prev_sibling=uncle};
+  *myself       = {.data=toString(arena, "myself"), .parent=mom};
+
+  state.hot_item = uncle;
+  state.codepoints = codepoints;
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
-  GameState &state = *(GameState *)memory.arena.base;
-  Arena &temp_arena  = memory.arena;
-  auto   temp_marker = beginTemporaryMemory(temp_arena);
+  GameState &state = *(GameState *)input.arena.base;
 
-  auto &rgroup    = memory.rgroup;
-  rgroup.commands = subArena(temp_arena, megaBytes(8));
-  rgroup.temp     = &temp_arena;
+  Arena &temp_arena  = state.temp_arena;
+  auto   temp_marker = beginTemporaryMemory(temp_arena);
+  defer(endTemporaryMemory(temp_marker));
+
+  RenderGroup rgroup = {};
+  rgroup.codepoints       = state.codepoints;
+  rgroup.monospaced_width = pixel_to_clip_x * (f32)state.codepoints[(u8)'a'].width;
+  rgroup.commands         = subArena(temp_arena, megaBytes(8));
+  rgroup.temp             = &temp_arena;
 
   // Game logic //////////////////////////////////////
   f32 &speed          = state.speed;
@@ -254,18 +284,18 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   f32 &dt             = target_frame_time_sec;
 
   b32 &cursor_mode = state.cursor_mode;
-  if (memory.key_states[kVK_Tab].is_down && memory.new_key_press) {
+  if (input.key_states[kVK_Tab].is_down) {
     cursor_mode = !cursor_mode;
   }
 
   v2 direction = {};
-  if (memory.key_states[kVK_ANSI_L].is_down) {
+  if (input.key_states[kVK_ANSI_L].is_down) {
     direction.x = 1;
-  } else if (memory.key_states[kVK_ANSI_H].is_down) {
+  } else if (input.key_states[kVK_ANSI_H].is_down) {
     direction.x = -1;
-  } else if (memory.key_states[kVK_ANSI_K].is_down) {
+  } else if (input.key_states[kVK_ANSI_K].is_down) {
     direction.y = 1;
-  } else if (memory.key_states[kVK_ANSI_J].is_down) {
+  } else if (input.key_states[kVK_ANSI_J].is_down) {
     direction.y = -1;
   }
 
@@ -303,10 +333,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     moveTree(state, tile_offset_int_x, tile_offset_int_y);
   }
 
-  // Draw stuff ////////////////////////////////////
+  // Render: Build the push buffer ////////////////////////////////////
 
   // draw backdrop
-  pushRect(rgroup, rect2{-1.f, -1.f, 1.f, 1.f}, v3{0,0,0});
+  pushRect(rgroup, rect2{-1.f, -1.f, 1.f, 1.f}, v4{0,0,0,1});
 
   {// draw cursor
     i32 screen_width_in_tiles = 80;
@@ -317,7 +347,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     v2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
               +1.f - (f32)(cursor_y+1) * tile_dim.y};
     auto rect = rectMinDim(min, tile_dim);
-    pushRect(rgroup, rect, v3{1,0,0});
+    pushRect(rgroup, rect, v4{1,0,0});
   }
   
   {// Draw the tree
@@ -327,8 +357,50 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 
   // draw debug text
   DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
-  pushDebugText(debug_drawer, "frame time: %.3f ms", memory.last_frame_time_sec * 1000);
+  pushDebugText(debug_drawer, "frame time: %.3f ms", input.last_frame_time_sec * 1000);
   pushDebugText(debug_drawer, "cursor speed: %.3f tiles/s", speed);
 
-  endTemporaryMemory(temp_marker);
+  // Render: Create the vertex buffer ///////////////////////
+
+  GPUCommands gcommands = {};
+  gcommands.commands      = subArena(temp_arena, megaBytes(8));
+  gcommands.vertex_buffer = subArena(temp_arena, megaBytes(8));
+
+  u8 *next = rgroup.commands.base;
+  u8 *end  = rgroup.commands.base + rgroup.commands.used;
+  while (next != end) {
+    auto &header = EAT_TYPE(next, RenderEntryHeader);
+
+    switch (header.type) {
+      case RenderEntryTypeRectangle: {
+        auto &entry = EAT_TYPE(next, RenderEntryRectangle);
+
+        auto out = pushVertices(gcommands, 6);
+        auto c = entry.color;
+        auto cs = simd_float4{c.r, c.g, c.b, c.a};
+        auto &rect = entry.rect;
+        auto min_x = rect.min.x;
+        auto max_x = rect.max.x;
+        auto min_y = rect.min.y;
+        auto max_y = rect.max.y;
+
+        out.vertices[0] = {{min_x, max_y}, {0.f, 0.f}, cs};
+        out.vertices[1] = {{min_x, min_y}, {0.f, 1.f}, cs};
+        out.vertices[2] = {{max_x, min_y}, {1.f, 1.f}, cs};
+        out.vertices[3] = {{min_x, max_y}, {0.f, 0.f}, cs};
+        out.vertices[4] = {{max_x, min_y}, {1.f, 1.f}, cs};
+        out.vertices[5] = {{max_x, max_y}, {1.f, 0.f}, cs};
+
+        auto &command = *pushGPUCommand(gcommands, Triangle);
+        command.vertex_start = out.vertex_start;
+        command.vertex_count = 6;
+        command.texture      = entry.texture;
+
+        break;
+      }
+
+        invalidDefaultCase;
+    }
+  }
+  return GameOutput{gcommands};
 }

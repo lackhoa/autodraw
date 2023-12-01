@@ -7,7 +7,7 @@ struct VertexOutput
 {
   float4 position [[position]];
   float2 uv;
-  float3 color;
+  float4 color;
 };
 
 vertex VertexOutput vert(VertexInput in [[stage_in]])
@@ -27,5 +27,6 @@ fragment float4 frag(VertexOutput in [[stage_in]],
   out.r *= in.color.r;
   out.g *= in.color.g;
   out.b *= in.color.b;
+  out.a *= in.color.a;
   return out;
 }

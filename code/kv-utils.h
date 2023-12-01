@@ -578,7 +578,7 @@ unsetFlag(u32 *flags, u32 flag)
   new_list->tail          = list;               \
   list                    = new_list;
 
-// defer macro ////////////////////
+// defer macro from https://www.gingerbill.org/article/2015/08/19/defer-in-cpp/
 template <typename F>
 struct privDefer {
 	F f;
@@ -596,3 +596,5 @@ privDefer<F> defer_func(F f) {
 #define DEFER_3(x)    DEFER_2(x, __COUNTER__)
 #define defer(code)   auto DEFER_3(_defer_) = defer_func([&](){code;})
 // end defer macro //////////////////
+
+#define EAT_TYPE(POINTER, TYPE) *(TYPE *)(POINTER += sizeof(TYPE), POINTER - sizeof(TYPE))
