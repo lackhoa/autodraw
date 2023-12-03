@@ -352,7 +352,7 @@ int main(int argc, char **argv)
          putchar(" .:ioVM@"[bitmap[j*w+i]>>5]);
       putchar('\n');
    }
-   return 0;
+   return 00;
 }
 #endif
 //

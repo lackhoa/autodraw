@@ -3,3 +3,4 @@ AutoDraw.xcodeproj/xcuserdata/
 build
 .vscode
 references/
+__pycache__

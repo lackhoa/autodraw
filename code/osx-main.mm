@@ -284,7 +284,7 @@ internal void osxLoadOrReloadGameCode(GameCode &game, b32 init) {
       assert(game.initialize);
     }
 
-    printf("Hot loaded: %s", game.dylib_name);
+    printf("Hot loaded: %s, mtime: %ld", game.dylib_name, mtime);
   }
 }
 

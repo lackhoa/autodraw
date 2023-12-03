@@ -1,4 +1,1 @@
-kill
-breakpoint delete --force
 breakpoint set --file /Users/khoa/AutoDraw/code/game.cpp --line 266
-run

@@ -1,29 +1,30 @@
 /*
+  todo:
+  - Draw some *sick* ray-tracing to the left
+  - Why are we using 100% CPU?
+  - Try my luck with the new llvm, see if I can fix the stupid macro bugs (or maybe that's)
+
   Rules for the renderer:
   - Textures and bitmaps are srgb premultiplied-alpha
   - Colors are in linear range, alpha=1 (so pma doesn't matter)
   - Packed colors are rgba in memory order (i.e abgr in u32 register order)
   pma = pre-multiplied alpha
 
-  todo:
-  - Renderer: add ability to draw rotated rectangle
-  - Language: draw rectangle, rotate it
-  - Make the editor, to a point where it can output things
-  - Try my luck with the new llvm, see if I can fix the stupid macro bug
  */
 
-// #include "kv-math.h"
 #include "kv-utils.h"
 #include "platform.h"
 #include "shader-interface.h"  // This might be a bad idea since the simd_float types might not be cross-platform
 
-struct UITree {
-  String  data;
+typedef u32 TreeID;
+struct EditorTree {
+  TreeID id;
+  String data;
 
-  UITree *children;
-  UITree *parent;
-  UITree *next_sibling;
-  UITree *prev_sibling;
+  EditorTree *children;
+  EditorTree *parent;
+  EditorTree *next_sibling;
+  EditorTree *prev_sibling;
 };
 
 inline void *
@@ -61,6 +62,7 @@ pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
 internal void
 pushRectOutline(RenderGroup &rgroup, rect2 outline, i32 thickness_px, v4 color)
 {
+  assert(thickness_px >= 2);  // our outlines are divided in half
   v2 min = outline.min;
   v2 max = outline.max;
   v2 t = 0.5f * v2{pixel_to_clip_x * (f32)thickness_px,
@@ -147,10 +149,11 @@ struct GameState {
   Arena temp_arena;
   Codepoint *codepoints;
 
-  i32     cursor_coord;
-  UITree  grandma;
-  UITree *hot_item;
-  b32     cursor_mode;
+  b32 focused_on_slider;
+
+  i32 cursor_coord;
+  EditorTree  editor_root;
+  EditorTree *hot_item;
 
   f32 direction_key_held_down_time;
   f32 speed;
@@ -158,38 +161,41 @@ struct GameState {
   v2  tree_tile_offset;
 };
 
-internal v2
-drawTree(GameState &state, RenderGroup &rgroup, UITree &tree, v2 min)
+internal rect2
+drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min)
 {
-  f32 margin  = pixel_to_clip_x * 5;  // todo cleanup
-  f32 spacing = pixel_to_clip_x * 20;
-  f32 data_dim_x = rgroup.monospaced_width * (f32)tree.data.length;
-  f32 max_y = pushText(rgroup, min, tree.data);
-  f32 max_x = min.x + data_dim_x;
+  // TODO: try switching to pixel-based coordinates computation
+  f32 margin      = pixel_to_clip_x * 5;
+  f32 spacing     = pixel_to_clip_x * 20;
+  f32 indentation = pixel_to_clip_x * 40;
+  f32 data_dim_x  = rgroup.monospaced_width * (f32)tree.data.length;
+  f32 line_height = pixel_to_clip_x * 128.f;  // todo: not a real height
+  v2 max = {};
+  max.y = pushText(rgroup, min, tree.data);
+  max.x = min.x + data_dim_x;
 
-  UITree *childp = tree.children;
+  EditorTree *childp = tree.children;
   while (childp) {
     auto &child = *childp;
-    v2 child_min = {max_x + spacing, min.y + margin};
-    v2 child_max = drawTree(state, rgroup, child, child_min);
-    max_y = maximum(max_y, child_max.y);
-    max_x = child_max.x + margin;
+    v2 child_min = {min.x + indentation, min.y - line_height};  // this is just the input, the actual min is different
+    auto crect = drawTree(state, rgroup, child, child_min);
+
+    // TODO use rect union
+    if (crect.max.x > max.x) max.x = crect.max.x;
+    min.y = crect.min.y - margin;
+
     childp = child.next_sibling;
   }
 
-  if (tree.children) {
-    max_y += margin;
+  max.y += margin;
+
+  if (tree.id == state.hot_item->id) {
+    i32 outline_thickness = 2;
+    v4 color = {1,0,0,1};
+    pushRectOutline(rgroup, rect2{min, max}, outline_thickness, color);
   }
 
-  f32 outline_thickness = 1;
-  v4  color             = {1,1,1,1};
-  if (&tree == state.hot_item) {
-    outline_thickness = 4;
-    color = {1,0,0};
-  }
-  pushRectOutline(rgroup, rect2{min, v2{max_x, max_y}}, outline_thickness, color);
-
-  return v2{max_x, max_y};
+  return rect2{min, max};
 }
 
 inline void
@@ -203,7 +209,7 @@ moveTree(GameState &state, i32 dx, i32 dy)
   }
 
   for (i32 i=0; i < iterations; i++) {
-    UITree *next = 0;
+    EditorTree *next = 0;
     if (dx > 0) next = hi->next_sibling;
     else if (dx < 0) next = hi->prev_sibling;
     else if (dy > 0) next = hi->parent;
@@ -245,21 +251,8 @@ pushVertices(GPUCommands &gcommands, i32 count)
 extern "C" GAME_INITIALIZE(gameInitialize)
 {
   auto &state = *pushStruct(arena, GameState);
-
   state.perm_arena = subArena(arena, megaBytes(512));
   state.temp_arena = subArenaWithRemainingMemory(arena);
-
-  auto grandma = &state.grandma;
-  auto myself  = pushStruct(arena, UITree);
-  auto uncle   = pushStruct(arena, UITree);
-  auto mom     = pushStruct(arena, UITree);
-
-  state.grandma = {.data=toString(arena, "grandma"), .children=uncle};
-  *uncle        = {.data=toString(arena, "uncle"), .parent=grandma, .next_sibling=mom};
-  *mom          = {.data=toString(arena, "mom"), .children=myself, .parent=grandma, .prev_sibling=uncle};
-  *myself       = {.data=toString(arena, "myself"), .parent=mom};
-
-  state.hot_item = uncle;
   state.codepoints = codepoints;
 }
 
@@ -270,6 +263,19 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   Arena &temp_arena  = state.temp_arena;
   auto   temp_marker = beginTemporaryMemory(temp_arena);
   defer(endTemporaryMemory(temp_marker));
+
+  auto grandma = &state.editor_root;
+  auto slider  = pushStruct(temp_arena, EditorTree);
+  auto uncle   = pushStruct(temp_arena, EditorTree);
+  auto mom     = pushStruct(temp_arena, EditorTree);
+
+  TreeID SLIDER_ID=3;
+  *grandma = {.id=0, .data=toString(temp_arena, "grandma"), .children=uncle};
+  *uncle   = {.id=1, .data=toString(temp_arena, "uncle"), .parent=grandma, .next_sibling=mom};
+  *mom     = {.id=2, .data=toString(temp_arena, "mom"), .children=slider, .parent=grandma, .prev_sibling=uncle};
+  *slider  = {.id=SLIDER_ID, .data=toString(temp_arena, "slider"), .parent=mom};
+
+  if (!state.hot_item) state.hot_item = uncle;
 
   RenderGroup rgroup = {};
   rgroup.codepoints       = state.codepoints;
@@ -282,9 +288,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   i32 &absolute_coord = state.cursor_coord;
   f32 &dt             = target_frame_time_sec;
 
-  b32 &cursor_mode = state.cursor_mode;
-  if (input.key_states[kVK_Tab].is_down) {
-    cursor_mode = !cursor_mode;
+  b32 &focused_on_slider = state.focused_on_slider;
+  if (input.key_states[kVK_ANSI_E].is_down) {
+    if (state.hot_item->id == SLIDER_ID) {
+      focused_on_slider = true;
+    }
+  }
+
+  if (input.key_states[kVK_Escape].is_down) {
+    focused_on_slider = false;
   }
 
   v2 direction = {};
@@ -298,10 +310,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     direction.y = -1;
   }
 
-  f32 acceleration_magnitude = state.cursor_mode ? 80.f : 40.f;
+  f32 acceleration_magnitude = state.focused_on_slider ? 80.f : 40.f;
 
   // abstract tiled movement update
-  v2 &tile_offset = cursor_mode ? state.cursor_tile_offset : state.tree_tile_offset;
+  v2 &tile_offset = focused_on_slider ? state.cursor_tile_offset : state.tree_tile_offset;
   f32 &held_time = state.direction_key_held_down_time;
   if (direction.x != 0 || direction.y != 0) {
     if (held_time == 0.f) {
@@ -326,7 +338,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   tile_offset.y -= (f32)tile_offset_int_y;
 
   // update game state according to movement
-  if (state.cursor_mode) {
+  if (state.focused_on_slider) {
     moveCursorHorizontally(state, tile_offset_int_x);
   } else {// tree navigation
     moveTree(state, tile_offset_int_x, tile_offset_int_y);
@@ -349,9 +361,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     pushRect(rgroup, rect, v4{1,0,0});
   }
   
-  {// Draw the tree
-    v2 min = {-0.9f, -0.1f};
-    v2 dim = drawTree(state, rgroup, state.grandma, min);
+  {// Draw the editor tree
+    v2 min = {0.5f, -0.12f};
+    drawTree(state, rgroup, state.editor_root, min);
   }
 
   // draw debug text
