@@ -10,16 +10,17 @@
 #import <sys/stat.h>
 #import <dlfcn.h>
 
-#import "kv-utils.h"
-#import "kv-math.h"
-#import "shader-interface.h"
-#import "platform.h"
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "imstb_truetype.h"
 #pragma clang diagnostic pop
+
+#import "kv-utils.h"
+#import "kv-math.h"
+#import "shader-interface.h"
+#import "platform.h"
+#import "kv-bitmap.h"
 
 // todo: This is an experiment, we'll put all global objects that can be misused when uninitialized here
 struct OsxGlobals {
@@ -59,7 +60,7 @@ struct ReadFileResult {
 };
 
 internal u8 *
-virtualAlloc(size_t size)
+osxVirtualAlloc(size_t size)
 {
   u8 *data = 0;
  
@@ -115,7 +116,7 @@ ReadFileResult osxReadEntireFile(const char *file_name)
              file_name, errno, strerror(errno));
     } else {
       i64 file_size = file_stat.st_size;
-      out.content = virtualAlloc(file_size);
+      out.content = osxVirtualAlloc(file_size);
       if (!out.content) {
         printf("platformReadEntireFile %s:  vm_allocate error: %d: %s\n",
                file_name, errno, strerror(errno));
@@ -137,55 +138,34 @@ ReadFileResult osxReadEntireFile(const char *file_name)
   return out;
 }
 
-#define STB_IMAGE_IMPLEMENTATION
-#import "stb_image.h"
-
-inline v4
-linearToSrgb(v4 linear)
-{
-    v4 result;
-    result.r = squareRoot(linear.r);
-    result.g = squareRoot(linear.g);
-    result.b = squareRoot(linear.b);
-    result.a = linear.a;
-    return result;
-}
-
-inline u32
-pack8x4(v4 color)
-{
-  u32 result = ((u32)(color.a*255.0f + 0.5f) << 24
-                | (u32)(color.b*255.0f + 0.5f) << 16
-                | (u32)(color.g*255.0f + 0.5f) << 8
-                | (u32)(color.r*255.0f + 0.5f));
-  return result;
-}
-
 internal id<MTLTexture>
-sRGBATexture(void *bitmap, i32 width, i32 height)
+metal_sRGBATexture(void *bitmap, i32 dimx, i32 dimy)
 {
-  auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
-                       width:width height:height mipmapped:NO];
-  auto texture = [osx_globals->mtl_device newTextureWithDescriptor:texture_desc];
-  [texture_desc release];
-  [texture replaceRegion:MTLRegionMake2D(0,0,width,height)
-   mipmapLevel:0
-   withBytes:bitmap
-   bytesPerRow:4*width];
+  id<MTLTexture> texture;
+  @autoreleasepool
+  {
+    auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                         width:dimx height:dimy mipmapped:NO];
+    texture = [osx_globals->mtl_device newTextureWithDescriptor:texture_desc];
+    [texture replaceRegion:MTLRegionMake2D(0,0,dimx,dimy)
+     mipmapLevel:0
+     withBytes:bitmap
+     bytesPerRow:4*dimx];
+  }
   return texture;
 }
 
 inline id<MTLTexture>
 makeColorTexture(v4 color)
 {
-  v4 srgb = linearToSrgb(color);
-  u32 packed = pack8x4(srgb);
-  return sRGBATexture(&packed, 1, 1);
+  u32 packed = pack_sRGBA(color);
+  return metal_sRGBATexture(&packed, 1, 1);
 }
 
 internal id<MTLTexture> metal_textures[TextureIdCount];
 internal Codepoint codepoints[128];
 
+// todo: this belongs in the asset system
 internal void
 makeCodepointTextures() {
   auto temp = beginTemporaryMemory(temp_arena);
@@ -221,24 +201,26 @@ makeCodepointTextures() {
 
       stbtt_FreeBitmap(mono_bitmap, 0);
       // Note: The color is white so srgb doesn't matter
-      metal_textures[ascii_char] = sRGBATexture(bitmap, width, height);
+      metal_textures[ascii_char] = metal_sRGBATexture(bitmap, width, height);
       codepoints[ascii_char]     = {width, height, (r32)width/(r32)height, xoff, yoff};
     }
   }
   endTemporaryMemory(temp);
 }
 
-internal id<MTLTexture>
-makeTestImageTexture()
-{
-  i32 width, height;
-  int num_channel;
-  unsigned char* bitmap = stbi_load("../resources/testTexture.png",
-                                    &width, &height, &num_channel, 4);
-  assert(bitmap && num_channel == 4);
+// #define STB_IMAGE_IMPLEMENTATION
+// #import "stb_image.h"
+// internal id<MTLTexture>
+// makeTestImageTexture()
+// {
+//   i32 width, height;
+//   int num_channel;
+//   unsigned char* bitmap = stbi_load("../resources/testTexture.png",
+//                                     &width, &height, &num_channel, 4);
+//   assert(bitmap && num_channel == 4);
 
-  return sRGBATexture(bitmap, width, height);
-}
+//   return metalsRGBATexture(bitmap, width, height);
+// }
 
 struct GameCode {
   char *dylib_name = "libgame.dylib";
@@ -260,7 +242,8 @@ osxGetMtime(char* filename)
 	return mtime;
 }
 
-internal void osxLoadOrReloadGameCode(GameCode &game, b32 init) {
+internal b32
+osxLoadOrReloadGameCode(GameCode &game) {
   time_t mtime = osxGetMtime(game.dylib_name);
   if (mtime != game.mtime) {
     game.mtime = mtime;
@@ -269,33 +252,45 @@ internal void osxLoadOrReloadGameCode(GameCode &game, b32 init) {
 
     dl = dlopen(game.dylib_name, RTLD_LAZY|RTLD_GLOBAL);
     if (!dl) {
-      printf("error: can't open game dylib: %s", game.dylib_name);
-      return;
+      printf("error: can't open game dylib: %s\n", game.dylib_name);
+      return false;
     }
 
-    game.updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
-    if (!game.updateAndRender) {
-      printf("error: can't load gameUpdateAndRender from %s", game.dylib_name);
-      return;
-    }
-
-    if (init) {
+    if (!game.initialize){
       game.initialize = (GameInitialize *)dlsym(dl, "gameInitialize");
       assert(game.initialize);
     }
 
-    printf("Hot loaded: %s, mtime: %ld", game.dylib_name, mtime);
+    game.updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
+    if (!game.updateAndRender) {
+      printf("error: can't load gameUpdateAndRender from %s\n", game.dylib_name);
+      return false;
+    }
+
+    printf("Hot loaded: %s, mtime: %ld\n", game.dylib_name, mtime);
+    return true;
   }
+  return false;
+}
+
+PLATFORM_UPLOAD_RAY_TRACING_BITMAP(osxUploadRayTracingBitmap)
+{
+  printf("upload ray tracing bitmap\n");
+
+  id<MTLTexture> new_texture = metal_sRGBATexture(bitmap, dimx, dimy);
+  id<MTLTexture> *texture = &metal_textures[TextureIdRayTrace];
+  if (*texture) [*texture release];
+  *texture = new_texture;
+
 }
 
 int main(int argc, const char *argv[])
 {
   GameCode game = {};
-  osxLoadOrReloadGameCode(game, true);
   
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
-  u8 *memory_base = virtualAlloc(game_memory_cap + platform_memory_cap);
+  u8 *memory_base = osxVirtualAlloc(game_memory_cap + platform_memory_cap);
   auto platform_arena = newArena(platform_memory_cap, memory_base);
   memory_base += platform_memory_cap;
   auto temp_memory_cap = platform_memory_cap;
@@ -303,7 +298,7 @@ int main(int argc, const char *argv[])
 
   {// platform memory
     auto cap = megaBytes(64);
-    auto memory = virtualAlloc(cap);
+    auto memory = osxVirtualAlloc(cap);
     temp_arena = newArena(cap, memory);
   }
   
@@ -317,13 +312,13 @@ int main(int argc, const char *argv[])
   [[NSFileManager defaultManager] changeCurrentDirectoryPath:[NSBundle mainBundle].bundlePath];
 
   NSRect screen_rect = [NSScreen mainScreen].frame;
-  NSRect initial_frame = NSMakeRect((screen_rect.size.width - global_rendering_width) * .5,
-                                    (screen_rect.size.height - global_rendering_height) * .5,
-                                    global_rendering_width,
-                                    global_rendering_height);
+  NSRect ns_initial_frame = NSMakeRect((screen_rect.size.width - global_rendering_width) * .5,
+                                       (screen_rect.size.height - global_rendering_height) * .5,
+                                       global_rendering_width,
+                                       global_rendering_height);
 
   NSWindow *main_window = [[NSWindow alloc]
-                           initWithContentRect: initial_frame
+                           initWithContentRect: ns_initial_frame
                            styleMask: (NSWindowStyleMaskTitled |
                                        NSWindowStyleMaskClosable |
                                        NSWindowStyleMaskMiniaturizable |
@@ -344,8 +339,6 @@ int main(int argc, const char *argv[])
   OsxGlobals osx_globals_ = {.mtl_device=mtl_device};
   osx_globals = &osx_globals_;
   makeCodepointTextures();
-
-  // Setup texture array
   metal_textures[TextureIdWhite] = makeColorTexture(v4{1,1,1,1});
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
@@ -356,15 +349,60 @@ int main(int argc, const char *argv[])
 
   // Load shaders
   NSError *error = nil;
-  id<MTLLibrary> mtl_library = [mtl_device newLibraryWithFile: @"shaders.metallib" error:&error];
-  if (!mtl_library)
-  {
-    printf("Failed to load library: %s\n", error.localizedDescription.UTF8String);
-    return 1;
+  auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
+  @autoreleasepool {
+    id<MTLLibrary> mtl_library = [mtl_device newLibraryWithFile: @"shaders.metallib" error:&error];
+    if (!mtl_library) {
+      printf("Failed to load library: %s\n", error.localizedDescription.UTF8String);
+      return 1;
+    }
+    id<MTLFunction> vert_func = [mtl_library newFunctionWithName:@"vert"];
+    id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
+
+    auto vertex_descriptor = [MTLVertexDescriptor new];
+    {
+      auto v = vertex_descriptor;
+      u64 offset = 0;
+      i32 i = 0;
+      // position
+      v.attributes[i].format      = MTLVertexFormatFloat2;
+      v.attributes[i].offset      = offset;
+      v.attributes[i].bufferIndex = 0;
+      offset += sizeof(simd_float2);
+      i++;
+      // uv
+      v.attributes[i].format      = MTLVertexFormatFloat2;
+      v.attributes[i].offset      = offset;
+      v.attributes[i].bufferIndex = 0;
+      offset += sizeof(simd_float2);
+      i++;
+      // color
+      v.attributes[i].format      = MTLVertexFormatFloat4;
+      v.attributes[i].offset      = offset;
+      v.attributes[i].bufferIndex = 0;
+      offset += sizeof(simd_float4);
+      i++;
+      // layout
+      v.layouts[0].stride       = sizeof(VertexInput);
+      v.layouts[0].stepRate     = 1;
+      v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+      assert(offset == sizeof(VertexInput));
+    }
+
+    render_pipeline_desc.vertexFunction   = vert_func;
+    render_pipeline_desc.fragmentFunction = frag_func;
+    render_pipeline_desc.vertexDescriptor = vertex_descriptor;
+    auto attachment = render_pipeline_desc.colorAttachments[0];
+    attachment.pixelFormat                 = ca_metal_layer.pixelFormat;
+    attachment.blendingEnabled             = YES;
+    // pre-multiplied alpha blending 
+    attachment.rgbBlendOperation           = MTLBlendOperationAdd;
+    attachment.alphaBlendOperation         = MTLBlendOperationAdd;
+    attachment.sourceRGBBlendFactor        = MTLBlendFactorOne;
+    attachment.sourceAlphaBlendFactor      = MTLBlendFactorOne;
+    attachment.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+    attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;  // NOTE: This works when dst alpha=1, but idk about compositing with a translucent destination
   }
-  id<MTLFunction> vert_func = [mtl_library newFunctionWithName:@"vert"];
-  id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
-  [mtl_library release];
 
   // Create a Sampler State
   auto sampler_desc = [MTLSamplerDescriptor new];
@@ -373,83 +411,39 @@ int main(int argc, const char *argv[])
   auto sampler_state = [mtl_device newSamplerStateWithDescriptor:sampler_desc];
   [sampler_desc release];
 
-  auto vertex_descriptor = [MTLVertexDescriptor new];
-  {
-    auto v = vertex_descriptor;
-    u64 offset = 0;
-    i32 i = 0;
-    // position
-    v.attributes[i].format      = MTLVertexFormatFloat2;
-    v.attributes[i].offset      = offset;
-    v.attributes[i].bufferIndex = 0;
-    offset += sizeof(simd_float2);
-    i++;
-    // uv
-    v.attributes[i].format      = MTLVertexFormatFloat2;
-    v.attributes[i].offset      = offset;
-    v.attributes[i].bufferIndex = 0;
-    offset += sizeof(simd_float2);
-    i++;
-    // color
-    v.attributes[i].format      = MTLVertexFormatFloat4;
-    v.attributes[i].offset      = offset;
-    v.attributes[i].bufferIndex = 0;
-    offset += sizeof(simd_float4);
-    i++;
-    // layout
-    v.layouts[0].stride       = sizeof(VertexInput);
-    v.layouts[0].stepRate     = 1;
-    v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-    assert(offset == sizeof(VertexInput));
-  }
-
-  auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
-  render_pipeline_desc.vertexFunction   = vert_func;
-  render_pipeline_desc.fragmentFunction = frag_func;
-  render_pipeline_desc.vertexDescriptor = vertex_descriptor;
-  auto attachment = render_pipeline_desc.colorAttachments[0];
-  attachment.pixelFormat                 = ca_metal_layer.pixelFormat;
-  attachment.blendingEnabled             = YES;
-  // pre-multiplied alpha blending 
-  attachment.rgbBlendOperation           = MTLBlendOperationAdd;
-  attachment.alphaBlendOperation         = MTLBlendOperationAdd;
-  attachment.sourceRGBBlendFactor        = MTLBlendFactorOne;
-  attachment.sourceAlphaBlendFactor      = MTLBlendFactorOne;
-  attachment.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
-  attachment.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;  // NOTE: This works when dst alpha=1, but idk about compositing with a translucent destination
   auto render_pipeline_state = [mtl_device newRenderPipelineStateWithDescriptor:render_pipeline_desc error:&error];
-  if (!render_pipeline_state)
-  {
+  if (!render_pipeline_state) {
     printf("failed to create render pipeline state: %s\n", error.localizedDescription.UTF8String);
     return 1;
   }
-
-  [vert_func release];
-  [frag_func release];
-  [vertex_descriptor release];
   [render_pipeline_desc release];
 
   auto command_queue = [mtl_device newCommandQueue];
 
   GameInput game_input = {};
   game_input.arena = newArena(game_memory_cap, memory_base);
-  game.initialize(codepoints, game_input.arena);
+  PlatformCode platform_code = {};
+  platform_code.uploadRayTracingBitmap = osxUploadRayTracingBitmap;
+  osxLoadOrReloadGameCode(game);
+  game.initialize(codepoints, game_input.arena, &platform_code);
 
   // NOTE: Main game loop
   u64 frame_start_tick = mach_absolute_time();
   f32 frame_time_sec  = 0;
   osx_main_delegate->is_running = true;
+  b32 initial_frame = true;
   while (osx_main_delegate->is_running)
   {
     auto temp_marker = beginTemporaryMemory(temp_arena);
     defer(endTemporaryMemory(temp_marker));
 
-    {// hot load game code
-      osxLoadOrReloadGameCode(game, false);
-    }
-    
+    game_input.hot_reloaded = initial_frame || osxLoadOrReloadGameCode(game);
+
     @autoreleasepool
     {
+      // bookmark: You cannot make a texture inside an autorelease pool?
+      // if (initial_frame) makeColorTexture(v4{.5,1,1,1});
+
       // Process events
       while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                untilDate: nil
@@ -509,8 +503,7 @@ int main(int argc, const char *argv[])
       {// drawing to the screen
 
         auto ca_metal_drawable = [ca_metal_layer nextDrawable];
-        if (!ca_metal_drawable)
-        {
+        if (!ca_metal_drawable) {
           printf("ERROR: nextDrawable timed out!\n");
           continue;
         }
@@ -564,6 +557,7 @@ int main(int argc, const char *argv[])
         [command_buffer commit];
       }
     }
+    initial_frame = false;
   }
 
   printf("objective-c autodraw finished!\n");

@@ -14,7 +14,9 @@
 
 #include "kv-utils.h"
 #include "platform.h"
-#include "shader-interface.h"  // This might be a bad idea since the simd_float types might not be cross-platform
+#include "shader-interface.h"
+#include "kv-bitmap.h"
+#include "ray.h"
 
 typedef u32 TreeID;
 struct EditorTree {
@@ -159,6 +161,8 @@ struct GameState {
   f32 speed;
   v2  cursor_tile_offset;
   v2  tree_tile_offset;
+
+  PlatformCode platform;
 };
 
 internal rect2
@@ -254,10 +258,12 @@ extern "C" GAME_INITIALIZE(gameInitialize)
   state.perm_arena = subArena(arena, megaBytes(512));
   state.temp_arena = subArenaWithRemainingMemory(arena);
   state.codepoints = codepoints;
+  state.platform   = *code;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
+  b32 hot_reloaded = input.hot_reloaded;
   GameState &state = *(GameState *)input.arena.base;
 
   Arena &temp_arena  = state.temp_arena;
@@ -344,6 +350,35 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     moveTree(state, tile_offset_int_x, tile_offset_int_y);
   }
 
+  if (hot_reloaded)
+  {// Ray tracing
+    World world = {};
+    world.plane_count    = 1;
+    world.material_count = 2;
+
+    Material materials[2];
+    materials[0] = {.color=v3{0,0,0}};
+    materials[1] = {.color=v3{1,1,1}};
+    world.materials = materials;
+
+    Plane planes[1] = {{.N=v3{1,1,1}, .d=1, .mat_index=1}};
+    world.planes = planes;
+
+    // let's fill a 512x512 rectangle with gray
+    // rgba in memory order
+    i32 dimx = 1;
+    i32 dimy = 1;
+    u32 *bitmap = pushArray(temp_arena, dimx*dimy, u32);
+    u32 *dst = bitmap;
+    for (i32 y=0; y < dimy; y++) {
+      for (i32 x=0; x < dimx; x++) {
+        v4 color = {.5, .5, .5, 1};
+        *dst++ = pack_sRGBA(color);
+      }
+    }
+    state.platform.uploadRayTracingBitmap(bitmap, dimx, dimy);
+  }
+
   // Render: Build the push buffer ////////////////////////////////////
 
   // draw backdrop
@@ -371,7 +406,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   pushDebugText(debug_drawer, "frame time: %.3f ms", input.last_frame_time_sec * 1000);
   pushDebugText(debug_drawer, "cursor speed: %.3f tiles/s", speed);
 
-  // Render: Create the vertex buffer ///////////////////////
+  // Render: Create GPU commands ///////////////////////
 
   GPUCommands gcommands = {};
   gcommands.commands      = subArena(temp_arena, megaBytes(8));

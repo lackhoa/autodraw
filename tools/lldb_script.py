@@ -13,3 +13,6 @@ def __lldb_init_module(debugger, internal_dict):
 
 # target = lldb.debugger.GetSelectedTarget()
 # target.GetProcess().GetSelectedThread().GetSelectedFrame().GetLineEntry().GetFileSpec()
+
+# NOTES
+# run "thread backtrace" to examine the call stack, which is bizarre

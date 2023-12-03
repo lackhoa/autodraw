@@ -18,6 +18,13 @@ f32 pixel_to_clip_y = 2.f / global_rendering_height;
 f32 game_update_hz = 60.f;
 f32 target_frame_time_sec = 1.f / game_update_hz;
 
+#define PLATFORM_UPLOAD_RAY_TRACING_BITMAP(NAME) void NAME(u32 *bitmap, i32 dimx, i32 dimy)
+typedef PLATFORM_UPLOAD_RAY_TRACING_BITMAP(PlatformUploadRayTracingBitmap);
+
+struct PlatformCode {
+  PlatformUploadRayTracingBitmap *uploadRayTracingBitmap;
+};
+
 // NOTE: currently we deal with monospaced fonts only
 struct Codepoint {
   i32 width, height;
@@ -37,7 +44,8 @@ struct RenderGroup {
 
 enum TextureId {
   // 0-127 are reserved for ascii glyphs
-  TextureIdWhite = 128,
+  TextureIdWhite    = 128,
+  TextureIdRayTrace = 129,
   TextureIdCount,
 };
 
@@ -94,10 +102,11 @@ struct GameInput {
 
   ActionState key_states[kVK_Count];
   f32         last_frame_time_sec;
+  b32         hot_reloaded;
 };
-
-#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &arena)
-typedef GAME_INITIALIZE(GameInitialize);
 
 #define GAME_UPDATE_AND_RENDER(NAME) GameOutput NAME(GameInput &input)
 typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
+
+#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &arena, PlatformCode *code)
+typedef GAME_INITIALIZE(GameInitialize);
