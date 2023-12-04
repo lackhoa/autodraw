@@ -17,7 +17,7 @@
 // }
 
 inline i32
-abs(i32 in)
+absoslute(i32 in)
 {
     return ((in >= 0) ? in : -in);
 }

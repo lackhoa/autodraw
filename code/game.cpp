@@ -1,6 +1,8 @@
 /*
   todo:
+  - Draw coordinate system
   - Draw some *sick* ray-tracing to the left
+  - Z-sorting for UI elements
   - Why are we using 100% CPU?
   - Try my luck with the new llvm, see if I can fix the stupid macro bugs (or maybe that's)
 
@@ -17,6 +19,7 @@
 #include "shader-interface.h"
 #include "kv-bitmap.h"
 #include "ray.h"
+#include <math.h>  // sin
 
 typedef u32 TreeID;
 struct EditorTree {
@@ -163,6 +166,7 @@ struct GameState {
   v2  tree_tile_offset;
 
   PlatformCode platform;
+  f32 second_period;
 };
 
 internal rect2
@@ -207,7 +211,7 @@ moveTree(GameState &state, i32 dx, i32 dy)
 {
   auto hi = state.hot_item;
   assert(dx == 0 || dy == 0);
-  i32 iterations = maximum(abs(dx), abs(dy));
+  i32 iterations = maximum(absoslute(dx), absoslute(dy));
   if (dy != 0) {
     breakhere;
   }
@@ -259,6 +263,29 @@ extern "C" GAME_INITIALIZE(gameInitialize)
   state.temp_arena = subArenaWithRemainingMemory(arena);
   state.codepoints = codepoints;
   state.platform   = *code;
+}
+
+internal v3
+raycast(World &world, v3 ray_origin, v3 ray_dir)
+{
+  i32 mat_index = 0;
+  auto r0 = ray_origin;
+  auto r  = ray_dir;
+  f32 min_t = FLT_MAX;
+  for (i32 plane_index=0; plane_index < world.plane_count; plane_index++) {
+    Plane plane = world.planes[plane_index];
+    auto N = plane.N;
+    auto d = plane.d;
+    f32 denom = inner(N, r);
+    if (absolute(denom) >= .0001f) {
+      f32 t = (-d -inner(N, r0)) / denom;
+      if ((t >= 0) && (t < min_t)) {
+        min_t = t;
+        mat_index = plane.mat_index;
+      }
+    }
+  }
+  return world.materials[mat_index].color;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
@@ -350,61 +377,95 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     moveTree(state, tile_offset_int_x, tile_offset_int_y);
   }
 
-  if (hot_reloaded)
-  {// Ray tracing
-    World world = {};
-    world.plane_count    = 1;
-    world.material_count = 2;
+  Bitmap raytracing_bitmap = {};
+  {// bookmark Ray tracing
+    // todo slowness
+    state.second_period += dt;
 
-    Material materials[2];
+    v3 camera_p = {0,10 + 3*sin(Tau32*state.second_period),1};
+    v3 camera_z = noz(camera_p);  // z facing away from the origin
+    v3 camera_x = cross(camera_z, v3{0,0,1});
+    v3 camera_y = cross(camera_z, camera_x);
+
+    World world = {};
+    Material materials[3];
     materials[0] = {.color=v3{0,0,0}};
-    materials[1] = {.color=v3{1,1,1}};
+    materials[1] = {.color=v3{.1,0,0}};
+    materials[2] = {.color=v3{0,.1,.1}};
     world.materials = materials;
 
-    Plane planes[1] = {{.N=v3{1,1,1}, .d=1, .mat_index=1}};
+    Plane planes[2] = {{.N=v3{1,1,1}, .d=0, .mat_index=1},
+                       {.N=v3{1,0,1}, .d=0, .mat_index=2}};
     world.planes = planes;
 
-    // let's fill a 512x512 rectangle with gray
+    world.plane_count    = arrayCount(planes);
+    world.material_count = arrayCount(materials);
+
     // rgba in memory order
-    i32 dimx = 1;
-    i32 dimy = 1;
+    raytracing_bitmap.dimx = 512;
+    raytracing_bitmap.dimy = 512;
+    auto dimx = raytracing_bitmap.dimx;
+    auto dimy = raytracing_bitmap.dimy;
+    raytracing_bitmap.pitch = 4*dimx;
+
     u32 *bitmap = pushArray(temp_arena, dimx*dimy, u32);
     u32 *dst = bitmap;
+    f32 d_film_camera = 1.f;
+    v3 film_center = camera_p - d_film_camera * camera_z;
+    f32 film_half_dim_x = 1.f;
+    f32 film_half_dim_y = 1.f;
     for (i32 y=0; y < dimy; y++) {
+      // film_x and film_y ranges from -1 to +1
+      f32 film_y = -1.f + 2.f * (f32)y / (f32)dimy;
+
       for (i32 x=0; x < dimx; x++) {
-        v4 color = {.5, .5, .5, 1};
-        *dst++ = pack_sRGBA(color);
+        f32 film_x = -1.f + 2.f * (f32)x / (f32)dimx;
+
+        // "film_p" is where we're looking at on the film
+        v3 film_p = film_center + (film_half_dim_x * film_x * camera_x +
+                                   film_half_dim_y * film_y * camera_y);
+        v3 ray_origin = camera_p;
+        v3 ray_dir    = noz(film_p - camera_p);
+        v3 color = raycast(world, ray_origin, ray_dir);
+
+        *dst++ = pack_sRGBA(toV4(color, 1));
       }
     }
-    state.platform.uploadRayTracingBitmap(bitmap, dimx, dimy);
+    raytracing_bitmap.memory = bitmap;
   }
 
   // Render: Build the push buffer ////////////////////////////////////
 
-  // draw backdrop
+  // push backdrop
   pushRect(rgroup, rect2{-1.f, -1.f, 1.f, 1.f}, v4{0,0,0,1});
 
-  {// draw cursor
+  {// push the editor tree
+    v2 min = {0.5f, -0.12f};
+    drawTree(state, rgroup, state.editor_root, min);
+  }
+
+  {// push ray tracing rect
+    pushRect(rgroup, rect2{{-1, -1}, {0, 1}}, TextureIdRayTrace);
+  }
+
+  if (state.focused_on_slider)
+  {// push cursor
     i32 screen_width_in_tiles = 80;
     i32 cursor_x = absolute_coord % screen_width_in_tiles;
     i32 cursor_y = absolute_coord / screen_width_in_tiles;
     f32 tile_width = 2.f / (f32)screen_width_in_tiles;
     v2 tile_dim = {tile_width, tile_width};
-    v2 min = {-1.f + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
-              +1.f - (f32)(cursor_y+1) * tile_dim.y};
+    v2 min = {0 + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
+              1 - (f32)(cursor_y+1) * tile_dim.y};
     auto rect = rectMinDim(min, tile_dim);
-    pushRect(rgroup, rect, v4{1,0,0});
-  }
-  
-  {// Draw the editor tree
-    v2 min = {0.5f, -0.12f};
-    drawTree(state, rgroup, state.editor_root, min);
+    pushRect(rgroup, rect, v4{1,0,0,1});
   }
 
-  // draw debug text
-  DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
-  pushDebugText(debug_drawer, "frame time: %.3f ms", input.last_frame_time_sec * 1000);
-  pushDebugText(debug_drawer, "cursor speed: %.3f tiles/s", speed);
+  {// push debug text
+    DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
+    pushDebugText(debug_drawer, "frame time: %.3f ms", input.last_frame_time_sec * 1000);
+    pushDebugText(debug_drawer, "cursor speed: %.3f tiles/s", speed);
+  }
 
   // Render: Create GPU commands ///////////////////////
 
@@ -448,5 +509,5 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
         invalidDefaultCase;
     }
   }
-  return GameOutput{gcommands};
+  return GameOutput{.gcommands=gcommands, .raytracing_bitmap=raytracing_bitmap};
 }

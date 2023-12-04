@@ -3,6 +3,9 @@
 
 #pragma once
 
+#define Pi32 3.14159265359f
+#define Tau32 6.28318530717958647692f
+
 inline f32
 toBilateral(f32 r)
 {

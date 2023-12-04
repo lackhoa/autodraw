@@ -273,17 +273,6 @@ osxLoadOrReloadGameCode(GameCode &game) {
   return false;
 }
 
-PLATFORM_UPLOAD_RAY_TRACING_BITMAP(osxUploadRayTracingBitmap)
-{
-  printf("upload ray tracing bitmap\n");
-
-  id<MTLTexture> new_texture = metal_sRGBATexture(bitmap, dimx, dimy);
-  id<MTLTexture> *texture = &metal_textures[TextureIdRayTrace];
-  if (*texture) [*texture release];
-  *texture = new_texture;
-
-}
-
 int main(int argc, const char *argv[])
 {
   GameCode game = {};
@@ -423,7 +412,6 @@ int main(int argc, const char *argv[])
   GameInput game_input = {};
   game_input.arena = newArena(game_memory_cap, memory_base);
   PlatformCode platform_code = {};
-  platform_code.uploadRayTracingBitmap = osxUploadRayTracingBitmap;
   osxLoadOrReloadGameCode(game);
   game.initialize(codepoints, game_input.arena, &platform_code);
 
@@ -508,6 +496,7 @@ int main(int argc, const char *argv[])
           continue;
         }
 
+        // TODO: what happens if render_pass_descriptor didn't exist?
         auto render_pass_descriptor = [[MTLRenderPassDescriptor new] autorelease];
         render_pass_descriptor.colorAttachments[0].texture     = ca_metal_drawable.texture;
         render_pass_descriptor.colorAttachments[0].loadAction  = MTLLoadActionClear;
@@ -515,6 +504,27 @@ int main(int argc, const char *argv[])
         render_pass_descriptor.colorAttachments[0].clearColor  = MTLClearColorMake(.6f, .0f, .6f, 1.f);
 
         auto command_buffer  = [command_queue commandBuffer];
+
+        {// blitting
+          Bitmap bitmap = game_output.raytracing_bitmap;
+          id<MTLTexture> *texture_ptr = &metal_textures[TextureIdRayTrace];
+          id<MTLTexture> texture = *texture_ptr;
+          if (texture) {
+            assert(dimx == texture.width && dimy == texture.height);  // todo: support changing dimension
+            [texture replaceRegion:MTLRegionMake2D(0,0,bitmap.dimx,bitmap.dimy)
+             mipmapLevel:0
+             withBytes:bitmap.memory
+             bytesPerRow:bitmap.pitch];
+          } else {
+            *texture_ptr = metal_sRGBATexture(bitmap.memory, bitmap.dimx, bitmap.dimy);
+            texture = *texture_ptr;
+          }
+
+          auto blit_encoder = [command_buffer blitCommandEncoder];
+          [blit_encoder synchronizeResource:texture];
+          [blit_encoder endEncoding];
+        }
+
         auto command_encoder = [command_buffer renderCommandEncoderWithDescriptor:render_pass_descriptor];
         [command_encoder setViewport:(MTLViewport){0,0, ca_metal_layer.drawableSize.width, ca_metal_layer.drawableSize.height, 0,1}];
         [command_encoder setRenderPipelineState:render_pipeline_state];
@@ -555,6 +565,7 @@ int main(int argc, const char *argv[])
         [command_encoder endEncoding];
         [command_buffer presentDrawable:ca_metal_drawable];
         [command_buffer commit];
+        [command_buffer waitUntilCompleted];
       }
     }
     initial_frame = false;

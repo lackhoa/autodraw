@@ -2,6 +2,13 @@
 
 #include "kv-math.h"
 
+struct Bitmap {
+  u32 *memory;
+  i32 dimx;
+  i32 dimy;
+  i32 pitch;
+};
+
 inline v4
 linearToSrgb(v4 linear)
 {

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <float.h>
 // #include "stdlib.h"
 
 struct BufferHeader {
@@ -81,8 +82,6 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #define todoUnknown     assert(false)
 #define invalidDefaultCase default: { assert(false); };
 #define breakhere  { int x = 5; (void)x; }
-
-#include "kv-intrinsics.h"
 
 // source: https://groups.google.com/g/comp.std.c/c/d-6Mj5Lko_s
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__,PP_RSEQ_N())

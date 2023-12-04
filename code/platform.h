@@ -9,6 +9,7 @@
 #include "kv-utils.h"
 #include "kv-math.h"
 #include "keycodes.h"
+#include "kv-bitmap.h"
 
 f32 debug_font_height = 128.f;
 f32 global_rendering_width  = 1920;
@@ -18,11 +19,11 @@ f32 pixel_to_clip_y = 2.f / global_rendering_height;
 f32 game_update_hz = 60.f;
 f32 target_frame_time_sec = 1.f / game_update_hz;
 
-#define PLATFORM_UPLOAD_RAY_TRACING_BITMAP(NAME) void NAME(u32 *bitmap, i32 dimx, i32 dimy)
-typedef PLATFORM_UPLOAD_RAY_TRACING_BITMAP(PlatformUploadRayTracingBitmap);
+// #define PLATFORM_UPLOAD_RAY_TRACING_BITMAP(NAME) void NAME(u32 *bitmap, i32 dimx, i32 dimy)
+// typedef PLATFORM_UPLOAD_RAY_TRACING_BITMAP(PlatformUploadRayTracingBitmap);
 
 struct PlatformCode {
-  PlatformUploadRayTracingBitmap *uploadRayTracingBitmap;
+  // PlatformUploadRayTracingBitmap *uploadRayTracingBitmap;
 };
 
 // NOTE: currently we deal with monospaced fonts only
@@ -94,6 +95,7 @@ struct ActionState {
 
 struct GameOutput {
   GPUCommands gcommands;
+  Bitmap      raytracing_bitmap;
 };
 
 // NOTE: GameMemory is the communication interface between the game and platform.

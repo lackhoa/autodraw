@@ -34,9 +34,9 @@ typedef struct
 } v4;
 
 inline v4
-toV4(r32 x, r32 y, r32 z, r32 w)
+toV4(v3 xyz, r32 w)
 {
-    v4 result = { x, y, z , w };
+    v4 result = { xyz.x, xyz.y, xyz.z , w };
     return result;
 }
 

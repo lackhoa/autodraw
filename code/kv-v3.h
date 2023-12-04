@@ -202,6 +202,14 @@ inner(v3 v, v3 u)
 }
 
 inline v3
+cross(v3 v, v3 u)
+{
+  return v3{v.y*u.z - v.z*u.y,
+            v.z*u.x - v.x*u.z,
+            v.x*u.y - v.y*u.x};
+}
+
+inline v3
 hadamard(v3 v, v3 u)
 {
     v3 result;
@@ -222,24 +230,27 @@ inline f32
 length(v3 v)
 {
     f32 result = squareRoot(lengthSq(v));
-    assert(((v.x == 0.0f) && (v.y == 0.0f)) || (result != 0));
     return result;
 }
 
 inline v3
 normalize(v3 v)
 {
-    v3 result;
     f32 len = length(v);
-    if (len == 0)
-    {
-        result = v3i(0,0,0);
-    }
-    else
-    {
-        result = v * (1.0f / len);
-    }
+    v3 result = v * (1.f / len);
     return result;
+}
+
+inline v3
+noz(v3 v)  // normalize or zero
+{
+  f32 lsq = lengthSq(v);
+  v3 result = {};
+  if (lsq > square(.0001f)) {
+    // prevent the result from getting too big
+    result = v * 1.f / squareRoot(lsq);
+  }
+  return result;
 }
 
 inline v3
