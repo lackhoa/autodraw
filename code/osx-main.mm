@@ -301,10 +301,12 @@ int main(int argc, const char *argv[])
   [[NSFileManager defaultManager] changeCurrentDirectoryPath:[NSBundle mainBundle].bundlePath];
 
   NSRect screen_rect = [NSScreen mainScreen].frame;
-  NSRect ns_initial_frame = NSMakeRect((screen_rect.size.width - global_rendering_width) * .5,
-                                       (screen_rect.size.height - global_rendering_height) * .5,
-                                       global_rendering_width,
-                                       global_rendering_height);
+  i32 init_width  = 1280;
+  i32 init_height = 720;
+  NSRect ns_initial_frame = NSMakeRect((screen_rect.size.width - init_width)   * .5,
+                                       (screen_rect.size.height - init_height) * .5,
+                                       init_width,
+                                       init_height);
 
   NSWindow *main_window = [[NSWindow alloc]
                            initWithContentRect: ns_initial_frame
@@ -318,6 +320,7 @@ int main(int argc, const char *argv[])
   main_window.title = @"AutoDraw";
   main_window.delegate = osx_main_delegate;
   main_window.contentView.wantsLayer = YES;
+  main_window.contentAspectRatio = NSMakeSize(16,9);
   [main_window makeKeyAndOrderFront: nil];
 
   [NSApp finishLaunching];
@@ -441,13 +444,22 @@ int main(int argc, const char *argv[])
         switch (event.type) {
           case NSEventTypeKeyUp:
           case NSEventTypeKeyDown: {
+            u32 modifier_flags = [event modifierFlags];
+            b32 cmd_held       = (modifier_flags & NSCommandKeyMask) > 0;
+            b32 ctrl_held      = (modifier_flags & NSControlKeyMask) > 0;
+            b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
+            b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
+            
             // We'd like to handle repeat ourselves
             b32 is_repeat = [event isARepeat];
 
             bool is_down = (event.type == NSEventTypeKeyDown);
-            if ((event.keyCode == kVK_ANSI_Q) && is_down) {
-              // todo: this should be Cmd+Q
+            if ((event.keyCode == kVK_ANSI_Q) && is_down && cmd_held) {
+              // Cmd-Q
               osx_main_delegate->is_running = false;
+            } else if ((event.keyCode == kVK_ANSI_F) && is_down && ctrl_held && cmd_held) {
+              // Ctrl-Cmd-F
+              [main_window toggleFullScreen:nil];
             } else {
               switch (event.keyCode) {
                 default: {

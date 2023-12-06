@@ -502,7 +502,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   }
 
   Bitmap raytracing_bitmap = {};
-  v3 eye_p_base =  {-1, -1, 1};
+  v3 eye_p_base =  {-1, 1, 3};
   v3 eye_p = eye_p_base + v3{0 * sin(r),
                              0 * sin(r),
                              0 * sin(r)};
