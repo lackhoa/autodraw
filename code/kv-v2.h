@@ -125,7 +125,7 @@ operator/(v2 v, f32 c)
 }
 
 inline f32
-inner(v2 v, v2 u)
+dot(v2 v, v2 u)
 {
     f32 result = v.x*u.x + v.y*u.y;
     return result;
@@ -148,7 +148,7 @@ length(v2 v)
 inline f32
 projectLen(v2 onto, v2 v)
 {
-    f32 innerProd = inner(onto, v);
+    f32 innerProd = dot(onto, v);
     f32 result = (innerProd / length(onto));
     return result;
 }
@@ -156,7 +156,7 @@ projectLen(v2 onto, v2 v)
 inline v2
 project(v2 onto, v2 v)
 {
-    f32 innerProd = inner(onto, v);
+    f32 innerProd = dot(onto, v);
     v2 result = (innerProd / lengthSq(onto)) * onto;
     return result;
 }

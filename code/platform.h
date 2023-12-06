@@ -33,16 +33,6 @@ struct Codepoint {
   i32 xoff, yoff;
 };
 
-// todo: Does the platform really need to understand everything in the render group? I doubt it.
-// But we need to keep things flexible since right now I don't understand how GPU works very well.
-struct RenderGroup {
-  Arena      commands;
-  Arena      gpu_commands;
-  Arena     *temp;
-  Codepoint *codepoints;
-  f32        monospaced_width;
-};
-
 enum TextureId {
   // 0-127 are reserved for ascii glyphs
   TextureIdWhite    = 128,
@@ -54,23 +44,9 @@ inline TextureId codepointTexture(char character) {
   return (TextureId)character;
 }
 
-enum RenderEntryType {
-  // todo: Is there a fast way to clear the buffer in metal?
-  RenderEntryTypeRectangle,
-};
-
-struct RenderEntryHeader {
-    RenderEntryType type;
-};
-
-struct RenderEntryRectangle {
-  rect2     rect;
-  TextureId texture;
-  v4        color;
-};
-
 enum GPUCommandType {
   GPUCommandTypeTriangle,
+  GPUCommandTypeTriangleStrip,
 };
 
 struct GPUCommandHeader {
@@ -84,6 +60,12 @@ struct GPUCommands {
 };
 
 struct GPUCommandTriangle {
+  i32 vertex_start;
+  i32 vertex_count;
+  TextureId texture;
+};
+
+struct GPUCommandTriangleStrip {
   i32 vertex_start;
   i32 vertex_count;
   TextureId texture;

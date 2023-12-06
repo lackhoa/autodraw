@@ -596,4 +596,4 @@ privDefer<F> defer_func(F f) {
 #define defer(code)   auto DEFER_3(_defer_) = defer_func([&](){code;})
 // end defer macro //////////////////
 
-#define EAT_TYPE(POINTER, TYPE) *(TYPE *)(POINTER += sizeof(TYPE), POINTER - sizeof(TYPE))
+#define EAT_TYPE(POINTER, TYPE) (TYPE *)(POINTER += sizeof(TYPE), POINTER - sizeof(TYPE))

@@ -1,9 +1,17 @@
 /*
   todo:
+  - Clean up our coordinate system: our dimensions are super effed
+  - Tell lldb to please not block the stdin when running the game
+  - Smaller font please!
+  - Controls for the camera
+  - lldb print out the v2,v3, etc.
+  - Resolution independence
+  - change EAT_TYPE to return a pointer
   - Draw coordinate system
+  - Try using line strip
+  - Sorting
   - Draw some *sick* ray-tracing to the left
   - Z-sorting for UI elements
-  - Why are we using 100% CPU?
   - Try my luck with the new llvm, see if I can fix the stupid macro bugs (or maybe that's)
 
   Rules for the renderer:
@@ -21,6 +29,12 @@
 #include "ray.h"
 #include <math.h>  // sin
 
+inline simd_float2
+toFloat2(v2 v)
+{
+  return {v.x, v.y};
+}
+
 typedef u32 TreeID;
 struct EditorTree {
   TreeID id;
@@ -30,6 +44,39 @@ struct EditorTree {
   EditorTree *parent;
   EditorTree *next_sibling;
   EditorTree *prev_sibling;
+};
+
+struct RenderGroup {
+  Arena      commands;
+  Arena      gpu_commands;
+  Arena     *temp;
+  Codepoint *codepoints;
+  f32        monospaced_width;
+};
+
+enum RenderEntryType {
+  // todo: Is there a fast way to clear the buffer in metal?
+  RenderEntryTypeRectangle,
+  RenderEntryTypeQuad,
+};
+
+struct RenderEntryHeader {
+    RenderEntryType type;
+};
+
+struct RenderEntryRectangle {
+  rect2     rect;
+  TextureId texture;
+  v4        color;
+};
+
+struct RenderEntryQuad {
+  v2        x0y0;
+  v2        x0y1;
+  v2        x1y0;
+  v2        x1y1;
+  TextureId texture;
+  v4        color;
 };
 
 inline void *
@@ -84,6 +131,24 @@ pushRectOutline(RenderGroup &rgroup, rect2 outline, i32 thickness_px, v4 color)
   pushRect(rgroup, rect2{min+dimy-t, max+t}, color);
 }
 
+internal void
+pushLine(RenderGroup &rgroup, v2 p0, v2 p1, i32 thickness_px, v4 color)
+{
+  // TODO: thickness doesn't work with our current coordinate system ya'll
+  RenderEntryQuad &entry = *pushRenderEntry(rgroup, Quad);
+  assert(thickness_px >= 2);
+  f32 thickness = pixel_to_clip_x * (f32)thickness_px;
+  v2 d = p1 - p0;
+  v2 perp = 0.5f * thickness * v2{-d.y, d.x};
+  // gotta do a "z" here
+  entry.x0y0 = p0 - perp;
+  entry.x0y1 = p0 + perp;
+  entry.x1y0 = p1 - perp;
+  entry.x1y1 = p1 + perp;
+  entry.texture = TextureIdWhite;
+  entry.color   = color;
+}
+
 struct DebugDrawer {
   Arena       &arena;
   RenderGroup &rgroup;
@@ -91,25 +156,25 @@ struct DebugDrawer {
 };
 
 inline f32
-pushLetter(RenderGroup &rgroup, v2 min, char character)
+pushLetter(RenderGroup &rgroup, v2 min, char character, v4 color)
 {
   assert(33 <= character && character <= 126);
   auto codepoint = rgroup.codepoints[(u8)character];
   auto dim = v2{rgroup.monospaced_width,
                 pixel_to_clip_y * (f32)codepoint.height};
-  pushRect(rgroup, rectMinDim(min, dim), codepointTexture(character));
+  pushRect(rgroup, rectMinDim(min, dim), codepointTexture(character), color);
   return dim.y;
 }
 
 internal f32
-pushText(RenderGroup &rgroup, v2 min, String string)
+pushText(RenderGroup &rgroup, v2 min, String string, v4 color)
 {
   f32 max_dim_y = 0;
   auto x = min.x;
   for (i32 i=0; i < string.length; i++) {
     char c = string.chars[i];
     if (c != ' ') {
-      f32 dim_y = pushLetter(rgroup, {x, min.y}, c);
+      f32 dim_y = pushLetter(rgroup, {x, min.y}, c, color);
       max_dim_y = maximum(max_dim_y, dim_y);
     }
     x += rgroup.monospaced_width;
@@ -118,13 +183,13 @@ pushText(RenderGroup &rgroup, v2 min, String string)
 }
 
 inline f32
-pushTextFormat(RenderGroup &rgroup, v2 min, char *format, ...)
+pushTextFormat(RenderGroup &rgroup, v2 min, v4 color, char *format, ...)
 {
   va_list args;
   va_start(args, format);
   auto string = printVA(*rgroup.temp, format, args);
   va_end(args);
-  return pushText(rgroup, min, string);
+  return pushText(rgroup, min, string, color);
 }
 
 inline void
@@ -133,7 +198,8 @@ pushDebugText(DebugDrawer &drawer, char *format, ...)
   va_list args;
   va_start(args, format);
   auto string = printVA(drawer.arena, format, args);
-  pushText(drawer.rgroup, {-1.f, drawer.y}, string);
+  v4 debug_text_color = {.5, .5, .5, 1};
+  pushText(drawer.rgroup, {-1.f, drawer.y}, string, debug_text_color);
   drawer.y += pixel_to_clip_y * debug_font_height;
   va_end(args);
 }
@@ -166,8 +232,10 @@ struct GameState {
   v2  tree_tile_offset;
 
   PlatformCode platform;
-  f32 second_period;
+  f32 revolution;
 };
+
+v4 warm_yellow = v4{.5, .5, .3, 1};
 
 internal rect2
 drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min)
@@ -179,7 +247,7 @@ drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min)
   f32 data_dim_x  = rgroup.monospaced_width * (f32)tree.data.length;
   f32 line_height = pixel_to_clip_x * 128.f;  // todo: not a real height
   v2 max = {};
-  max.y = pushText(rgroup, min, tree.data);
+  max.y = pushText(rgroup, min, tree.data, warm_yellow);
   max.x = min.x + data_dim_x;
 
   EditorTree *childp = tree.children;
@@ -199,8 +267,7 @@ drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min)
 
   if (tree.id == state.hot_item->id) {
     i32 outline_thickness = 2;
-    v4 color = {1,0,0,1};
-    pushRectOutline(rgroup, rect2{min, max}, outline_thickness, color);
+    pushRectOutline(rgroup, rect2{min, max}, outline_thickness, warm_yellow);
   }
 
   return rect2{min, max};
@@ -265,20 +332,50 @@ extern "C" GAME_INITIALIZE(gameInitialize)
   state.platform   = *code;
 }
 
+struct RaycastOutput {
+  b32 hit;
+  v3  p;
+};
+
+internal RaycastOutput
+raycastPlane(v3 ray_origin, v3 ray_direction, v3 plane_N, f32 plane_d)
+{
+  RaycastOutput out = {};
+  f32 denom = dot(plane_N, ray_direction);
+  if (absolute(denom) >= .0001f) {
+    f32 t = -(plane_d + dot(plane_N, ray_origin)) / denom;
+    if (t >= 0) {
+      out.hit = true;
+      out.p = ray_origin + t*ray_direction;
+    }
+  }
+  return out;
+}
+
+internal RaycastOutput
+screencast(v3 ray_origin, v3 ray_direction, v3 plane_N, f32 plane_d)
+{
+  RaycastOutput out = {};
+  f32 denom = dot(plane_N, ray_direction);
+  if (absolute(denom) >= .0001f) {
+    f32 t = -(plane_d + dot(plane_N, ray_origin)) / denom;
+    if (t >= 0) {
+      out.p = ray_origin + t*ray_direction;
+    }
+  }
+  return out;
+}
+
 internal v3
-raycast(World &world, v3 ray_origin, v3 ray_dir)
+raycast(World &world, v3 ray_origin, v3 ray_direction)
 {
   i32 mat_index = 0;
-  auto r0 = ray_origin;
-  auto r  = ray_dir;
   f32 min_t = FLT_MAX;
   for (i32 plane_index=0; plane_index < world.plane_count; plane_index++) {
     Plane plane = world.planes[plane_index];
-    auto N = plane.N;
-    auto d = plane.d;
-    f32 denom = inner(N, r);
+    f32 denom = dot(plane.N, ray_direction);
     if (absolute(denom) >= .0001f) {
-      f32 t = (-d -inner(N, r0)) / denom;
+      f32 t = -(plane.d + dot(plane.N, ray_origin)) / denom;
       if ((t >= 0) && (t < min_t)) {
         min_t = t;
         mat_index = plane.mat_index;
@@ -286,6 +383,28 @@ raycast(World &world, v3 ray_origin, v3 ray_dir)
     }
   }
   return world.materials[mat_index].color;
+}
+
+internal void
+pushLine(RenderGroup rgroup, v3 p0, v3 p1, f32 thickness_px, v4 color)
+{
+  // v2 p0_screen = eye, p0;
+  rect2 rect = {};
+  pushRect(rgroup, rect, color);
+}
+
+struct Screen {
+  v3 center;
+  v3 x;
+  v3 y;
+};
+
+inline v2
+screenProject(Screen screen, v3 p)
+{
+  v3 d = p-screen.center;
+  return v2{dot(screen.x, d),
+            dot(screen.y, d)};
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
@@ -320,6 +439,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   f32 &speed          = state.speed;
   i32 &absolute_coord = state.cursor_coord;
   f32 &dt             = target_frame_time_sec;
+  f32 &r              = state.revolution;
+  r += Tau32 * dt;
+  if (r > Tau32) {
+    r -= Tau32;
+  }
 
   b32 &focused_on_slider = state.focused_on_slider;
   if (input.key_states[kVK_ANSI_E].is_down) {
@@ -378,15 +502,19 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   }
 
   Bitmap raytracing_bitmap = {};
-  {// bookmark Ray tracing
-    // todo slowness
-    state.second_period += dt;
+  v3 eye_p_base =  {-1, -1, 1};
+  v3 eye_p = eye_p_base + v3{0 * sin(r),
+                             0 * sin(r),
+                             0 * sin(r)};
+  v3 eye_z = noz(eye_p_base);  // NOTE: z comes at you
+  v3 eye_x = cross(eye_z, v3{0,0,1});
+  v3 eye_y = cross(eye_z, eye_x);
 
-    v3 camera_p = {0,10 + 3*sin(Tau32*state.second_period),1};
-    v3 camera_z = noz(camera_p);  // z facing away from the origin
-    v3 camera_x = cross(camera_z, v3{0,0,1});
-    v3 camera_y = cross(camera_z, camera_x);
+  f32 d_eye_screen = .5f;
+  f32 screen_dimx  = .5f;
+  v3 screen_center = eye_p - d_eye_screen * eye_z;
 
+  {// Ray tracing
     World world = {};
     Material materials[3];
     materials[0] = {.color=v3{0,0,0}};
@@ -410,22 +538,19 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 
     u32 *bitmap = pushArray(temp_arena, dimx*dimy, u32);
     u32 *dst = bitmap;
-    f32 d_film_camera = 1.f;
-    v3 film_center = camera_p - d_film_camera * camera_z;
-    f32 film_half_dim_x = 1.f;
-    f32 film_half_dim_y = 1.f;
+    f32 screen_half_dim_x = 1.f;
+    f32 screen_half_dim_y = 1.f;
     for (i32 y=0; y < dimy; y++) {
-      // film_x and film_y ranges from -1 to +1
-      f32 film_y = -1.f + 2.f * (f32)y / (f32)dimy;
+      // screen_x and screen_y ranges from -1 to +1
+      f32 screen_y = -1.f + 2.f * (f32)y / (f32)dimy;
 
       for (i32 x=0; x < dimx; x++) {
-        f32 film_x = -1.f + 2.f * (f32)x / (f32)dimx;
+        f32 screen_x = -1.f + 2.f * (f32)x / (f32)dimx;
 
-        // "film_p" is where we're looking at on the film
-        v3 film_p = film_center + (film_half_dim_x * film_x * camera_x +
-                                   film_half_dim_y * film_y * camera_y);
-        v3 ray_origin = camera_p;
-        v3 ray_dir    = noz(film_p - camera_p);
+        v3 screen_p = screen_center + (screen_half_dim_x * screen_x * eye_x +
+                                       screen_half_dim_y * screen_y * eye_y);
+        v3 ray_origin = eye_p;
+        v3 ray_dir    = noz(screen_p - eye_p);  // TODO: do we gotta normalize?
         v3 color = raycast(world, ray_origin, ray_dir);
 
         *dst++ = pack_sRGBA(toV4(color, 1));
@@ -444,10 +569,6 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     drawTree(state, rgroup, state.editor_root, min);
   }
 
-  {// push ray tracing rect
-    pushRect(rgroup, rect2{{-1, -1}, {0, 1}}, TextureIdRayTrace);
-  }
-
   if (state.focused_on_slider)
   {// push cursor
     i32 screen_width_in_tiles = 80;
@@ -461,13 +582,53 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     pushRect(rgroup, rect, v4{1,0,0,1});
   }
 
-  {// push debug text
-    DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
-    pushDebugText(debug_drawer, "frame time: %.3f ms", input.last_frame_time_sec * 1000);
-    pushDebugText(debug_drawer, "cursor speed: %.3f tiles/s", speed);
+  DebugDrawer debug_drawer = {.arena=temp_arena, .rgroup=rgroup};
+  {// push ray tracing
+    // push the canvas rect ///////////////////////////////////////////////
+    v2 min = {-0.8, -0.8};
+    v2 max = min + v2{pixel_to_clip_x * raytracing_bitmap.dimx,
+                      pixel_to_clip_y * raytracing_bitmap.dimy};
+    pushRect(rgroup, rect2{min, max}, TextureIdRayTrace);
+    pushRectOutline(rgroup, rect2{min, max}, 4, warm_yellow);
+
+    // push coordinate system ///////////////////////////////////////////////
+    v3 p0 = v3{0,0,0};
+    v3 px = v3{1,0,0};
+    v3 py = v3{0,1,0};
+    v3 pz = v3{0,0,1};
+
+    v3  &screen_N = eye_z;
+    f32  screen_d = -dot(eye_p, eye_z) + d_eye_screen;
+
+    auto p0_hit = raycastPlane(eye_p, p0 - eye_p, screen_N, screen_d);
+    auto px_hit = raycastPlane(eye_p, px - eye_p, screen_N, screen_d);
+    auto py_hit = raycastPlane(eye_p, py - eye_p, screen_N, screen_d);
+    auto pz_hit = raycastPlane(eye_p, pz - eye_p, screen_N, screen_d);
+
+    if (p0_hit.hit && px_hit.hit && py_hit.hit && pz_hit.hit) {
+      f32 meter_to_clip = 2.f / screen_dimx;
+      Screen screen = {screen_center, eye_x, eye_y};
+      v2 p0_screen = meter_to_clip * screenProject(screen, p0_hit.p);
+      // bookmark: inspect p0_screen
+      v2 px_screen = meter_to_clip * screenProject(screen, px_hit.p);
+      v2 py_screen = meter_to_clip * screenProject(screen, py_hit.p);
+      v2 pz_screen = meter_to_clip * screenProject(screen, pz_hit.p);
+      // #wrong: Luckily the screen coordinate is also the clip coordinate, so we can just draw it!
+      pushLine(rgroup, p0_screen, px_screen, 8, {.2,0,0});
+      pushLine(rgroup, p0_screen, py_screen, 8, {0,.2,0});
+      pushLine(rgroup, p0_screen, pz_screen, 8, {0,0,.2});
+
+      v3 px = px_hit.p;
+      pushDebugText(debug_drawer, "eye_x: %.1f, %.1f, %.1f", eye_x.x, eye_x.y, eye_x.z);
+      pushDebugText(debug_drawer, "eye_y: %.1f, %.1f, %.1f", eye_y.x, eye_y.y, eye_y.z);
+    }
   }
 
-  // Render: Create GPU commands ///////////////////////
+  {// push debug text
+    pushDebugText(debug_drawer, "frame time: %.3f ms", input.last_frame_time_sec * 1000);
+  }
+
+  // Render: Create GPU commands //////////////////////////////////////////
 
   GPUCommands gcommands = {};
   gcommands.commands      = subArena(temp_arena, megaBytes(8));
@@ -476,31 +637,50 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   u8 *next = rgroup.commands.base;
   u8 *end  = rgroup.commands.base + rgroup.commands.used;
   while (next != end) {
-    auto &header = EAT_TYPE(next, RenderEntryHeader);
+    auto &header = *EAT_TYPE(next, RenderEntryHeader);
 
     switch (header.type) {
       case RenderEntryTypeRectangle: {
-        auto &entry = EAT_TYPE(next, RenderEntryRectangle);
+        auto &entry = *EAT_TYPE(next, RenderEntryRectangle);
 
-        auto out = pushVertices(gcommands, 6);
+        i32 vertex_count = 4;
+        auto out = pushVertices(gcommands, vertex_count);
         auto c = entry.color;
         auto cs = simd_float4{c.r, c.g, c.b, c.a};
-        auto &rect = entry.rect;
-        auto min_x = rect.min.x;
-        auto max_x = rect.max.x;
-        auto min_y = rect.min.y;
-        auto max_y = rect.max.y;
+        auto &min = entry.rect.min;
+        auto &max = entry.rect.max;
 
-        out.vertices[0] = {{min_x, max_y}, {0.f, 0.f}, cs};
-        out.vertices[1] = {{min_x, min_y}, {0.f, 1.f}, cs};
-        out.vertices[2] = {{max_x, min_y}, {1.f, 1.f}, cs};
-        out.vertices[3] = {{min_x, max_y}, {0.f, 0.f}, cs};
-        out.vertices[4] = {{max_x, min_y}, {1.f, 1.f}, cs};
-        out.vertices[5] = {{max_x, max_y}, {1.f, 0.f}, cs};
+        // TODO: excuse me but why are these bitmaps flipped?
+        out.vertices[0] = {{min.x, min.y}, {0.f, 1.f}, cs};
+        out.vertices[1] = {{min.x, max.y}, {0.f, 0.f}, cs};
+        out.vertices[2] = {{max.x, min.y}, {1.f, 1.f}, cs};
+        out.vertices[3] = {{max.x, max.y}, {1.f, 0.f}, cs};
 
-        auto &command = *pushGPUCommand(gcommands, Triangle);
+        auto &command = *pushGPUCommand(gcommands, TriangleStrip);
         command.vertex_start = out.vertex_start;
-        command.vertex_count = 6;
+        command.vertex_count = vertex_count;
+        command.texture      = entry.texture;
+
+        break;
+      }
+
+        // TODO cutnpaste
+      case RenderEntryTypeQuad: {
+        auto &entry = *EAT_TYPE(next, RenderEntryQuad);
+
+        i32 vertex_count = 4;
+        auto out = pushVertices(gcommands, vertex_count);
+        auto c = entry.color;
+        auto cs = simd_float4{c.r, c.g, c.b, c.a};
+
+        out.vertices[0] = {toFloat2(entry.x0y0), {0.f, 1.f}, cs};
+        out.vertices[1] = {toFloat2(entry.x0y1), {0.f, 0.f}, cs};
+        out.vertices[2] = {toFloat2(entry.x1y0), {1.f, 1.f}, cs};
+        out.vertices[3] = {toFloat2(entry.x1y1), {1.f, 0.f}, cs};
+
+        auto &command = *pushGPUCommand(gcommands, TriangleStrip);
+        command.vertex_start = out.vertex_start;
+        command.vertex_count = vertex_count;
         command.texture      = entry.texture;
 
         break;

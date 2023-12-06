@@ -195,7 +195,7 @@ operator/(v3 v, f32 c)
 }
 
 inline f32
-inner(v3 v, v3 u)
+dot(v3 v, v3 u)
 {
     f32 result = v.x*u.x + v.y*u.y + v.z*u.z;
     return result;
@@ -256,7 +256,7 @@ noz(v3 v)  // normalize or zero
 inline v3
 project(v3 onto, v3 v)
 {
-    f32 innerProd = inner(onto, v);
+    f32 innerProd = dot(onto, v);
     v3 result = (innerProd / lengthSq(onto)) * onto;
     return result;
 }

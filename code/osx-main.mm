@@ -543,14 +543,26 @@ int main(int argc, const char *argv[])
           u8 *next = commands.base;
           u8 *end  = commands.base + commands.used;
           while (next != end) {
-            auto &header = EAT_TYPE(next, GPUCommandHeader);
+            auto &header = *EAT_TYPE(next, GPUCommandHeader);
 
             switch (header.type) {
               case GPUCommandTypeTriangle: {
-                auto &command = EAT_TYPE(next, GPUCommandTriangle);
+                auto &command = *EAT_TYPE(next, GPUCommandTriangle);
 
                 [command_encoder setFragmentTexture:metal_textures[command.texture] atIndex:0];
                 [command_encoder drawPrimitives:MTLPrimitiveTypeTriangle
+                 vertexStart:command.vertex_start
+                 vertexCount:command.vertex_count];
+
+                break;
+              }
+
+              // todo: cutnpaste
+              case GPUCommandTypeTriangleStrip: {
+                auto &command = *EAT_TYPE(next, GPUCommandTriangleStrip);
+
+                [command_encoder setFragmentTexture:metal_textures[command.texture] atIndex:0];
+                [command_encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                  vertexStart:command.vertex_start
                  vertexCount:command.vertex_count];
 
