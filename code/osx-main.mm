@@ -169,43 +169,42 @@ internal Codepoint codepoints[128];
 internal void
 makeCodepointTextures() {
   auto temp = beginTemporaryMemory(temp_arena);
+  defer(endTemporaryMemory(temp));
   auto read_file = osxReadEntireFile("../resources/fonts/LiberationMono-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
-  } else {
-    stbtt_fontinfo font;
-    stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
-    f32 pixel_height = stbtt_ScaleForPixelHeight(&font, debug_font_height);
-
-    for (i32 ascii_char=33; ascii_char <= 126; ascii_char++) {
-      i32 width, height, xoff, yoff;
-      u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
-                                                 &width, &height, &xoff, &yoff);
-      assert(width != 0 && height != 0);
-      u8 *bitmap = (u8 *)pushSize(temp_arena, 4 * width * height);
-      // Blow it out to rgba bitmap
-      u32 *dst = (u32 *)bitmap;
-      u8 *src  = mono_bitmap;
-      for (i32 y=0; y < height; y++) {
-        for (i32 x=0; x < width; x++) {
-          u32 au = *src++;
-          // assert(au < 256);
-          f32 c = (f32)au / 255.f;
-          // pre-multiplied alpha (NOTE: we assume color is white)
-          c = square(c);
-          u32 cu = (u32)(255.f*c + 0.5f) ;
-          *dst++ = (au << 24) | (cu << 16) | (cu << 8) | (cu << 0);
-        }
-      }
-
-      stbtt_FreeBitmap(mono_bitmap, 0);
-      // Note: The color is white so srgb doesn't matter
-      metal_textures[ascii_char] = metal_sRGBATexture(bitmap, width, height);
-      codepoints[ascii_char]     = {width, height, (r32)width/(r32)height, xoff, yoff};
-    }
   }
-  endTemporaryMemory(temp);
+  stbtt_fontinfo font;
+  stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
+  f32 pixel_height = stbtt_ScaleForPixelHeight(&font, font_height_px);
+
+  for (i32 ascii_char=33; ascii_char <= 126; ascii_char++) {
+    i32 width, height, xoff, yoff;
+    u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
+                                               &width, &height, &xoff, &yoff);
+    assert(width != 0 && height != 0);
+    u8 *bitmap = (u8 *)pushSize(temp_arena, 4 * width * height);
+    // Blow it out to rgba bitmap
+    u32 *dst = (u32 *)bitmap;
+    u8 *src  = mono_bitmap;
+    for (i32 y=0; y < height; y++) {
+      for (i32 x=0; x < width; x++) {
+        u32 au = *src++;
+        // assert(au < 256);
+        f32 c = (f32)au / 255.f;
+        // pre-multiplied alpha (NOTE: we assume color is white)
+        c = square(c);
+        u32 cu = (u32)(255.f*c + 0.5f) ;
+        *dst++ = (au << 24) | (cu << 16) | (cu << 8) | (cu << 0);
+      }
+    }
+
+    stbtt_FreeBitmap(mono_bitmap, 0);
+    // Note: The color is white so srgb doesn't matter
+    metal_textures[ascii_char] = metal_sRGBATexture(bitmap, width, height);
+    codepoints[ascii_char]     = {width, height, (r32)width/(r32)height, xoff, yoff};
+  }
 }
 
 // #define STB_IMAGE_IMPLEMENTATION
@@ -432,9 +431,6 @@ int main(int argc, const char *argv[])
 
     @autoreleasepool
     {
-      // bookmark: You cannot make a texture inside an autorelease pool?
-      // if (initial_frame) makeColorTexture(v4{.5,1,1,1});
-
       // Process events
       while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                untilDate: nil
@@ -475,12 +471,17 @@ int main(int argc, const char *argv[])
         }
       }
 
-      if (osx_main_delegate->window_was_resized) {
-        ca_metal_layer.frame = main_window.contentView.frame;
-        ca_metal_layer.drawableSize = ca_metal_layer.frame.size;
-        osx_main_delegate->window_was_resized = false;
+      {// Frame size
+        NSRect frame = main_window.contentView.frame;
+        if (osx_main_delegate->window_was_resized) {
+          osx_main_delegate->window_was_resized = false;
+          ca_metal_layer.frame        = frame;
+          ca_metal_layer.drawableSize = frame.size;
+        }
+        game_input.screen_dim = v2{(f32)frame.size.width,
+                                   (f32)frame.size.height};
       }
-
+      
       GameOutput game_output = game.updateAndRender(game_input);
 
       // sleep

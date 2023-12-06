@@ -187,6 +187,18 @@ normalize(v2 v)
 }
 
 inline v2
+noz(v2 v)  // normalize or zero
+{
+  f32 lsq = lengthSq(v);
+  v2 result = {};
+  if (lsq > square(.0001f)) {
+    // prevent the result from getting too big
+    result = v * 1.f / squareRoot(lsq);
+  }
+  return result;
+}
+
+inline v2
 perp(v2 v)
 {
     v2 result = {-v.y, v.x};

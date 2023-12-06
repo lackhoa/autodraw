@@ -11,11 +11,7 @@
 #include "keycodes.h"
 #include "kv-bitmap.h"
 
-f32 debug_font_height = 128.f;
-f32 TODOglobal_rendering_width  = 1920;
-f32 TODOglobal_rendering_height = 1080;
-f32 pixel_to_clip_x = 2.f / TODOglobal_rendering_width;
-f32 pixel_to_clip_y = 2.f / TODOglobal_rendering_height;
+f32 font_height_px = 128.f;
 f32 game_update_hz = 60.f;
 f32 target_frame_time_sec = 1.f / game_update_hz;
 
@@ -87,8 +83,7 @@ struct GameInput {
   ActionState key_states[kVK_Count];
   f32         last_frame_time_sec;
   b32         hot_reloaded;
-  i32         screen_dimx;
-  i32         screen_dimy;
+  v2          screen_dim;
 };
 
 #define GAME_UPDATE_AND_RENDER(NAME) GameOutput NAME(GameInput &input)
