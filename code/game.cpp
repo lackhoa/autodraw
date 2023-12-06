@@ -1,6 +1,5 @@
 /*
   todo:
-  - Clean up our coordinate system: our dimensions are super effed
   - Tell lldb to please not block the stdin when running the game
   - Smaller font please!
   - Controls for the camera

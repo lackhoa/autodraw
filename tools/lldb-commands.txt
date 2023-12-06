@@ -1,1 +1,0 @@
-breakpoint set --file /Users/khoa/AutoDraw/code/game.cpp --line 266
