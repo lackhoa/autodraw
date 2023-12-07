@@ -129,7 +129,7 @@ pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
 internal void
 pushRectOutline(RenderGroup &rgroup, rect2 outline, f32 thickness, v4 color)
 {
-  assert(thickness_px >= 2);  // our outlines are divided in half
+  assert(thickness >= 2);  // our outlines are divided in half
   v2 min = outline.min;
   v2 max = outline.max;
   v2 t = 0.5f * v2{thickness, thickness};
@@ -149,7 +149,7 @@ internal void
 pushLine(RenderGroup &rgroup, v2 p0, v2 p1, f32 thickness, v4 color)
 {
   RenderEntryQuad &entry = *pushRenderEntry(rgroup, Quad);
-  assert(thickness_px >= 2);
+  assert(thickness >= 2);
   v2 d = noz(p1 - p0);
   v2 perp = 0.5f * thickness * v2{-d.y, d.x};
   // NOTE: gotta draw a "z" here for triangle strip
@@ -212,6 +212,7 @@ pushDebugText(char *format, ...)
 {
   auto &d = debug_drawer;
   d.rgroup->current_z_level = ZLevelDebug;
+  defer(d.rgroup->current_z_level = ZLevelGeneral;);
   va_list args;
   va_start(args, format);
   auto string = printVA(debug_drawer.arena, format, args);
@@ -219,7 +220,6 @@ pushDebugText(char *format, ...)
   pushText(*d.rgroup, d.at, string, debug_text_color);
   d.at.y += todo_text_scale * font_height_px;
   va_end(args);
-  d.rgroup->current_z_level = ZLevelGeneral;
 }
 
 inline void *
@@ -253,40 +253,50 @@ struct GameState {
   f32 revolution;
 };
 
-v4 warm_yellow = v4{.5, .5, .3, 1};
+internal v4 warm_yellow = v4{.5, .5, .3, 1};
+
+internal f32 editor_margin      = 5;
+internal f32 editor_indentation = 20;
 
 internal rect2
-drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min)
+drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min);
+
+internal rect2
+drawTrees(GameState &state, RenderGroup &rgroup, EditorTree *tree, v2 trees_min)
 {
-  f32 margin      = 5;
-  f32 spacing     = 20;
-  f32 indentation = 20;
-  f32 data_dim_x  = todo_text_scale * (f32)rgroup.monospaced_width * (f32)tree.name.length;
-  v2 max = {};
-  max.y = pushText(rgroup, min, tree.name, warm_yellow);
-  max.x = min.x + data_dim_x;
+  v2 max = trees_min;
+  while (tree) {
+    v2 tree_min = {trees_min.x,
+                   trees_min.y - todo_text_scale * font_height_px};
+    rect2 rect = drawTree(state, rgroup, *tree, tree_min);
 
-  EditorTree *childp = tree.children;
-  while (childp) {
-    auto &child = *childp;
-    v2 child_min = {min.x + indentation, min.y - todo_text_scale * font_height_px};  // this is just the input, the actual min is different
-    auto crect = drawTree(state, rgroup, child, child_min);
+    max.x = maximum(rect.max.x, max.x);
+    trees_min.y = rect.min.y - editor_margin;
 
-    // todo use rect union
-    if (crect.max.x > max.x) max.x = crect.max.x;
-    min.y = crect.min.y - margin;
-
-    childp = child.next_sibling;
+    tree = tree->next_sibling;
   }
+  return rect2{trees_min, max};
+}
 
-  max.y += margin;
+internal rect2
+drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 tree_min)
+{
+  f32 data_dim_x  = todo_text_scale * (f32)rgroup.monospaced_width * (f32)tree.name.length;
+  f32 data_max_y = pushText(rgroup, tree_min, tree.name, warm_yellow);
+
+  v2 children_min = {tree_min.x + editor_indentation,
+                     tree_min.y};
+  rect2 children = drawTrees(state, rgroup, tree.children, children_min);
+  v2 max = {maximum(tree_min.x + data_dim_x, children.max.x),
+            data_max_y + editor_margin};
+  tree_min.y = children.min.y - editor_margin;
 
   if (tree.id == state.hot_item->id) {
     f32 outline_thickness = 2;
-    pushRectOutline(rgroup, rect2{min, max}, outline_thickness, warm_yellow);
+    pushRectOutline(rgroup, rect2{tree_min, max}, outline_thickness, warm_yellow);
   }
 
-  return rect2{min, max};
+  return rect2{tree_min, max};
 }
 
 inline void
@@ -434,16 +444,21 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   v2 pixel_to_clip = {1.f / screen_half_dim.x,
                       1.f / screen_half_dim.y};
 
-  auto grandma = &state.editor_root;
-  auto slider  = pushStruct(temp_arena, EditorTree);
-  auto uncle   = pushStruct(temp_arena, EditorTree);
-  auto mom     = pushStruct(temp_arena, EditorTree);
+  auto root   = &state.editor_root;  // this thing should do something!
+  auto slider = pushStruct(temp_arena, EditorTree);
+  auto uncle  = pushStruct(temp_arena, EditorTree);
+  auto mom    = pushStruct(temp_arena, EditorTree);
 
-  TreeID SLIDER_ID=3;
-  *grandma = {.id=0, .name=toString(temp_arena, "grandma"), .children=uncle};
-  *uncle   = {.id=1, .name=toString(temp_arena, "uncle"), .parent=grandma, .next_sibling=mom};
-  *mom     = {.id=2, .name=toString(temp_arena, "mom"), .children=slider, .parent=grandma, .prev_sibling=uncle};
-  *slider  = {.id=SLIDER_ID, .name=toString(temp_arena, "slider"), .parent=mom};
+  // bookmark: add "eye" mode
+  *root   = {.id=0, .name=toString(temp_arena, "root"),
+             .next_sibling=uncle};
+  *uncle  = {.id=1, .name=toString(temp_arena, "uncle"),
+             .prev_sibling=root, .next_sibling=mom};
+  *mom    = {.id=2, .name=toString(temp_arena, "mom"),
+             .children=slider,
+             .prev_sibling=uncle};
+  *slider = {.id=3, .name=toString(temp_arena, "slider"),
+             .parent=mom};
 
   if (!state.hot_item) state.hot_item = uncle;
 
@@ -452,6 +467,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   rgroup.monospaced_width = (f32)state.codepoints[(u8)'a'].width;
   rgroup.commands         = subArena(temp_arena, megaBytes(8));
   rgroup.temp_arena       = subArena(temp_arena, kiloBytes(128));
+  rgroup.current_z_level  = ZLevelGeneral;
 
   debug_drawer.arena  = subArena(temp_arena, kiloBytes(128));
   debug_drawer.rgroup = &rgroup; // todo have separate render group maybe?
@@ -469,7 +485,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 
   b32 &focused_on_slider = state.focused_on_slider;
   if (input.key_states[kVK_ANSI_E].is_down) {
-    if (state.hot_item->id == SLIDER_ID) {
+    if (state.hot_item->id == slider->id) {
       focused_on_slider = true;
     }
   }
@@ -523,10 +539,9 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     moveTree(state, tile_offset_int_x, tile_offset_int_y);
   }
 
-
-  Bitmap raytracing_bitmap = {};
+  Bitmap ray_bitmap = {};
   {// Ray tracing
-    v3 eye_p_base =  {-1, 1, 3};
+    v3 eye_p_base = {-1000, -200, 3000};
     v3 eye_p = eye_p_base + v3{0 * kv_sin(r),
                                0 * kv_sin(r),
                                0 * kv_sin(r)};
@@ -534,7 +549,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     v3 eye_x = cross(eye_z, v3{0,0,1});
     v3 eye_y = cross(eye_z, eye_x);
 
-    f32 d_eye_screen = 1920;  // NOTE: it's just fudge
+    f32 d_eye_screen = 2000.f;  // NOTE: based on real life distance
     v3 screen_center = eye_p - d_eye_screen * eye_z;
 
     World world = {};
@@ -544,31 +559,30 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     materials[2] = {.color=v3{0,.1,.1}};
     world.materials = materials;
 
-    Plane planes[2] = {{.N=v3{1,1,1}, .d=0, .mat_index=1},
-                       {.N=v3{1,0,1}, .d=0, .mat_index=2}};
+    Plane planes[2] = {{.N=v3{1,1,1}, .d=-100, .mat_index=1},
+                       {.N=v3{1,0,1}, .d=-200, .mat_index=2}};
     world.planes = planes;
 
     world.plane_count    = arrayCount(planes);
     world.material_count = arrayCount(materials);
 
     // rgba in memory order
-    raytracing_bitmap.dim = {512, 512};
-    auto bitmap_dim = raytracing_bitmap.dim;
-    raytracing_bitmap.pitch = 4*bitmap_dim.x;
+    ray_bitmap.dim = {512, 512};
+    auto bitmap_dim = ray_bitmap.dim;
+    ray_bitmap.pitch = 4*bitmap_dim.x;
 
     u32 *bitmap = pushArray(temp_arena, bitmap_dim.x*bitmap_dim.y, u32);
     u32 *dst = bitmap;
-    f32 screen_half_dim_x = 1.f;
-    f32 screen_half_dim_y = 1.f;
-    for (i32 y=0; y < (i32)bitmap_dim.y; y++) {
-      // screen_x and screen_y ranges from -1 to +1
-      f32 screen_y = -1.f + 2.f * (f32)y / bitmap_dim.y;
-
-      for (i32 x=0; x < (i32)bitmap_dim.x; x++) {
-        f32 screen_x = -1.f + 2.f * (f32)x / bitmap_dim.x;
-
-        v3 screen_p = screen_center + (screen_half_dim_x * screen_x * eye_x +
-                                       screen_half_dim_y * screen_y * eye_y);
+    v2 ray_bitmap_half_dim = .5f * ray_bitmap.dim;
+    for (i32 y = (i32)-ray_bitmap_half_dim.y;
+         y < (i32)ray_bitmap_half_dim.y;
+         y++)
+    {
+      for (i32 x = (i32)-ray_bitmap_half_dim.x;
+           x < (i32)ray_bitmap_half_dim.x;
+           x++)
+      {
+        v3 screen_p = screen_center + ((f32)x * eye_x + (f32)y * eye_y);
         v3 ray_origin = eye_p;
         v3 ray_dir    = screen_p - eye_p;
         v3 color = raycast(world, ray_origin, ray_dir);
@@ -576,22 +590,22 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
         *dst++ = pack_sRGBA(toV4(color, 1));
       }
     }
-    raytracing_bitmap.memory = bitmap;
+    ray_bitmap.memory = bitmap;
 
     {// push ray tracing
       // push the canvas rect ///////////////////////////////////////////////
       rgroup.current_z_level = ZLevelRaytrace;
-      v2 min = {-500, -250};  // todo don't like this fudgy coordinates, we need a layout system
-      v2 max = min + v2i(bitmap_dim.x, bitmap_dim.y);
-      pushRect(rgroup, rect2{min, max}, TextureIdRayTrace);
-      pushRectOutline(rgroup, rect2{min, max}, .04f, warm_yellow);
-      rgroup.current_z_level = ZLevelGeneral;
+      defer(rgroup.current_z_level = ZLevelGeneral;);
+      v2 layout_center = {-350, 0};
+      rect2 rect = rectCenterDim(layout_center, bitmap_dim);
+      pushRect(rgroup, rect, TextureIdRayTrace);
+      pushRectOutline(rgroup, rect, 2.f, warm_yellow);
 
       // push coordinate system ///////////////////////////////////////////////
       v3 p0 = v3{0,0,0};
-      v3 px = v3{1,0,0};
-      v3 py = v3{0,1,0};
-      v3 pz = v3{0,0,1};
+      v3 px = v3{1000,0,0};
+      v3 py = v3{0,1000,0};
+      v3 pz = v3{0,0,1000};
 
       v3  &screen_N = eye_z;
       f32  screen_d = -dot(eye_p, eye_z) + d_eye_screen;
@@ -607,32 +621,34 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
         v2 px_screen = screenProject(screen, px_hit.p);
         v2 py_screen = screenProject(screen, py_hit.p);
         v2 pz_screen = screenProject(screen, pz_hit.p);
-        pushLine(rgroup, p0_screen, px_screen, 2.f, {.2,  0,  0, 1});
-        pushLine(rgroup, p0_screen, py_screen, 2.f, { 0, .2,  0, 1});
-        pushLine(rgroup, p0_screen, pz_screen, 2.f, { 0,  0, .2, 1});
+        auto O = layout_center;
+        pushLine(rgroup, p0_screen+O, px_screen+O, 2.f, {.2,  0,  0, 1});
+        pushLine(rgroup, p0_screen+O, py_screen+O, 2.f, { 0, .2,  0, 1});
+        pushLine(rgroup, p0_screen+O, pz_screen+O, 2.f, { 0,  0, .2, 1});
 
         v3 px = px_hit.p;
-        // pushDebugText("eye_x: %.1f, %.1f, %.1f", eye_x.x, eye_x.y, eye_x.z);
-        // pushDebugText("eye_y: %.1f, %.1f, %.1f", eye_y.x, eye_y.y, eye_y.z);
+        pushDebugText("p0_hit: %.1f, %.1f, %.1f", p0_hit.p.x, p0_hit.p.y, p0_hit.p.z);
       }
     }
   }
 
   // Render: Build the push buffer ////////////////////////////////////
 
-  rgroup.current_z_level = ZLevelGeneral;
-  {// push the editor tree
-    v2 min = hadamard(screen_half_dim, {0.5f, -0.0f});
-    drawTree(state, rgroup, state.editor_root, min);
+  {
+    // push backdrop
+    rgroup.current_z_level = ZLevelBackdrop;
+    pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, v4{0,0,0,1});
+    rgroup.current_z_level = ZLevelGeneral;
   }
 
-  // push backdrop
-  rgroup.current_z_level = ZLevelBackdrop;
-  pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, v4{0,0,0,1});
-  rgroup.current_z_level = ZLevelGeneral;
+  {// push the editor tree
+    v2 min = hadamard(screen_half_dim, {0.5f, -0.0f});
+    drawTrees(state, rgroup, &state.editor_root, min);
+  }
 
   if (state.focused_on_slider)
   {// push cursor
+    rgroup.current_z_level = ZLevelGeneral;
     i32 screen_width_in_tiles = 80;
     i32 cursor_x = absolute_coord % screen_width_in_tiles;
     i32 cursor_y = absolute_coord / screen_width_in_tiles;
@@ -707,5 +723,5 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
       }
     }
   }
-  return GameOutput{.gcommands=gcommands, .raytracing_bitmap=raytracing_bitmap};
+  return GameOutput{.gcommands=gcommands, .raytracing_bitmap=ray_bitmap};
 }

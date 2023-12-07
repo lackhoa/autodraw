@@ -69,8 +69,8 @@ typedef float    f32;  // todo Not sure why we don't just use this?
 #  define debugbreak __builtin_trap()
 #endif
 
-#if REA_INTERNAL
-#  define assert(claim) if (!(claim)) { printf("%s:%d: assertion fired!", __FILE__, __LINE__); fflush(stdout); crashTheProgram; }
+#if AUTO_INTERNAL
+#  define assert(claim) if (!(claim)) { printf("%s:%d: assertion fired!", __FILE__, __LINE__); fflush(stdout); debugbreak; }
 #else
 #  define assert(claim)
 #endif
@@ -154,7 +154,7 @@ pushSize(Arena &arena, size_t size, b32 zero = false)
 {
   void *out = arena.base + arena.used;
   arena.used += size;
-  assert(arena->used <= arena->cap);
+  assert(arena.used <= arena.cap);
   if (zero) zeroSize(out, size);
   return(out);
 }
@@ -163,7 +163,7 @@ inline void *
 pushSizeBackward(Arena &arena, size_t size)
 {
   arena.cap -= size;
-  assert(arena->used <= arena->cap);
+  assert(arena.used <= arena.cap);
   void *out = arena.base + arena.cap;
   return(out);
 }
@@ -224,7 +224,7 @@ inline void
 endTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
-  assert(temp.arena->used >= temp.original_used);
+  assert(temp.arena.used >= temp.original_used);
   temp.arena.used = temp.original_used;
 }
 
@@ -469,7 +469,7 @@ print(Arena &buffer, String s)
     *at = 0;
     out.length = (i32)(at - out.chars);
     buffer.used += out.length;
-    assert(buffer->used <= buffer->cap);
+    assert(buffer.used <= buffer.cap);
   }
 
   return out;

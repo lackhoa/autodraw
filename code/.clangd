@@ -4,9 +4,9 @@ CompileFlags:
   Add:
     - -I../libs
     - -ferror-limit=0
-    - -DAUTO_MAC
-    - -DAUTO_INTERNAL
-    - -DAUTO_DIAGNOSTICS
+    - -DAUTO_MAC=1
+    - -DAUTO_INTERNAL=1
+    - -DAUTO_DIAGNOSTICS=1
     - -Wall
     - -Wimplicit-int-float-conversion
     - -Wno-unused-function

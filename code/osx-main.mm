@@ -526,7 +526,8 @@ int main(int argc, const char *argv[])
           id<MTLTexture> *texture_ptr = &metal_textures[TextureIdRayTrace];
           id<MTLTexture> texture = *texture_ptr;
           if (texture) {
-            assert(dimx == texture.width && dimy == texture.height);  // todo: support changing dimension
+            assert((i32)bitmap.dim.x == texture.width &&
+                   (i32)bitmap.dim.y == texture.height);  // todo: support changing dimension
             [texture replaceRegion:MTLRegionMake2D(0,0,bitmap.dim.x,bitmap.dim.y)
              mipmapLevel:0
              withBytes:bitmap.memory
