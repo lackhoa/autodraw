@@ -96,39 +96,39 @@ ceilF32ToI32(f32 Real32)
     return(Result);
 }
 
-// todo How did these math functions sneak into our build ???
-// inline f32
-// sin(f32 angle)
-// {
-// #if COMPILER_MSVC
-//     f32 result = sinf(angle);
-// #else
-//     f32 result = __builtin_sinf(angle);
-// #endif
-//     return(result);
-// }
+// NOTE: weird names to avoid name collision (haizz)
+inline f32
+kv_sin(f32 angle)
+{
+#if COMPILER_MSVC
+    f32 result = sinf(angle);
+#else
+    f32 result = __builtin_sinf(angle);
+#endif
+    return(result);
+}
 
-// inline f32
-// cos(f32 angle)
-// {
-// #if COMPILER_MSVC
-//     f32 result = cosf(angle);
-// #else
-//     f32 result = __builtin_cosf(angle);
-// #endif
-//     return(result);
-// }
+inline f32
+kv_cos(f32 angle)
+{
+#if COMPILER_MSVC
+    f32 result = cosf(angle);
+#else
+    f32 result = __builtin_cosf(angle);
+#endif
+    return(result);
+}
 
-// inline f32
-// atan2(f32 y, f32 x)
-// {
-// #if COMPILER_MSVC
-//     f32 result = atan2f(y, x);
-// #else
-//     f32 result = __builtin_atan2f(y, x);
-// #endif
-//     return(result);
-// }
+inline f32
+kv_atan2(f32 y, f32 x)
+{
+#if COMPILER_MSVC
+    f32 result = atan2f(y, x);
+#else
+    f32 result = __builtin_atan2f(y, x);
+#endif
+    return(result);
+}
 
 struct bit_scan_result
 {

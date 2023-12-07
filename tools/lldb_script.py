@@ -10,7 +10,7 @@ def __lldb_init_module(debugger, internal_dict):
     for i in range(debugger.GetNumTargets()):
         target = debugger.GetTargetAtIndex(i)
         target.DeleteAllBreakpoints()
-    debugger.HandleCommand('command source ../tools/lldb-commands.txt')
+    debugger.HandleCommand('command source ../too  ls/lldb-commands.txt')
     debugger.HandleCommand('command script import ../tools/lldb_formatters.py')
     debugger.HandleCommand(f'type summary add --python-function lldb_script.print_v3 v3')
     debugger.HandleCommand(f'type summary add --python-function lldb_script.print_v2 v2')

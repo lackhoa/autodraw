@@ -120,21 +120,25 @@ zeroSize(void *base, size_t size)
 
 struct Arena
 {
-    u8     *base;
-    size_t  used;
-    size_t  cap;
+  u8     *base;
+  size_t  used;
+  size_t  cap;
 
-    i32 temp_count;
+  // support backward push
+  size_t original_cap;
+
+  i32 temp_count;
 };
 
 typedef Arena StringBuffer;
 
 inline Arena
-newArena(size_t cap, void *base)
+newArena(void *base, size_t cap)
 {
     Arena arena = {};
-    arena.cap = cap;
-    arena.base = (u8 *)base;
+    arena.cap          = cap;
+    arena.base         = (u8 *)base;
+    arena.original_cap = cap;
     return arena;
 }
 
@@ -148,15 +152,25 @@ getArenaFree(Arena *arena)
 inline void *
 pushSize(Arena &arena, size_t size, b32 zero = false)
 {
-    void *out = (arena.base + arena.used);
-    arena.used += size;
-    assert(arena->used <= arena->cap);
-    if (zero) zeroSize(out, size);
-    return(out);
+  void *out = arena.base + arena.used;
+  arena.used += size;
+  assert(arena->used <= arena->cap);
+  if (zero) zeroSize(out, size);
+  return(out);
+}
+
+inline void *
+pushSizeBackward(Arena &arena, size_t size)
+{
+  arena.cap -= size;
+  assert(arena->used <= arena->cap);
+  void *out = arena.base + arena.cap;
+  return(out);
 }
 
 // todo: clang broke __VA_ARGS__!
 #define pushStruct(arena, type) (type *) pushSize(arena, sizeof(type))
+#define pushStructBackward(arena, type) (type *) pushSizeBackward(arena, sizeof(type))
 #define pushArray(arena, count, type) (type *) pushSize(arena, (count)*sizeof(type))
 #define allocate(arena, x, ...) x = (mytypeof(x)) pushSize(arena, sizeof(*x), __VA_ARGS__)
 #define allocateArray(arena, count, x, ...) x = (mytypeof(x)) pushSize(arena, (count)*sizeof(*x), __VA_ARGS__)
@@ -176,10 +190,9 @@ pushSize(Arena &arena, size_t size, b32 zero = false)
 inline Arena
 subArena(Arena &parent, size_t size)
 {
-    Arena result = {};
-    result.base = (u8 *)pushSize(parent, size);
-    result.cap  = size;
-    return result;
+  u8 *base = (u8 *)pushSize(parent, size);
+  Arena result = newArena(base, size);
+  return result;
 }
 
 inline Arena

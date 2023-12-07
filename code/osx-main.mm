@@ -174,6 +174,7 @@ makeCodepointTextures() {
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
+    return;
   }
   stbtt_fontinfo font;
   stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
@@ -187,8 +188,10 @@ makeCodepointTextures() {
     u8 *bitmap = (u8 *)pushSize(temp_arena, 4 * width * height);
     // Blow it out to rgba bitmap
     u32 *dst = (u32 *)bitmap;
-    u8 *src  = mono_bitmap;
+    i32 pitch = width;
+    u8 *src_row  = mono_bitmap + (height-1)*pitch;  // read backward in y
     for (i32 y=0; y < height; y++) {
+      u8 *src = src_row;
       for (i32 x=0; x < width; x++) {
         u32 au = *src++;
         // assert(au < 256);
@@ -198,6 +201,7 @@ makeCodepointTextures() {
         u32 cu = (u32)(255.f*c + 0.5f) ;
         *dst++ = (au << 24) | (cu << 16) | (cu << 8) | (cu << 0);
       }
+      src_row -= pitch;
     }
 
     stbtt_FreeBitmap(mono_bitmap, 0);
@@ -279,7 +283,7 @@ int main(int argc, const char *argv[])
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
   u8 *memory_base = osxVirtualAlloc(game_memory_cap + platform_memory_cap);
-  auto platform_arena = newArena(platform_memory_cap, memory_base);
+  auto platform_arena = newArena(memory_base, platform_memory_cap);
   memory_base += platform_memory_cap;
   auto temp_memory_cap = platform_memory_cap;
   temp_arena = subArena(platform_arena, temp_memory_cap);
@@ -287,7 +291,7 @@ int main(int argc, const char *argv[])
   {// platform memory
     auto cap = megaBytes(64);
     auto memory = osxVirtualAlloc(cap);
-    temp_arena = newArena(cap, memory);
+    temp_arena = newArena(memory, cap);
   }
   
   NSApplication *app = [NSApplication sharedApplication];
@@ -412,7 +416,7 @@ int main(int argc, const char *argv[])
   auto command_queue = [mtl_device newCommandQueue];
 
   GameInput game_input = {};
-  game_input.arena = newArena(game_memory_cap, memory_base);
+  game_input.arena = newArena(memory_base, game_memory_cap);
   PlatformCode platform_code = {};
   osxLoadOrReloadGameCode(game);
   game.initialize(codepoints, game_input.arena, &platform_code);
@@ -509,7 +513,6 @@ int main(int argc, const char *argv[])
           continue;
         }
 
-        // TODO: what happens if render_pass_descriptor didn't exist?
         auto render_pass_descriptor = [[MTLRenderPassDescriptor new] autorelease];
         render_pass_descriptor.colorAttachments[0].texture     = ca_metal_drawable.texture;
         render_pass_descriptor.colorAttachments[0].loadAction  = MTLLoadActionClear;
@@ -524,12 +527,12 @@ int main(int argc, const char *argv[])
           id<MTLTexture> texture = *texture_ptr;
           if (texture) {
             assert(dimx == texture.width && dimy == texture.height);  // todo: support changing dimension
-            [texture replaceRegion:MTLRegionMake2D(0,0,bitmap.dimx,bitmap.dimy)
+            [texture replaceRegion:MTLRegionMake2D(0,0,bitmap.dim.x,bitmap.dim.y)
              mipmapLevel:0
              withBytes:bitmap.memory
              bytesPerRow:bitmap.pitch];
           } else {
-            *texture_ptr = metal_sRGBATexture(bitmap.memory, bitmap.dimx, bitmap.dimy);
+            *texture_ptr = metal_sRGBATexture(bitmap.memory, bitmap.dim.x, bitmap.dim.y);
             texture = *texture_ptr;
           }
 

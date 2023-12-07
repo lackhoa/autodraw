@@ -4,10 +4,8 @@
 
 struct Bitmap {
   u32 *memory;
-  // TODO: let's just use floats
-  i32 dimx;
-  i32 dimy;
-  i32 pitch;
+  v2   dim;
+  i32  pitch;
 };
 
 inline v4
