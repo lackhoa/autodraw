@@ -1,5 +1,10 @@
 /*
   todo:
+  - Accelerate, decelerate
+  - lldb: how to move past debug break
+  - lldb: tell the python script to run the damn program
+  - Array accessor for vectors
+  - Implicitly convert vectors to arrays
   - Camera control
   - lldb: how to watch variable
   - I need vim key bindings for the stupid terminal, like for real
@@ -39,6 +44,7 @@ toFloat2(v2 v)
 }
 
 typedef u32 TreeID;
+TreeID mode_tree_id = 0;
 struct EditorTree {
   TreeID id;
   String name;
@@ -238,16 +244,17 @@ struct GameState {
   Arena temp_arena;
   Codepoint *codepoints;
 
-  b32 focused_on_slider;
+  TreeID editing_item;
 
   i32 cursor_coord;
-  EditorTree  editor_root;
+  EditorTree *first_tree;
   EditorTree *hot_item;
 
   f32 direction_key_held_down_time;
-  f32 speed;
-  v2  cursor_tile_offset;
-  v2  tree_tile_offset;
+  v3  cursor_tile_offset;
+  v3  tree_tile_offset;
+  v3  eye_position;
+  b32 eye_inited;
 
   PlatformCode platform;
   f32 revolution;
@@ -259,16 +266,16 @@ internal f32 editor_margin      = 5;
 internal f32 editor_indentation = 20;
 
 internal rect2
-drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min);
+drawSingleTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min);
 
 internal rect2
-drawTrees(GameState &state, RenderGroup &rgroup, EditorTree *tree, v2 trees_min)
+drawTreeAndSiblings(GameState &state, RenderGroup &rgroup, EditorTree *tree, v2 trees_min)
 {
   v2 max = trees_min;
   while (tree) {
     v2 tree_min = {trees_min.x,
                    trees_min.y - todo_text_scale * font_height_px};
-    rect2 rect = drawTree(state, rgroup, *tree, tree_min);
+    rect2 rect = drawSingleTree(state, rgroup, *tree, tree_min);
 
     max.x = maximum(rect.max.x, max.x);
     trees_min.y = rect.min.y - editor_margin;
@@ -279,21 +286,25 @@ drawTrees(GameState &state, RenderGroup &rgroup, EditorTree *tree, v2 trees_min)
 }
 
 internal rect2
-drawTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 tree_min)
+drawSingleTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 tree_min)
 {
   f32 data_dim_x  = todo_text_scale * (f32)rgroup.monospaced_width * (f32)tree.name.length;
   f32 data_max_y = pushText(rgroup, tree_min, tree.name, warm_yellow);
 
   v2 children_min = {tree_min.x + editor_indentation,
                      tree_min.y};
-  rect2 children = drawTrees(state, rgroup, tree.children, children_min);
+  rect2 children = drawTreeAndSiblings(state, rgroup, tree.children, children_min);
   v2 max = {maximum(tree_min.x + data_dim_x, children.max.x),
             data_max_y + editor_margin};
   tree_min.y = children.min.y - editor_margin;
 
   if (tree.id == state.hot_item->id) {
+    v4 color = warm_yellow;
+    if (state.editing_item) {
+      color.r += .5f;
+    }
     f32 outline_thickness = 2;
-    pushRectOutline(rgroup, rect2{tree_min, max}, outline_thickness, warm_yellow);
+    pushRectOutline(rgroup, rect2{tree_min, max}, outline_thickness, color);
   }
 
   return rect2{tree_min, max};
@@ -320,15 +331,22 @@ moveTree(GameState &state, i32 dx, i32 dy)
   state.hot_item = hi;
 }
 
+// TODO: Don't pass the state in whole sale like that
 inline void
-moveCursorHorizontally(GameState &state, i32 dx)
+moveCursor(GameState &state, i32 dx)
 {
   i32 &coord = state.cursor_coord;
+  i32 old_coord = state.cursor_coord;
+  f32 &offset = state.cursor_tile_offset.x;
   coord += dx;
-  if (coord <= 0) {
+  if ((coord < 0) || (coord == 0 && offset < 0)) {
     // clamp cursor to left side of the screen
-    coord = 0;
-    if (state.cursor_tile_offset.x < 0) state.cursor_tile_offset.x = 0;
+    coord  = 0;
+    offset = 0;
+  }
+  if ((coord > 30) || (coord == 30 && offset > 0)) {
+    coord  = 30;
+    offset = 0;
   }
 }
 
@@ -418,24 +436,24 @@ pushLine(RenderGroup rgroup, v3 p0, v3 p1, f32 thickness_px, v4 color)
 
 struct Screen {
   v3 center;
-  v3 x;
-  v3 y;
+  v3 x_axis;
+  v3 y_axis;
 };
 
 inline v2
 screenProject(Screen screen, v3 p)
 {
   v3 d = p-screen.center;
-  return v2{dot(screen.x, d),
-            dot(screen.y, d)};
+  return v2{dot(screen.x_axis, d),
+            dot(screen.y_axis, d)};
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
   b32 hot_reloaded = input.hot_reloaded;
-  GameState &state = *(GameState *)input.arena.base;
+  GameState &s = *(GameState *)input.arena.base;
 
-  Arena &temp_arena  = state.temp_arena;
+  Arena &temp_arena  = s.temp_arena;
   auto   temp_marker = beginTemporaryMemory(temp_arena);
   defer(endTemporaryMemory(temp_marker));
 
@@ -444,108 +462,120 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   v2 pixel_to_clip = {1.f / screen_half_dim.x,
                       1.f / screen_half_dim.y};
 
-  auto root   = &state.editor_root;  // this thing should do something!
-  auto slider = pushStruct(temp_arena, EditorTree);
-  auto uncle  = pushStruct(temp_arena, EditorTree);
-  auto mom    = pushStruct(temp_arena, EditorTree);
+  EditorTree &eye    = *pushStruct(temp_arena, EditorTree);
+  auto &mom    = *pushStruct(temp_arena, EditorTree);
+  auto &slider = *pushStruct(temp_arena, EditorTree);
 
-  // bookmark: add "eye" mode
-  *root   = {.id=0, .name=toString(temp_arena, "root"),
-             .next_sibling=uncle};
-  *uncle  = {.id=1, .name=toString(temp_arena, "uncle"),
-             .prev_sibling=root, .next_sibling=mom};
-  *mom    = {.id=2, .name=toString(temp_arena, "mom"),
-             .children=slider,
-             .prev_sibling=uncle};
-  *slider = {.id=3, .name=toString(temp_arena, "slider"),
-             .parent=mom};
+  eye    = {.id=1, .name=toString(temp_arena, "eye"),
+             .next_sibling=&mom};
+  mom    = {.id=2, .name=toString(temp_arena, "mom"),
+            .children=&slider, .prev_sibling=&eye};
+  slider = {.id=3, .name=toString(temp_arena, "slider"),
+            .parent=&mom};
 
-  if (!state.hot_item) state.hot_item = uncle;
+  s.first_tree = &eye;
+  if (!s.hot_item) s.hot_item = &eye;
 
   RenderGroup rgroup = {};
-  rgroup.codepoints       = state.codepoints;
-  rgroup.monospaced_width = (f32)state.codepoints[(u8)'a'].width;
+  rgroup.codepoints       = s.codepoints;
+  rgroup.monospaced_width = (f32)s.codepoints[(u8)'a'].width;
   rgroup.commands         = subArena(temp_arena, megaBytes(8));
   rgroup.temp_arena       = subArena(temp_arena, kiloBytes(128));
   rgroup.current_z_level  = ZLevelGeneral;
 
   debug_drawer.arena  = subArena(temp_arena, kiloBytes(128));
-  debug_drawer.rgroup = &rgroup; // todo have separate render group maybe?
+  debug_drawer.rgroup = &rgroup;
   debug_drawer.at     = -screen_half_dim + v2{10, 10};
 
-  // Game logic //////////////////////////////////////
-  f32 &speed          = state.speed;
-  i32 &absolute_coord = state.cursor_coord;
-  f32 &dt             = target_frame_time_sec;
-  f32 &r              = state.revolution;
-  r += Tau32 * dt;
-  if (r > Tau32) {
-    r -= Tau32;
-  }
+  {// Input processing //////////////////////////////////////
+    v3 direction = {};
+    if (input.key_states[kVK_ANSI_L].is_down) {
+      direction.E[0] = 1;
+    } else if (input.key_states[kVK_ANSI_H].is_down) {
+      direction.E[0] = -1;
+    }
+    if (input.key_states[kVK_ANSI_K].is_down) {
+      direction.E[1] = 1;
+    } else if (input.key_states[kVK_ANSI_J].is_down) {
+      direction.E[1] = -1;
+    }
+    if (input.key_states[kVK_ANSI_I].is_down) {
+      direction.E[2] = 1;
+    } else if (input.key_states[kVK_ANSI_O].is_down) {
+      direction.E[2] = -1;
+    }
 
-  b32 &focused_on_slider = state.focused_on_slider;
-  if (input.key_states[kVK_ANSI_E].is_down) {
-    if (state.hot_item->id == slider->id) {
-      focused_on_slider = true;
+    f32 &dt = target_frame_time_sec;
+    f32 &r  = s.revolution;
+    r += Tau32 * dt;
+    if (r > Tau32) {
+      r -= Tau32;
+    }
+
+    if (input.key_states[kVK_ANSI_E].is_down) {
+      s.editing_item = s.hot_item->id;
+    }
+
+    if (input.key_states[kVK_Escape].is_down) {
+      s.editing_item = mode_tree_id;
+    }
+
+    // We will process all 3 dimensions of control (regardless of the particular tool)
+    v3 *offset_ = &s.tree_tile_offset;
+    if      (s.editing_item == slider.id) offset_ = &s.cursor_tile_offset;
+    else if (s.editing_item == eye.id) {
+      offset_ = &s.eye_position;
+    }
+    v3 &offset = *offset_;
+
+    f32 &held_time = s.direction_key_held_down_time;
+    if (direction.E[0] != 0 || direction.E[1] != 0 || direction.E[2] != 0) {
+      if (held_time == 0.f) {
+        offset += direction;
+      } else if (held_time < 0.25f) {
+        // hold right there!
+      } else {
+        f32 speed = 10.f;
+        if      (s.editing_item == slider.id) speed = 20.f;
+        else if (s.editing_item == eye.id)    speed = 100.f;
+        offset += speed * dt * direction;
+      }
+      held_time += dt;
+    } else if (s.editing_item == slider.id || s.editing_item == mode_tree_id) {
+      offset   = v3{};
+      held_time = 0.0f;
+    }
+
+    // TODO: please, no more "offset_int"
+    // NOTE: "offset_int" only applicable for tiled movement
+    v3 offset_int = {};
+    for (i32 dim_i=0; dim_i < 3; dim_i++) {
+      offset_int.E[dim_i] = (offset.E[dim_i] == -0.5f) ? 0 : roundF32(offset.E[dim_i]);
+    }
+    if (s.editing_item == slider.id || s.editing_item == mode_tree_id) {
+      offset -= offset_int;
+    }
+
+    // Update game state according to movement
+    if (s.editing_item == slider.id) {
+      moveCursor(s, offset_int.x);
+      pushDebugText("cursor offset: %1.f", s.cursor_tile_offset.x);
+      pushDebugText("cursor coord: %1.d", s.cursor_coord);
+    } else if (s.editing_item == 0) {// mode tree navigation
+      moveTree(s, offset_int.x, offset_int.y);
     }
   }
-
-  if (input.key_states[kVK_Escape].is_down) {
-    focused_on_slider = false;
-  }
-
-  v2 direction = {};
-  if (input.key_states[kVK_ANSI_L].is_down) {
-    direction.x = 1;
-  } else if (input.key_states[kVK_ANSI_H].is_down) {
-    direction.x = -1;
-  } else if (input.key_states[kVK_ANSI_K].is_down) {
-    direction.y = 1;
-  } else if (input.key_states[kVK_ANSI_J].is_down) {
-    direction.y = -1;
-  }
-
-  f32 acceleration_magnitude = state.focused_on_slider ? 80.f : 40.f;
-
-  // abstract tiled movement update
-  v2 &tile_offset = focused_on_slider ? state.cursor_tile_offset : state.tree_tile_offset;
-  f32 &held_time = state.direction_key_held_down_time;
-  if (direction.x != 0 || direction.y != 0) {
-    if (held_time == 0.f) {
-      tile_offset += direction;
-    } else if (held_time < 0.25f) {
-      // hold right there!
-    } else {
-      auto a = acceleration_magnitude;
-      tile_offset += direction * (speed * dt + 0.5f * a * dt * dt);
-      speed       += a * dt;
-    }
-    held_time += dt;
-  } else {
-    speed       = 0.f;
-    tile_offset = {};
-    held_time   = 0.f;
-  }
-
-  i32 tile_offset_int_x = (tile_offset.x == -0.5f) ? 0 : (i32)roundF32(tile_offset.x);
-  i32 tile_offset_int_y = (tile_offset.y == -0.5f) ? 0 : (i32)roundF32(tile_offset.y);
-  tile_offset.x -= (f32)tile_offset_int_x;
-  tile_offset.y -= (f32)tile_offset_int_y;
-
-  // update game state according to movement
-  if (state.focused_on_slider) {
-    moveCursorHorizontally(state, tile_offset_int_x);
-  } else {// tree navigation
-    moveTree(state, tile_offset_int_x, tile_offset_int_y);
-  }
-
+  
   Bitmap ray_bitmap = {};
   {// Ray tracing
-    v3 eye_p_base = {-1000, -200, 3000};
-    v3 eye_p = eye_p_base + v3{0 * kv_sin(r),
-                               0 * kv_sin(r),
-                               0 * kv_sin(r)};
-    v3 eye_z = noz(eye_p_base);  // NOTE: z comes at you
+    f32 S = 1000.f;  // scale to prevent tedious typing
+    v3 &eye_p = s.eye_position;
+    if (!s.eye_inited) {
+      s.eye_inited = true;
+      eye_p = S * v3{-1, -.2f, 3};
+    }
+    pushDebugText("eye_p: %2.f, %2.f, %2.f", eye_p.x, eye_p.y, eye_p.z);
+    v3 eye_z = noz(eye_p);  // NOTE: z comes at you
     v3 eye_x = cross(eye_z, v3{0,0,1});
     v3 eye_y = cross(eye_z, eye_x);
 
@@ -559,8 +589,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     materials[2] = {.color=v3{0,.1,.1}};
     world.materials = materials;
 
-    Plane planes[2] = {{.N=v3{1,1,1}, .d=-100, .mat_index=1},
-                       {.N=v3{1,0,1}, .d=-200, .mat_index=2}};
+    Plane planes[2] = {{.N=v3{1,1,1}, .d=S * -0.1f, .mat_index=1},
+                       {.N=v3{1,0,1}, .d=S * -0.2f, .mat_index=2}};
     world.planes = planes;
 
     world.plane_count    = arrayCount(planes);
@@ -602,10 +632,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
       pushRectOutline(rgroup, rect, 2.f, warm_yellow);
 
       // push coordinate system ///////////////////////////////////////////////
-      v3 p0 = v3{0,0,0};
-      v3 px = v3{1000,0,0};
-      v3 py = v3{0,1000,0};
-      v3 pz = v3{0,0,1000};
+      v3 p0 = S * v3{0,0,0};
+      v3 px = S * v3{1,0,0};
+      v3 py = S * v3{0,1,0};
+      v3 pz = S * v3{0,0,1};
 
       v3  &screen_N = eye_z;
       f32  screen_d = -dot(eye_p, eye_z) + d_eye_screen;
@@ -634,33 +664,26 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 
   // Render: Build the push buffer ////////////////////////////////////
 
-  {
-    // push backdrop
+  {// push backdrop
     rgroup.current_z_level = ZLevelBackdrop;
     pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, v4{0,0,0,1});
     rgroup.current_z_level = ZLevelGeneral;
   }
 
-  {// push the editor tree
-    v2 min = hadamard(screen_half_dim, {0.5f, -0.0f});
-    drawTrees(state, rgroup, &state.editor_root, min);
-  }
-
-  if (state.focused_on_slider)
+  if (s.editing_item == slider.id)
   {// push cursor
+    v2 O = {0, screen_half_dim.y};
     rgroup.current_z_level = ZLevelGeneral;
-    i32 screen_width_in_tiles = 80;
-    i32 cursor_x = absolute_coord % screen_width_in_tiles;
-    i32 cursor_y = absolute_coord / screen_width_in_tiles;
-    f32 tile_width = 2.f / (f32)screen_width_in_tiles;
-    v2 tile_dim = {tile_width, tile_width};
-    v2 min = {0 + ((f32)cursor_x + state.cursor_tile_offset.x) * tile_dim.x,
-              1 - (f32)(cursor_y+1) * tile_dim.y};
-    auto rect = rectMinDim(min, tile_dim);
+    v2 cursor_dim = {20, 20};
+    v2 min = O + v2{(s.cursor_coord + s.cursor_tile_offset.x) * cursor_dim.x,
+                    - cursor_dim.y};
+    auto rect = rectMinDim(min, cursor_dim);
     pushRect(rgroup, rect, v4{1,0,0,1});
+    pushDebugText("cursor: %d", s.cursor_coord);
+  } else {// push the editor tree
+    v2 min = hadamard(screen_half_dim, {0.5f, -0.0f});
+    drawTreeAndSiblings(s, rgroup, s.first_tree, min);
   }
-
-  
 
   {// push debug text
     pushDebugText("frame time: %.3f ms", input.last_frame_time_sec * 1000);
