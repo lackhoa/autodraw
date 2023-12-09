@@ -17,8 +17,11 @@ f32 target_frame_time_sec = 1.f / game_update_hz;
 
 struct ReadFileResult
 {
-    u64  content_size;
-    u8  *content;
+  u64  size;
+  u8  *content;
+  operator bool() {
+    return content;
+  }
 };
 
 #define PLATFORM_WRITE_ENTIRE_FILE(NAME) b32 NAME(u8 *content, u64 content_size, char *filename)
@@ -28,7 +31,7 @@ typedef PLATFORM_WRITE_ENTIRE_FILE(PlatformWriteEntireFile);
 typedef PLATFORM_READ_ENTIRE_FILE(PlatformReadEntireFile);
 
 struct PlatformCode {
-  PlatformWriteEntireFile *writeToFile;
+  PlatformWriteEntireFile *writeEntireFile;
   PlatformReadEntireFile  *readEntireFile;
 };
 
@@ -99,5 +102,5 @@ struct GameInput {
 #define GAME_UPDATE_AND_RENDER(NAME) GameOutput NAME(GameInput &input)
 typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
 
-#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &arena, PlatformCode &platform)
+#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
 typedef GAME_INITIALIZE(GameInitialize);

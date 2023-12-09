@@ -130,7 +130,7 @@ PLATFORM_READ_ENTIRE_FILE(osxReadEntireFile)
     return {};
   }
 
-  out.content_size = file_size;
+  out.size = file_size;
   return out;
 }
 
@@ -167,7 +167,7 @@ PLATFORM_WRITE_ENTIRE_FILE(osxWriteEntireFile)
     return 0;  // Return an error code
   }
 
-  i32 fd = open(filename, O_WRONLY | O_CREAT, 0644);
+  i32 fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd == -1) {
     printf("failed to open file handle of file %s: code %d, reason %s\n",
            filename, errno, strerror(errno));
@@ -469,7 +469,7 @@ int main(int argc, const char *argv[])
   GameInput game_input = {};
   game_input.arena = newArena(memory_base, game_memory_cap);
   PlatformCode platform_code = {.readEntireFile = osxReadEntireFile,
-                                .writeToFile = osxWriteEntireFile};
+                                .writeEntireFile = osxWriteEntireFile};
   osxLoadOrReloadGameCode(game);
   game.initialize(codepoints, game_input.arena, platform_code);
 

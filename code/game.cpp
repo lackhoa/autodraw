@@ -1,6 +1,9 @@
 /*
   todo:
-  - Save the camera location to a file, camera location x,y,z, that's it. So the workflow is this: we'll save the state periodically, always, every 10 seconds or so. It is up to the user to "commit" their work. Let's go with binary data format, I don't wanna have to parse text files. Press "w" to save
+  - Think about the file format packing?
+  - Need the attachment log file format
+  - Need a way to save the schema of the file format, just in case we forgot how to read it.
+  - Save the camera location to a file, camera location x,y,z, that's it. So the workflow is this: we'll save the state periodically, always, every 10 seconds or so. It is up to the user to "commit" their work. Press "w" to save immediately
   - Reading the scene from a file format
   - Asset file store
   - Fun: wrap-around motion
@@ -23,6 +26,7 @@
 
  */
 
+#import <time.h>
 #include "kv-utils.h"
 #include "platform.h"
 #include "shader-interface.h"
@@ -240,10 +244,23 @@ pushGPUCommand_(GPUCommands &gcommands, u32 size, GPUCommandType type)
 
 #define pushGPUCommand(commands, type) (GPUCommand##type *) pushGPUCommand_(commands, sizeof(GPUCommand##type), GPUCommandType##type)
 
-struct Scene {
+struct OldScene {
+  u32 magic_number;
+  u64 version;
   v3  eye_position;
   b32 eye_inited;
 };
+
+// IMPORTANT: This struct is saved to a file, so don't touch it without bumping the version!
+u64 current_scene_file_format_version = 1;
+u32 scene_file_format_magic_number = *(u32 *)"scen";
+
+struct Scene {
+  u32 magic_number;
+  u64 version;
+  v3 eye_position;
+  b32 eye_inited;
+} __attribute__((packed));
 
 struct GameState {
   Arena perm_arena;
@@ -260,6 +277,7 @@ struct GameState {
   v3    cursor_tile_offset;
   v3    tree_tile_offset;
   Scene scene;
+  b32   successfully_read_scene_file;
 
   PlatformCode platform;
   f32 revolution;
@@ -444,26 +462,87 @@ screenProject(Screen screen, v3 p)
             dot(screen.y_axis, d)};
 }
 
+// TODO cleanup ../data file path
 char *scene_filename = "../data/scene.ad";
+
+internal void
+initScene(Scene &scene) {
+  scene.magic_number = scene_file_format_magic_number;
+  scene.version      = current_scene_file_format_version;
+}
 
 extern "C" GAME_INITIALIZE(gameInitialize)
 {
-  auto &state = *pushStruct(arena, GameState);
-  state.perm_arena = subArena(arena, megaBytes(512));
-  state.temp_arena = subArenaWithRemainingMemory(arena);
+  auto &state = *pushStruct(init_arena, GameState);
+  state.perm_arena = subArena(init_arena, megaBytes(512));
+  state.temp_arena = subArenaWithRemainingMemory(init_arena);
   state.codepoints = codepoints;
   state.platform   = platform;
+  
+  {// Read saved scene from a file
+    auto temp_marker = beginTemporaryMemory(state.temp_arena);
+    defer(endTemporaryMemory(temp_marker));
+    // Read into a temp buffer first
+    ReadFileResult scene_file = state.platform.readEntireFile(state.temp_arena, scene_filename);
+    if (!scene_file) {
+      printf("scene file %s empty or doesn't exist", scene_filename);
+    }
+    else if (scene_file.size >= 12)
+    {
+      state.scene = *(Scene *)scene_file.content;
 
-  // Read saved state from a file
-  auto temp_marker = beginTemporaryMemory(state.temp_arena);
-  defer(endTemporaryMemory(temp_marker));
-  ReadFileResult scene_file = platform.readEntireFile(state.temp_arena, scene_filename);
-  if (scene_file.content) {
-    u8 *next = scene_file.content;
-    state.scene.eye_position = *EAT_TYPE(next, v3);
-    state.scene.eye_inited   = *EAT_TYPE(next, b32);
-    assert(next <= scene_file.content + scene_file.content_size);
-    printf("loaded data from file %s\n", scene_filename);
+      if (state.scene.magic_number != *(u32 *)"scen") {
+        printf("file %s has wrong magic number!\n", scene_filename);
+      }
+      else if (state.scene.version == current_scene_file_format_version)  {
+        if (scene_file.size != sizeof(Scene)) {
+          printf("wrong file size (something went horribly wrong!)\n");
+        } else {
+          printf("successfully loaded data from file %s\n", scene_filename);
+          state.successfully_read_scene_file = true;
+        }
+      } else if (state.scene.version == current_scene_file_format_version - 1) {
+        if (scene_file.size != sizeof(OldScene)) {
+          printf("wrong file size (something went horribly wrong!)\n");
+        } else {
+          // upgrade file version
+          // bookmark: Automatically create a backup file
+          printf("scene file is old, updating it\n");
+          printf("creating a backup file\n");
+
+          // TODO: cleanup this weird code
+          size_t filename_size = 256;
+          char backup_name[filename_size];
+
+          time_t rawtime;
+          time(&rawtime);
+          struct tm *timeinfo = localtime(&rawtime);
+          // todo write to a backup folder, to avoid flood
+          size_t strftime_result = strftime(backup_name, filename_size, "../data/scene-%d-%m-%Y-%H-%M-%S.ad", timeinfo);
+          if (strftime_result == 0) {
+            printf("strftime failed... I don't even know!\n");
+          } else {
+            b32 backup_succeed = platform.writeEntireFile(scene_file.content,
+                                                          scene_file.size,
+                                                          backup_name);
+            if (!backup_succeed) {
+              printf("failed to create backup file\n");
+            } else {
+              OldScene old_scene = *(OldScene *)scene_file.content;
+              state.scene.version = current_scene_file_format_version;
+
+              state.scene.eye_position = old_scene.eye_position;
+              state.scene.eye_inited   = old_scene.eye_inited;
+
+              state.successfully_read_scene_file = true;
+            }
+          }
+        }
+      } else {
+        printf("cannot recognize scene file version %s\n", scene_filename);
+        initScene(state.scene);
+      }
+    }
   }
 }
 
@@ -523,11 +602,15 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     kVK save_key = kVK_ANSI_W;
     if (in.key_states[save_key].is_down && (s.key_held_frames[save_key] == 1)) {
       // write data to a save file
-      b32 write_result = s.platform.writeToFile((u8 *)&s.scene, sizeof(s.scene), scene_filename);
-      if (write_result) {
-        printf("Scene data written to file: %s\n", scene_filename);
+      if (!state.successfully_read_scene_file) {
+        printf("WARNING: we won't overwrite the file, since we weren't able to read it");
       } else {
-        printf("Failed to write to file: %s\n", scene_filename);
+        b32 write_result = s.platform.writeEntireFile((u8 *)&s.scene, sizeof(s.scene), scene_filename);
+        if (write_result) {
+          printf("scene data written to file: %s\n", scene_filename);
+        } else {
+          printf("failed to write to file: %s\n", scene_filename);
+        }
       }
     }
 

@@ -143,9 +143,9 @@ newArena(void *base, size_t cap)
 }
 
 inline size_t
-getArenaFree(Arena *arena)
+getArenaFree(Arena &arena)
 {
-    size_t out = arena->cap - arena->used;
+    size_t out = arena.cap - arena.used;
     return out;
 }
 
@@ -293,7 +293,7 @@ struct String
   operator bool() {return chars;}
 };
 
-inline void *
+inline u8 *
 getNext(Arena &buffer)
 {
   return (buffer.base + buffer.used);
