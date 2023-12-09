@@ -43,7 +43,7 @@ try:
         process = subprocess.Popen(command, close_fds=True, preexec_fn=os.setsid)
     else:
         # Set compiler and linker flags
-        optimization = ['-O0']
+        optimization = ['-O2']
         constants = ['-DAUTO_MAC', '-DAUTO_INTERNAL=1', '-DAUTO_DIAGNOSTICS=1']
         warnings = ['-Wall', '-Wimplicit-int-float-conversion', '-Wno-unused-function', '-Wno-missing-braces', '-Wno-unused-parameter', '-Wno-unused-but-set-variable', '-Wno-unused-variable', '-Wno-switch', '-Wno-writable-strings', '-Wno-c++17-extensions', '-Wno-pointer-to-int-cast', '-Wno-tautological-constant-out-of-range-compare', '-Wno-reorder-init-list', '-Wno-macro-redefined', '-Wno-deprecated-declarations', '-Wno-unknown-attributes']
         common_compiler_flags = ["-g", "-mavx2", "-std=gnu++20", '-fno-exceptions'] + optimization + constants + warnings

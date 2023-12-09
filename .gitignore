@@ -4,3 +4,4 @@ build
 .vscode
 references/
 __pycache__
+data

@@ -15,11 +15,21 @@ f32 font_height_px = 128.f;
 f32 game_update_hz = 60.f;
 f32 target_frame_time_sec = 1.f / game_update_hz;
 
-// #define PLATFORM_UPLOAD_RAY_TRACING_BITMAP(NAME) void NAME(u32 *bitmap, i32 dimx, i32 dimy)
-// typedef PLATFORM_UPLOAD_RAY_TRACING_BITMAP(PlatformUploadRayTracingBitmap);
+struct ReadFileResult
+{
+    u64  content_size;
+    u8  *content;
+};
+
+#define PLATFORM_WRITE_ENTIRE_FILE(NAME) b32 NAME(u8 *content, u64 content_size, char *filename)
+typedef PLATFORM_WRITE_ENTIRE_FILE(PlatformWriteEntireFile);
+
+#define PLATFORM_READ_ENTIRE_FILE(NAME) ReadFileResult NAME(Arena &arena, char *filename)
+typedef PLATFORM_READ_ENTIRE_FILE(PlatformReadEntireFile);
 
 struct PlatformCode {
-  // PlatformUploadRayTracingBitmap *uploadRayTracingBitmap;
+  PlatformWriteEntireFile *writeToFile;
+  PlatformReadEntireFile  *readEntireFile;
 };
 
 // NOTE: currently we deal with monospaced fonts only
@@ -67,7 +77,7 @@ struct GPUCommandTriangleStrip {
   TextureId texture;
 };
 
-struct ActionState {
+struct KeyState {
   b32 is_down;
 };
 
@@ -80,14 +90,14 @@ struct GameOutput {
 struct GameInput {
   Arena arena;                  // All memory allocated for the game by the platform
 
-  ActionState key_states[kVK_Count];
-  f32         last_frame_time_sec;
-  b32         hot_reloaded;
-  v2          screen_dim;
+  KeyState key_states[kVK_Count];
+  f32      last_frame_time_sec;
+  b32      hot_reloaded;
+  v2       screen_dim;
 };
 
 #define GAME_UPDATE_AND_RENDER(NAME) GameOutput NAME(GameInput &input)
 typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
 
-#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &arena, PlatformCode *code)
+#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &arena, PlatformCode &platform)
 typedef GAME_INITIALIZE(GameInitialize);

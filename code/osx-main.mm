@@ -27,7 +27,7 @@ struct OsxGlobals {
   id<MTLDevice> mtl_device;
 };
 global_variable OsxGlobals *osx_globals = 0;
-internal Arena temp_arena;
+// internal Arena temp_arena;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -53,11 +53,6 @@ internal Arena temp_arena;
 @end
 
 ///////////////////////////////////////////////////////////////////////
-
-struct ReadFileResult {
-    u32 content_size;
-    u8 *content;
-};
 
 internal u8 *
 osxVirtualAlloc(size_t size)
@@ -101,41 +96,90 @@ void osxFreeFileMemory(u8 *memory) {
   }
 }
 
-ReadFileResult osxReadEntireFile(const char *file_name)
+PLATFORM_READ_ENTIRE_FILE(osxReadEntireFile)
 {
   ReadFileResult out = {};
 
-  int fd = open(file_name, O_RDONLY);
+  int fd = open(filename, O_RDONLY);
   if (fd == -1) {
     printf("platformReadEntireFile %s: open error: %d: %s\n",
-           file_name, errno, strerror(errno));
-  } else {
-    struct stat file_stat;
-    if (fstat(fd, &file_stat) != 0) {
-      printf("platformReadEntireFile %s: fstat error: %d: %s\n",
-             file_name, errno, strerror(errno));
-    } else {
-      i64 file_size = file_stat.st_size;
-      out.content = osxVirtualAlloc(file_size);
-      if (!out.content) {
-        printf("platformReadEntireFile %s:  vm_allocate error: %d: %s\n",
-               file_name, errno, strerror(errno));
-      }
-      ssize_t bytes_read;
-      bytes_read = read(fd, out.content, file_size);
-      if (bytes_read == file_size) {
-        out.content_size = file_size;
-      } else {
-        osxFreeFileMemory(out.content);
-        out.content = 0;
-        printf("platformReadEntireFile %s:  couldn't read file: %d: %s\n",
-               file_name, errno, strerror(errno));
-      }
+           filename, errno, strerror(errno));
+    return {};
+  }
+  defer(close(fd));
+
+  struct stat file_stat;
+  if (fstat(fd, &file_stat) != 0) {
+    printf("platformReadEntireFile %s: fstat error: %d: %s\n",
+           filename, errno, strerror(errno));
+    return {};
+  }
+  i64 file_size = file_stat.st_size;
+  out.content = (u8 *)pushSize(arena, file_size);
+  if (!out.content) {
+    printf("platformReadEntireFile %s:  vm_allocate error: %d: %s\n",
+           filename, errno, strerror(errno));
+    return {};
+  }
+
+  ssize_t bytes_read = read(fd, out.content, file_size);
+  if (bytes_read != file_size) {
+    out.content = 0;
+    printf("platformReadEntireFile %s:  couldn't read file: %d: %s\n",
+           filename, errno, strerror(errno));
+    return {};
+  }
+
+  out.content_size = file_size;
+  return out;
+}
+
+inline void
+getParentDirName(char *buffer, char *path)
+{
+  i32 last_slash_index = 0;
+  i32 index = 0;
+  for (char *scan=path;
+       *scan;
+       scan++, index++) {
+    if (*scan == '/') {
+      last_slash_index = index;
     }
   }
 
-  close(fd);
-  return out;
+  for (i32 index=0; index < last_slash_index; index++) {
+    buffer[index] = path[index];
+  }
+  buffer[last_slash_index] = 0;
+}
+
+PLATFORM_WRITE_ENTIRE_FILE(osxWriteEntireFile)
+{
+  // Create the directory along with missing parent directories
+  char dir_name[PATH_MAX];
+  getParentDirName(dir_name, filename);
+  i32 mkdir_output = mkdir(dir_name, S_IRWXU | S_IRWXG | S_IROTH);
+  if (mkdir_output == 0) {
+    printf("Directory created successfully.\n");
+  } else if (errno != EEXIST) {
+    printf("failed to create directory %s: code %d, reason %s\n",
+           dir_name, errno, strerror(errno));
+    return 0;  // Return an error code
+  }
+
+  i32 fd = open(filename, O_WRONLY | O_CREAT, 0644);
+  if (fd == -1) {
+    printf("failed to open file handle of file %s: code %d, reason %s\n",
+           filename, errno, strerror(errno));
+    return 0;
+  }
+  defer(close(fd));
+  ssize_t bytes_written = write(fd, content, content_size);
+  if (bytes_written != content_size) {
+    printf("failed to write to file %s\n", filename);
+    return 0;
+  }
+  return 1;
 }
 
 internal id<MTLTexture>
@@ -165,12 +209,12 @@ makeColorTexture(v4 color)
 internal id<MTLTexture> metal_textures[TextureIdCount];
 internal Codepoint codepoints[128];
 
-// todo: this belongs in the asset system
+// todo: #startup #speed Maybe store the bitmaps in the asset system, but idk if it's even faster.
 internal void
-makeCodepointTextures() {
-  auto temp = beginTemporaryMemory(temp_arena);
+makeCodepointTextures(Arena &arena) {
+  auto temp = beginTemporaryMemory(arena);
   defer(endTemporaryMemory(temp));
-  auto read_file = osxReadEntireFile("../resources/fonts/LiberationMono-Regular.ttf");
+  auto read_file = osxReadEntireFile(arena, "../resources/fonts/LiberationMono-Regular.ttf");
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
@@ -185,7 +229,7 @@ makeCodepointTextures() {
     u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
                                                &width, &height, &xoff, &yoff);
     assert(width != 0 && height != 0);
-    u8 *bitmap = (u8 *)pushSize(temp_arena, 4 * width * height);
+    u8 *bitmap = (u8 *)pushSize(arena, 4 * width * height);
     // Blow it out to rgba bitmap
     u32 *dst = (u32 *)bitmap;
     i32 pitch = width;
@@ -286,7 +330,7 @@ int main(int argc, const char *argv[])
   auto platform_arena = newArena(memory_base, platform_memory_cap);
   memory_base += platform_memory_cap;
   auto temp_memory_cap = platform_memory_cap;
-  temp_arena = subArena(platform_arena, temp_memory_cap);
+  Arena temp_arena = subArena(platform_arena, temp_memory_cap);
 
   {// platform memory
     auto cap = megaBytes(64);
@@ -333,7 +377,14 @@ int main(int argc, const char *argv[])
 
   OsxGlobals osx_globals_ = {.mtl_device=mtl_device};
   osx_globals = &osx_globals_;
-  makeCodepointTextures();
+
+  {
+    u64 make_codepoint_start = mach_absolute_time();
+    makeCodepointTextures(temp_arena);
+    f32 elapsed = osxGetSecondsElapsed(make_codepoint_start);
+    printf("make codepoint textures time: %f\n", elapsed);
+  }
+  
   metal_textures[TextureIdWhite] = makeColorTexture(v4{1,1,1,1});
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
@@ -417,9 +468,10 @@ int main(int argc, const char *argv[])
 
   GameInput game_input = {};
   game_input.arena = newArena(memory_base, game_memory_cap);
-  PlatformCode platform_code = {};
+  PlatformCode platform_code = {.readEntireFile = osxReadEntireFile,
+                                .writeToFile = osxWriteEntireFile};
   osxLoadOrReloadGameCode(game);
-  game.initialize(codepoints, game_input.arena, &platform_code);
+  game.initialize(codepoints, game_input.arena, platform_code);
 
   // NOTE: Main game loop
   u64 frame_start_tick = mach_absolute_time();

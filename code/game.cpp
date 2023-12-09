@@ -1,17 +1,18 @@
 /*
   todo:
-  - Accelerate, decelerate
-  - lldb: how to move past debug break
-  - lldb: tell the python script to run the damn program
-  - Array accessor for vectors
-  - Implicitly convert vectors to arrays
-  - Camera control
-  - lldb: how to watch variable
-  - I need vim key bindings for the stupid terminal, like for real
-  - automatically insert breakpoints
+  - Save the camera location to a file, camera location x,y,z, that's it. So the workflow is this: we'll save the state periodically, always, every 10 seconds or so. It is up to the user to "commit" their work. Let's go with binary data format, I don't wanna have to parse text files. Press "w" to save
+  - Reading the scene from a file format
+  - Asset file store
+  - Fun: wrap-around motion
+  - cleanup: Array accessor for vectors
+  - cleanup: Implicitly convert vectors to arrays
   - lldb: fix u8 print, currently it's string
   - lldb: remove breakpoint on current line, the python script isn't working out...
   - Draw some *sick* ray-tracing to the left
+
+  - #failed test the python script dylib hook, don't add the hook if it already is
+  - #sleep lldb: tell the python script to run the damn program
+  - #sleep I need vim key bindings for the stupid terminal, like for real
 
   Rules for the renderer:
   - When you push render entries, dimensions are specified in "meter"
@@ -239,6 +240,11 @@ pushGPUCommand_(GPUCommands &gcommands, u32 size, GPUCommandType type)
 
 #define pushGPUCommand(commands, type) (GPUCommand##type *) pushGPUCommand_(commands, sizeof(GPUCommand##type), GPUCommandType##type)
 
+struct Scene {
+  v3  eye_position;
+  b32 eye_inited;
+};
+
 struct GameState {
   Arena perm_arena;
   Arena temp_arena;
@@ -250,11 +256,10 @@ struct GameState {
   EditorTree *first_tree;
   EditorTree *hot_item;
 
-  f32 direction_key_held_down_time;
-  v3  cursor_tile_offset;
-  v3  tree_tile_offset;
-  v3  eye_position;
-  b32 eye_inited;
+  i32   key_held_frames[kVK_Count];
+  v3    cursor_tile_offset;
+  v3    tree_tile_offset;
+  Scene scene;
 
   PlatformCode platform;
   f32 revolution;
@@ -364,15 +369,6 @@ pushVertices(GPUCommands &gcommands, i32 count)
   return {verts, vstart};
 }
 
-extern "C" GAME_INITIALIZE(gameInitialize)
-{
-  auto &state = *pushStruct(arena, GameState);
-  state.perm_arena = subArena(arena, megaBytes(512));
-  state.temp_arena = subArenaWithRemainingMemory(arena);
-  state.codepoints = codepoints;
-  state.platform   = *code;
-}
-
 struct RaycastOutput {
   b32 hit;
   v3  p;
@@ -448,10 +444,34 @@ screenProject(Screen screen, v3 p)
             dot(screen.y_axis, d)};
 }
 
+char *scene_filename = "../data/scene.ad";
+
+extern "C" GAME_INITIALIZE(gameInitialize)
+{
+  auto &state = *pushStruct(arena, GameState);
+  state.perm_arena = subArena(arena, megaBytes(512));
+  state.temp_arena = subArenaWithRemainingMemory(arena);
+  state.codepoints = codepoints;
+  state.platform   = platform;
+
+  // Read saved state from a file
+  auto temp_marker = beginTemporaryMemory(state.temp_arena);
+  defer(endTemporaryMemory(temp_marker));
+  ReadFileResult scene_file = platform.readEntireFile(state.temp_arena, scene_filename);
+  if (scene_file.content) {
+    u8 *next = scene_file.content;
+    state.scene.eye_position = *EAT_TYPE(next, v3);
+    state.scene.eye_inited   = *EAT_TYPE(next, b32);
+    assert(next <= scene_file.content + scene_file.content_size);
+    printf("loaded data from file %s\n", scene_filename);
+  }
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 {
   b32 hot_reloaded = input.hot_reloaded;
-  GameState &s = *(GameState *)input.arena.base;
+  GameState &state = *(GameState *)input.arena.base;
+  auto &s = state;
 
   Arena &temp_arena  = s.temp_arena;
   auto   temp_marker = beginTemporaryMemory(temp_arena);
@@ -488,35 +508,73 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   debug_drawer.at     = -screen_half_dim + v2{10, 10};
 
   {// Input processing //////////////////////////////////////
-    v3 direction = {};
-    if (input.key_states[kVK_ANSI_L].is_down) {
-      direction.E[0] = 1;
-    } else if (input.key_states[kVK_ANSI_H].is_down) {
-      direction.E[0] = -1;
-    }
-    if (input.key_states[kVK_ANSI_K].is_down) {
-      direction.E[1] = 1;
-    } else if (input.key_states[kVK_ANSI_J].is_down) {
-      direction.E[1] = -1;
-    }
-    if (input.key_states[kVK_ANSI_I].is_down) {
-      direction.E[2] = 1;
-    } else if (input.key_states[kVK_ANSI_O].is_down) {
-      direction.E[2] = -1;
+    f32 &dt = target_frame_time_sec;
+    auto &in = input;
+
+    for (i32 keyi=0; keyi < kVK_Count; keyi++) {
+      // Processing held time
+      if (in.key_states[keyi].is_down) {
+        s.key_held_frames[keyi]++;
+      } else {
+        s.key_held_frames[keyi] = 0;
+      }
     }
 
-    f32 &dt = target_frame_time_sec;
-    f32 &r  = s.revolution;
+    kVK save_key = kVK_ANSI_W;
+    if (in.key_states[save_key].is_down && (s.key_held_frames[save_key] == 1)) {
+      // write data to a save file
+      b32 write_result = s.platform.writeToFile((u8 *)&s.scene, sizeof(s.scene), scene_filename);
+      if (write_result) {
+        printf("Scene data written to file: %s\n", scene_filename);
+      } else {
+        printf("Failed to write to file: %s\n", scene_filename);
+      }
+    }
+
+    v3 direction = {};
+    i32 direction_key_held_frames = 0;  // todo this is a #hack to implement the "new-key" behavior
+    // TODO: cutnpaste code, gross
+    if (in.key_states[kVK_ANSI_L].is_down) {
+      direction.E[0] = 1;
+      direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_L]);
+    } else if (in.key_states[kVK_ANSI_H].is_down) {
+      direction.E[0] = -1;
+      direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_H]);
+    }
+    if (in.key_states[kVK_ANSI_K].is_down) {
+      direction.E[1] = 1;
+      direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_K]);
+    } else if (in.key_states[kVK_ANSI_J].is_down) {
+      direction.E[1] = -1;
+      direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_J]);
+    }
+    if (in.key_states[kVK_ANSI_O].is_down) {
+      direction.E[2] = 1;
+      direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_O]);
+    } else if (in.key_states[kVK_ANSI_I].is_down) {
+      direction.E[2] = -1;
+      direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_I]);
+    }
+
+    // bookmark: We need to record the speed for each UI element, which is kind of an ordeal
+    // Maybe we only save the speed optionally? (Maybe we should just stick to a good speed, and allow rapid acceleration to both ends (you can press the A-D keys to adjust the speed beforehand, and it'll show you the speed))
+    // We're in control adjustment territory, and I'm not sure I wanna go down this rabit hole right now
+    // todo: Let's just implement the control, note down the speed, and see what happens
+    b32 accelerate = false;
+    if (in.key_states[kVK_ANSI_A].is_down) {
+      accelerate = true;
+    }
+
+    f32 &r = s.revolution;
     r += Tau32 * dt;
     if (r > Tau32) {
       r -= Tau32;
     }
 
-    if (input.key_states[kVK_ANSI_E].is_down) {
+    if (in.key_states[kVK_ANSI_E].is_down) {
       s.editing_item = s.hot_item->id;
     }
-
-    if (input.key_states[kVK_Escape].is_down) {
+    if (in.key_states[kVK_Escape].is_down) {
       s.editing_item = mode_tree_id;
     }
 
@@ -524,26 +582,30 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     v3 *offset_ = &s.tree_tile_offset;
     if      (s.editing_item == slider.id) offset_ = &s.cursor_tile_offset;
     else if (s.editing_item == eye.id) {
-      offset_ = &s.eye_position;
+      offset_ = &s.scene.eye_position;
     }
     v3 &offset = *offset_;
 
-    f32 &held_time = s.direction_key_held_down_time;
     if (direction.E[0] != 0 || direction.E[1] != 0 || direction.E[2] != 0) {
-      if (held_time == 0.f) {
+      if (direction_key_held_frames == 1) {
+        // new key-press
         offset += direction;
-      } else if (held_time < 0.25f) {
-        // hold right there!
+      } else if (direction_key_held_frames < 8) {
+        // hold still for some time
       } else {
+        // regular continuous movement
         f32 speed = 10.f;
         if      (s.editing_item == slider.id) speed = 20.f;
-        else if (s.editing_item == eye.id)    speed = 100.f;
+        else if (s.editing_item == eye.id)    speed = 1000.f;
+
+        if (accelerate) {
+          speed *= 10;
+        }
+
         offset += speed * dt * direction;
       }
-      held_time += dt;
     } else if (s.editing_item == slider.id || s.editing_item == mode_tree_id) {
-      offset   = v3{};
-      held_time = 0.0f;
+      offset = v3{};
     }
 
     // TODO: please, no more "offset_int"
@@ -566,35 +628,62 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     }
   }
   
+  f32 E3 = 1000.f;
+  World world = {};
+  Material materials[3];
+  materials[0] = {.color=v3{0,0,0}};
+  materials[1] = {.color=v3{.1,0,0}};
+  materials[2] = {.color=v3{0,.1,.1}};
+  world.materials = materials;
+
+  Plane planes[2] = {{.N=v3{1,1,1}, .d=E3 * -0.1f, .mat_index=1},
+                     {.N=v3{1,0,1}, .d=E3 * -0.2f, .mat_index=2}};
+  world.planes = planes;
+
+  world.plane_count    = arrayCount(planes);
+  world.material_count = arrayCount(materials);
+
+  // Render: Build the push buffer ////////////////////////////////////
+
+  {// push backdrop
+    rgroup.current_z_level = ZLevelBackdrop;
+    pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, v4{0,0,0,1});
+    rgroup.current_z_level = ZLevelGeneral;
+  }
+
+  if (s.editing_item == slider.id)
+  {// push cursor
+    v2 O = {0, screen_half_dim.y};
+    rgroup.current_z_level = ZLevelGeneral;
+    v2 cursor_dim = {20, 20};
+    v2 min = O + v2{(s.cursor_coord + s.cursor_tile_offset.x) * cursor_dim.x,
+                    - cursor_dim.y};
+    auto rect = rectMinDim(min, cursor_dim);
+    pushRect(rgroup, rect, v4{1,0,0,1});
+    pushDebugText("cursor: %d", s.cursor_coord);
+  } else {// push the editor tree
+    v2 min = hadamard(screen_half_dim, {0.5f, -0.0f});
+    drawTreeAndSiblings(s, rgroup, s.first_tree, min);
+  }
+
+  {// push debug text
+    pushDebugText("frame time: %.3f ms", input.last_frame_time_sec * 1000);
+  }
+
   Bitmap ray_bitmap = {};
   {// Ray tracing
-    f32 S = 1000.f;  // scale to prevent tedious typing
-    v3 &eye_p = s.eye_position;
-    if (!s.eye_inited) {
-      s.eye_inited = true;
-      eye_p = S * v3{-1, -.2f, 3};
+    auto &scene = state.scene;
+    v3   &eye_p = scene.eye_position;
+    if (!scene.eye_inited) {
+      scene.eye_inited = true;
+      eye_p = E3 * v3{-1, -.2f, 3};
     }
-    pushDebugText("eye_p: %2.f, %2.f, %2.f", eye_p.x, eye_p.y, eye_p.z);
     v3 eye_z = noz(eye_p);  // NOTE: z comes at you
     v3 eye_x = cross(eye_z, v3{0,0,1});
     v3 eye_y = cross(eye_z, eye_x);
 
     f32 d_eye_screen = 2000.f;  // NOTE: based on real life distance
     v3 screen_center = eye_p - d_eye_screen * eye_z;
-
-    World world = {};
-    Material materials[3];
-    materials[0] = {.color=v3{0,0,0}};
-    materials[1] = {.color=v3{.1,0,0}};
-    materials[2] = {.color=v3{0,.1,.1}};
-    world.materials = materials;
-
-    Plane planes[2] = {{.N=v3{1,1,1}, .d=S * -0.1f, .mat_index=1},
-                       {.N=v3{1,0,1}, .d=S * -0.2f, .mat_index=2}};
-    world.planes = planes;
-
-    world.plane_count    = arrayCount(planes);
-    world.material_count = arrayCount(materials);
 
     // rgba in memory order
     ray_bitmap.dim = {512, 512};
@@ -632,10 +721,10 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
       pushRectOutline(rgroup, rect, 2.f, warm_yellow);
 
       // push coordinate system ///////////////////////////////////////////////
-      v3 p0 = S * v3{0,0,0};
-      v3 px = S * v3{1,0,0};
-      v3 py = S * v3{0,1,0};
-      v3 pz = S * v3{0,0,1};
+      v3 p0 = E3 * v3{0,0,0};
+      v3 px = E3 * v3{1,0,0};
+      v3 py = E3 * v3{0,1,0};
+      v3 pz = E3 * v3{0,0,1};
 
       v3  &screen_N = eye_z;
       f32  screen_d = -dot(eye_p, eye_z) + d_eye_screen;
@@ -657,36 +746,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
         pushLine(rgroup, p0_screen+O, pz_screen+O, 2.f, { 0,  0, .2, 1});
 
         v3 px = px_hit.p;
-        pushDebugText("p0_hit: %.1f, %.1f, %.1f", p0_hit.p.x, p0_hit.p.y, p0_hit.p.z);
+        pushDebugText("eye_p: %2.f, %2.f, %2.f", eye_p.x, eye_p.y, eye_p.z);
+        // pushDebugText("p0_hit: %.1f, %.1f, %.1f", p0_hit.p.x, p0_hit.p.y, p0_hit.p.z);
+        // pushDebugText("p0_screen: %.1f, %.1f", p0_screen.x, p0_screen.y);
       }
     }
-  }
-
-  // Render: Build the push buffer ////////////////////////////////////
-
-  {// push backdrop
-    rgroup.current_z_level = ZLevelBackdrop;
-    pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, v4{0,0,0,1});
-    rgroup.current_z_level = ZLevelGeneral;
-  }
-
-  if (s.editing_item == slider.id)
-  {// push cursor
-    v2 O = {0, screen_half_dim.y};
-    rgroup.current_z_level = ZLevelGeneral;
-    v2 cursor_dim = {20, 20};
-    v2 min = O + v2{(s.cursor_coord + s.cursor_tile_offset.x) * cursor_dim.x,
-                    - cursor_dim.y};
-    auto rect = rectMinDim(min, cursor_dim);
-    pushRect(rgroup, rect, v4{1,0,0,1});
-    pushDebugText("cursor: %d", s.cursor_coord);
-  } else {// push the editor tree
-    v2 min = hadamard(screen_half_dim, {0.5f, -0.0f});
-    drawTreeAndSiblings(s, rgroup, s.first_tree, min);
-  }
-
-  {// push debug text
-    pushDebugText("frame time: %.3f ms", input.last_frame_time_sec * 1000);
   }
 
   // Render: Create GPU commands //////////////////////////////////////////
