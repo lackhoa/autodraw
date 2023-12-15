@@ -99,8 +99,4 @@ struct GameInput {
   v2       screen_dim;
 };
 
-#define GAME_UPDATE_AND_RENDER(NAME) GameOutput NAME(GameInput &input)
-typedef GAME_UPDATE_AND_RENDER(GameUpdateAndRender);
-
-#define GAME_INITIALIZE(name) void name(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
-typedef GAME_INITIALIZE(GameInitialize);
+#include "generated_ad_platform.h"

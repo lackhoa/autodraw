@@ -26,4 +26,5 @@ def generate_scene_structs():
     for field in new_scene_fields:
         print(f"state.scene.{field[1]} = old_scene.{field[1]};")
 
-generate_scene_structs()
+for char in range(ord('A'), ord('Z')+1):
+    print(f"case '{chr(char)}':")

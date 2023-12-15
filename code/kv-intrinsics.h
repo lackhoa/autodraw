@@ -1,20 +1,28 @@
 #pragma once
 
-#include "kv-utils.h"
+#include <stddef.h>
+#include "kv_types.h"
 
-// #include <string.h>  // todo importing a string library just to zero out memory?
+inline void
+zeroMemory(void *dst, size_t size)
+{
+  // todo #speed
+  u8 *dst8 = (u8 *)dst;
+  while (size--) {
+    *dst8++ = 0;
+  }
+}
 
-// inline void
-// zeroMemory(void *destination, size_t length)
-// {
-//     memset(destination, 0, length);
-// }
-
-// inline void
-// copyMemory(void *dst, void *src, size_t size)
-// {
-//     memcpy(dst, src, size);
-// }
+inline void
+copyMemory_(void *src, void *dst, size_t size) // source to dest
+{
+  // todo #speed
+  u8 *dst8 = (u8 *)dst;
+  u8 *src8 = (u8 *)src;
+  while (size--) {
+    *dst8++ = *src8++;
+  }
+}
 
 inline i32
 absoslute(i32 in)

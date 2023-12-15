@@ -1,19 +1,21 @@
 # note: clang compile command is run in the same dir as the source
 CompileFlags:
-  Compiler: clang
+  Compiler: clang++
   Add:
     - -I../libs
+    - -I/usr/local/Cellar/llvm/17.0.6/include
     - -ferror-limit=0
     - -DAUTO_MAC=1
     - -DAUTO_INTERNAL=1
     - -DAUTO_DIAGNOSTICS=1
+    - -DKV_UTILS_IMPLEMENTATION  # NOTE: This flag isn't in the actual build, maybe we can put it there
     - -Wall
     - -Wimplicit-int-float-conversion
     - -Wno-unused-function
     - -Wno-missing-braces
     - -Wno-unused-parameter
-    - -Wno-unused-but-set-variable
-    - -Wno-unused-variable
+    # - -Wno-unused-but-set-variable
+    # - -Wno-unused-variable
     - -Wno-switch
     - -Wno-writable-strings
     - -Wno-c++17-extensions

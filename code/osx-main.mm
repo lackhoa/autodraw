@@ -2,22 +2,24 @@
   The platform layer shouldn't know about the game, except for platform
  */
 
-#import <stdio.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+
 #import <Metal/Metal.h>
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <mach/mach_time.h>
+
+#import <stdio.h>
 #import <sys/stat.h>
 #import <dlfcn.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "imstb_truetype.h"
+
 #pragma clang diagnostic pop
 
 #import "kv-utils.h"
-#import "kv-math.h"
 #import "shader-interface.h"
 #import "platform.h"
 #import "kv-bitmap.h"
@@ -308,11 +310,13 @@ osxLoadOrReloadGameCode(GameCode &game) {
       assert(game.initialize);
     }
 
-    game.updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
-    if (!game.updateAndRender) {
+    auto updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
+    if (!updateAndRender) {
+      assert(game.updateAndRender);  // We'll fail if the game function doesn't exist
       printf("error: can't load gameUpdateAndRender from %s\n", game.dylib_name);
       return false;
     }
+    game.updateAndRender = updateAndRender;
 
     printf("Hot loaded: %s, mtime: %ld\n", game.dylib_name, mtime);
     return true;
@@ -499,11 +503,11 @@ int main(int argc, const char *argv[])
             u32 modifier_flags = [event modifierFlags];
             b32 cmd_held       = (modifier_flags & NSCommandKeyMask) > 0;
             b32 ctrl_held      = (modifier_flags & NSControlKeyMask) > 0;
-            b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
-            b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
+            unused_var b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
+            unused_var b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
             
             // We'd like to handle repeat ourselves
-            b32 is_repeat = [event isARepeat];
+            unused_var b32 is_repeat = [event isARepeat];
 
             bool is_down = (event.type == NSEventTypeKeyDown);
             if ((event.keyCode == kVK_ANSI_Q) && is_down && cmd_held) {
@@ -537,7 +541,7 @@ int main(int argc, const char *argv[])
         game_input.screen_dim = v2{(f32)frame.size.width,
                                    (f32)frame.size.height};
       }
-      
+
       GameOutput game_output = game.updateAndRender(game_input);
 
       // sleep

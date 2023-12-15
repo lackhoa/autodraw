@@ -1,31 +1,30 @@
+/*
+  Usage: Define "KV_UTILS_IMPLEMENTATION" before including this file to get the
+  implementation for your compilation unit.
+
+  String printing Q: What is the "temp_arena.used++" crap?
+   No, it's because by default, we don't say "include the nil term in my string please!"
+   So that we support concatenation by default
+   HOWEVER, when interoping with C function like fprintf, we need to move arena base up,
+   so that whatever string we append on top of the arena will not get pulled in.
+   I should have remembered this fact, but I didn't, disappointing but what are ya gonna do!
+
+  TODO: overhaul of the string library
+  String library: when converting from C string to our string, always put a +1 nil terminator,
+  because we feel like it's just a conversion, and can be converted back.
+*/
+
 #pragma once
 
-#include <cstdint>
-#include <stdio.h>
+#include <stdlib.h> // malloc, free
+#include <stdio.h>  // printf
 #include <stdarg.h>
 #include <stddef.h>
-#include <float.h>
-// #include "stdlib.h"
+#include "kv-intrinsics.h"
 
-struct BufferHeader {
-  size_t len;
-  size_t cap;
-  void *items[0];
-};
-
-#define bufHeader_(buffer) ((BufferHeader *)((char *)(buffer) - offsetof(BufferHeader, items)))
-#define doesBufFit_(buffer, new_len) (new_len <= bufCap(buffer))
-#define bufFit_(buffer, new_len) doesBufFit_(buffer, new_len) ? 0 : (buffer = (mytypeof(buffer))bufGrow_(buffer, new_len, sizeof(*buffer)))
-#define bufLen(buffer) (buffer ? bufHeader_(buffer)->len : 0)
-#define bufCap(buffer) (buffer ? bufHeader_(buffer)->cap : 0)
-#define bufPush(buffer, item) (bufFit_(buffer, bufLen(buffer)+1)), buffer[bufHeader_(buffer)->len++] = item
-#define bufFree(buffer) free(bufHeader_(buffer))
-
-void * bufGrow_(void *buffer, size_t new_len, size_t item_size);
-
-//
-// Compilers
-//
+/*
+  Compilers
+*/
 
 #if __llvm__
 #    undef COMPILER_LLVM
@@ -42,18 +41,6 @@ void * bufGrow_(void *buffer, size_t new_len, size_t item_size);
 #define global_variable UNUSED_VAR static
 #define global_constant UNUSED_VAR static
 #define local_persist   static
-
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef int32_t  i32;
-typedef long     i64;
-typedef int8_t   b8;
-typedef int32_t  b32;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef float    r32;
-typedef float    f32;  // todo Not sure why we don't just use this?
 
 #define kiloBytes(value) ((value)*1024LL)
 #define megaBytes(value) (kiloBytes(value)*1024LL)
@@ -168,24 +155,24 @@ pushSizeBackward(Arena &arena, size_t size)
   return(out);
 }
 
-// todo: clang broke __VA_ARGS__!
-#define pushStruct(arena, type) (type *) pushSize(arena, sizeof(type))
+// NOTE: Apparently ##__VA_ARGS__ is the thing
+#define pushStruct(arena, type, ...)    (type *) pushSize(arena, sizeof(type), ##__VA_ARGS__)
 #define pushStructBackward(arena, type) (type *) pushSizeBackward(arena, sizeof(type))
-#define pushArray(arena, count, type) (type *) pushSize(arena, (count)*sizeof(type))
-#define allocate(arena, x, ...) x = (mytypeof(x)) pushSize(arena, sizeof(*x), __VA_ARGS__)
-#define allocateArray(arena, count, x, ...) x = (mytypeof(x)) pushSize(arena, (count)*sizeof(*x), __VA_ARGS__)
+#define pushArray(arena, count, type)   (type *) pushSize(arena, (count)*sizeof(type))
+#define allocate(arena, x, ...) x = (mytypeof(x)) pushSize(arena, sizeof(*x), ##__VA_ARGS__)
+#define allocateArray(arena, count, x, ...) x = (mytypeof(x)) pushSize(arena, (count)*sizeof(*x), ##__VA_ARGS__)
 
 #define pushItems_1(array, index, item) array[index] = item;
-#define pushItems_2(array, index, item, ...) array[index] = item; pushItems_1(array, index+1, __VA_ARGS__);
-#define pushItems_3(array, index, item, ...) array[index] = item; pushItems_2(array, index+1, __VA_ARGS__);
+#define pushItems_2(array, index, item, ...) array[index] = item; pushItems_1(array, index+1, ##__VA_ARGS__);
+#define pushItems_3(array, index, item, ...) array[index] = item; pushItems_2(array, index+1, ##__VA_ARGS__);
 #define pushItems_N(N, ...) CONCATENATE(pushItems_, N)
 
 #define pushItems(arena, array, item, ...)     \
-  array = (mytypeof(item) *) pushArray(arena, PP_NARG(item, __VA_ARGS__), mytypeof(item)); \
-  pushItems_N(PP_NARG(item, __VA_ARGS__), __VA_ARGS__)(array, 0, item, __VA_ARGS__)
+  array = (mytypeof(item) *) pushArray(arena, PP_NARG(item, ##__VA_ARGS__), mytypeof(item)); \
+  pushItems_N(PP_NARG(item, ##__VA_ARGS__), ##__VA_ARGS__)(array, 0, item, ##__VA_ARGS__)
 
 #define pushItemsAs(...) \
-  auto pushItems(__VA_ARGS__)
+  auto pushItems(##__VA_ARGS__)
 
 inline Arena
 subArena(Arena &parent, size_t size)
@@ -240,22 +227,23 @@ checkArena(Arena *arena)
     assert(arena->temp_count == 0);
 }
 
-// todo re-implement these
-// inline void
-// resetArena(Arena *arena, b32 zero=false)
-// {
-//   arena->used = 0;
-//   if (zero)
-//     zeroMemory(arena->base, arena->cap);
-// }
+inline void
+resetArena(Arena &arena, b32 zero=false)
+{
+  arena.used = 0;
+  if (zero) {
+    zeroMemory(arena.base, arena.cap);
+  }
+}
 
-// inline void *
-// copySize(Arena *arena, void *src, size_t size)
-// {
-//   void *dst = pushSize(arena, size);
-//   copyMemory(dst, src, size);
-//   return dst;
-// }
+// TODO: this should be called "copyToArena"
+inline void *
+copySize(Arena &arena, void *src, size_t size)
+{
+  void *dst = pushSize(arena, size);
+  copyMemory_(src, dst, size);
+  return dst;
+}
 
 #if COMPILER_MSVC
 #    define mytypeof decltype
@@ -381,9 +369,8 @@ toString(const char *c)
   String out;
   out.chars  = (char*)c;
   out.length = 0;
-  while (*c) {
+  while (*c++) {
     out.length++;
-    c++;
   }
   return out;
 }
@@ -397,7 +384,8 @@ toString(Arena &arena, const char *c)
   while ((*dst++ = *c++)) {
     out.length++;
   }
-  pushSize(arena, out.length);
+  *dst = '\0';
+  pushSize(arena, out.length+1);
   return out;
 }
 
@@ -481,6 +469,13 @@ print(String s)
   printf("%.*s", s.length, s.chars);
 }
 
+internal void
+print(Arena &buffer, char character)
+{
+  char *string = (char *)pushSize(buffer, 1);
+  string[0] = character;
+}
+
 // todo #cleanup same as "inArena"?
 inline b32
 belongsToArena(Arena *arena, u8 *memory)
@@ -492,8 +487,8 @@ belongsToArena(Arena *arena, u8 *memory)
 #define minimum(a, b) ((a < b) ? a : b)
 
 // Metaprogramming tags
-#define forward_declare
-#define embed_struct
+#define forward_declare(FILE_NAME)
+#define function_typedef(FILE_NAME)
 
 inline char
 toLowerCase(char c)
@@ -539,20 +534,19 @@ inline void dump(String s) {print(0, s);}
 
 
 inline b32
-inArena(Arena *arena, void *p)
+inArena(Arena &arena, void *p)
 {
-  return ((u64)p >= (u64)arena->base && (u64)p < (u64)arena->base+arena->cap);
+  return ((u64)p >= (u64)arena.base && (u64)p < (u64)arena.base+arena.cap);
 }
 
-// todo Reimplement
-// inline String
-// copyString(Arena *buffer, String src)
-// {
-//   String out;
-//   out.chars  = copyArray(buffer, src.length, src.chars);
-//   out.length = src.length;
-//   return out;
-// }
+inline String
+copyString(Arena &buffer, String src)
+{
+  String out;
+  out.chars  = copyArray(buffer, src.length, src.chars);
+  out.length = src.length;
+  return out;
+}
 
 inline void
 concat(String *a, String b)
@@ -610,3 +604,57 @@ privDefer<F> defer_func(F f) {
 // end defer macro //////////////////
 
 #define EAT_TYPE(POINTER, TYPE) (TYPE *)(POINTER += sizeof(TYPE), POINTER - sizeof(TYPE))
+
+#define DLL_EXPORT extern "C" __attribute__((visibility("default")))
+
+
+void *xmalloc(size_t size) {
+  void *ptr = malloc(size);
+  if (!ptr) {
+    perror("xmalloc failed");
+    exit(1);
+  }
+  return ptr;
+}
+
+/* 
+   Stretchy buffer by Sean Barrett
+ */
+
+struct BufferHeader {
+  size_t len;
+  size_t cap;
+  char items[0];
+};
+
+#define bufHeader_(buffer) ((BufferHeader *)((char *)(buffer) - offsetof(BufferHeader, items)))
+#define doesBufFit_(buffer, new_len) (new_len <= bufCap(buffer))
+#define bufFit_(buffer, new_len) doesBufFit_(buffer, new_len) ? 0 : (buffer = (mytypeof(buffer))bufGrow_(buffer, new_len, sizeof(*buffer)))
+#define bufLength(buffer) (buffer ? bufHeader_(buffer)->len : 0)
+#define bufCap(buffer) (buffer ? bufHeader_(buffer)->cap : 0)
+#define bufPush(buffer, item) (bufFit_(buffer, bufLength(buffer)+1)), buffer[bufHeader_(buffer)->len++] = item
+#define bufFree(buffer) free(bufHeader_(buffer))
+
+void * bufGrow_(void *buffer, size_t new_len, size_t item_size);
+
+#ifdef KV_UTILS_IMPLEMENTATION
+void *
+bufGrow_(void *buffer, size_t new_len, size_t item_size)
+{
+  size_t new_cap = maximum(bufCap(buffer)*2, new_len);
+  size_t new_size = sizeof(BufferHeader)+new_cap*item_size;
+  BufferHeader *new_header = 0;
+  if (buffer) {
+    new_header = (BufferHeader *)realloc(bufHeader_(buffer), new_size);
+  } else {
+    new_header = (BufferHeader *)xmalloc(new_size);
+    new_header->len = 0;
+  }
+  new_header->cap = new_cap;
+  buffer = new_header->items;
+  assert(bufCap(buffer) >= new_len);
+  return buffer;
+}
+#endif // KV_UTILS_IMPLEMENTATION
+
+/* End of stretchy buffer */

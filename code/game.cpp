@@ -1,12 +1,13 @@
 /*
   todo:
-  - Think about the file format packing?
-  - Need the attachment log file format
-  - Need a way to save the schema of the file format, just in case we forgot how to read it.
-  - Save the camera location to a file, camera location x,y,z, that's it. So the workflow is this: we'll save the state periodically, always, every 10 seconds or so. It is up to the user to "commit" their work. Press "w" to save immediately
-  - Reading the scene from a file format
-  - Asset file store
-  - Fun: wrap-around motion
+  - Porting our lexer code
+  - emacs: evil broken word boundary: like when you dW "foo(x,y)" you'd delete the whole thing
+  - Martin's compiler stuff
+  - Port the raytracing code and camera movement out to the language
+  - better camera control: save the camera z axis
+  - cleanup: Need the attachment system for logs
+  - autosave: we'll save the state periodically, always, every minute or so. It is up to the user to "commit" their work. Press "w" to save immediately.
+  - Fun: wrap-around cursor movement
   - cleanup: Array accessor for vectors
   - cleanup: Implicitly convert vectors to arrays
   - lldb: fix u8 print, currently it's string
@@ -27,11 +28,15 @@
  */
 
 #import <time.h>
+#define KV_UTILS_IMPLEMENTATION
 #include "kv-utils.h"
 #include "platform.h"
 #include "shader-interface.h"
 #include "kv-bitmap.h"
 #include "ray.h"
+#include "ad_typer.cpp"
+
+global_variable Tokenizer init_tokenizer;
 
 enum ZLevel {
   ZLevelBackdrop,
@@ -69,7 +74,7 @@ struct RenderGroup {
   Arena      commands;
   i32        z_bucket_count[ZLevelCount_];
   ZLevel     current_z_level;
-  Arena      temp_arena;
+  Arena      arena;
   Codepoint *codepoints;
   i32        monospaced_width;
   // We won't specific meter_to_pixel here, it is up to the thing that does the rendering
@@ -113,7 +118,7 @@ pushRenderEntry_(RenderGroup &rgroup, u32 size, RenderEntryType type)
 
 #define pushRenderEntry(rgroup, type) (RenderEntry##type *) pushRenderEntry_(rgroup, sizeof(RenderEntry##type), RenderEntryType##type)
 
-internal void
+void
 pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture, v4 color)
 {
   RenderEntryQuad &entry = *pushRenderEntry(rgroup, Quad);
@@ -137,7 +142,7 @@ pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
   pushRect(rgroup, rect, texture, v4{1,1,1,1});
 }
 
-internal void
+void
 pushRectOutline(RenderGroup &rgroup, rect2 outline, f32 thickness, v4 color)
 {
   assert(thickness >= 2);  // our outlines are divided in half
@@ -156,7 +161,7 @@ pushRectOutline(RenderGroup &rgroup, rect2 outline, f32 thickness, v4 color)
   pushRect(rgroup, rect2{min+dimy-t, max+t}, color);
 }
 
-internal void
+void
 pushLine(RenderGroup &rgroup, v2 p0, v2 p1, f32 thickness, v4 color)
 {
   RenderEntryQuad &entry = *pushRenderEntry(rgroup, Quad);
@@ -192,7 +197,7 @@ pushLetter(RenderGroup &rgroup, v2 min, char character, v4 color)
   return dim.y;
 }
 
-internal f32
+f32
 pushText(RenderGroup &rgroup, v2 min, String string, v4 color)
 {
   f32 max_dim_y = 0;
@@ -213,7 +218,7 @@ pushTextFormat(RenderGroup &rgroup, v2 min, v4 color, char *format, ...)
 {
   va_list args;
   va_start(args, format);
-  auto string = printVA(rgroup.temp_arena, format, args);
+  auto string = printVA(rgroup.arena, format, args);
   va_end(args);
   return pushText(rgroup, min, string, color);
 }
@@ -263,8 +268,8 @@ struct Scene {
 } __attribute__((packed));
 
 struct GameState {
-  Arena perm_arena;
-  Arena temp_arena;
+  Arena arena;
+  Arena frame_arena;
   Codepoint *codepoints;
 
   TreeID editing_item;
@@ -283,15 +288,15 @@ struct GameState {
   f32 revolution;
 };
 
-internal v4 warm_yellow = v4{.5, .5, .3, 1};
+v4 warm_yellow = v4{.5, .5, .3, 1};
 
-internal f32 editor_margin      = 5;
-internal f32 editor_indentation = 20;
+f32 editor_margin      = 5;
+f32 editor_indentation = 20;
 
-internal rect2
+rect2
 drawSingleTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 min);
 
-internal rect2
+rect2
 drawTreeAndSiblings(GameState &state, RenderGroup &rgroup, EditorTree *tree, v2 trees_min)
 {
   v2 max = trees_min;
@@ -308,7 +313,7 @@ drawTreeAndSiblings(GameState &state, RenderGroup &rgroup, EditorTree *tree, v2 
   return rect2{trees_min, max};
 }
 
-internal rect2
+rect2
 drawSingleTree(GameState &state, RenderGroup &rgroup, EditorTree &tree, v2 tree_min)
 {
   f32 data_dim_x  = todo_text_scale * (f32)rgroup.monospaced_width * (f32)tree.name.length;
@@ -359,7 +364,6 @@ inline void
 moveCursor(GameState &state, i32 dx)
 {
   i32 &coord = state.cursor_coord;
-  i32 old_coord = state.cursor_coord;
   f32 &offset = state.cursor_tile_offset.x;
   coord += dx;
   if ((coord < 0) || (coord == 0 && offset < 0)) {
@@ -392,7 +396,7 @@ struct RaycastOutput {
   v3  p;
 };
 
-internal RaycastOutput
+RaycastOutput
 raycastPlane(v3 ray_origin, v3 ray_direction, v3 plane_N, f32 plane_d)
 {
   RaycastOutput out = {};
@@ -407,7 +411,7 @@ raycastPlane(v3 ray_origin, v3 ray_direction, v3 plane_N, f32 plane_d)
   return out;
 }
 
-internal RaycastOutput
+RaycastOutput
 screencast(v3 ray_origin, v3 ray_direction, v3 plane_N, f32 plane_d)
 {
   RaycastOutput out = {};
@@ -421,7 +425,7 @@ screencast(v3 ray_origin, v3 ray_direction, v3 plane_N, f32 plane_d)
   return out;
 }
 
-internal v3
+v3
 raycast(World &world, v3 ray_origin, v3 ray_direction)
 {
   i32 mat_index = 0;
@@ -440,7 +444,7 @@ raycast(World &world, v3 ray_origin, v3 ray_direction)
   return world.materials[mat_index].color;
 }
 
-internal void
+void
 pushLine(RenderGroup rgroup, v3 p0, v3 p1, f32 thickness_px, v4 color)
 {
   // v2 p0_screen = eye, p0;
@@ -462,28 +466,42 @@ screenProject(Screen screen, v3 p)
             dot(screen.y_axis, d)};
 }
 
-// TODO cleanup ../data file path
+// todo cleanup ../data file path
 char *scene_filename = "../data/scene.ad";
 
-internal void
+void
 initScene(Scene &scene) {
   scene.magic_number = scene_file_format_magic_number;
   scene.version      = current_scene_file_format_version;
 }
 
-extern "C" GAME_INITIALIZE(gameInitialize)
+function_typedef("generated_ad_platform.h")
+DLL_EXPORT void
+gameInitialize(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
 {
+  {// Testing
+    Tokenizer tk;
+    initTokenizer(tk, "+()123+234");
+    TK = &tk;
+    do {
+      eatToken();
+      printf("token kind is: %d\n", tk.last_token.kind);
+    } while (tk.last_token.kind);
+  }
+
   auto &state = *pushStruct(init_arena, GameState);
-  state.perm_arena = subArena(init_arena, megaBytes(512));
-  state.temp_arena = subArenaWithRemainingMemory(init_arena);
-  state.codepoints = codepoints;
-  state.platform   = platform;
+  state.arena = subArena(init_arena, megaBytes(512));
+  state.frame_arena = subArenaWithRemainingMemory(init_arena);
+  state.codepoints  = codepoints;
+  state.platform    = platform;
   
-  {// Read saved scene from a file
-    auto temp_marker = beginTemporaryMemory(state.temp_arena);
+  {// readSceneFile
+    auto temp_marker = beginTemporaryMemory(state.arena);
     defer(endTemporaryMemory(temp_marker));
+    auto &arena = state.arena;
+
     // Read into a temp buffer first
-    ReadFileResult scene_file = state.platform.readEntireFile(state.temp_arena, scene_filename);
+    ReadFileResult scene_file = state.platform.readEntireFile(arena, scene_filename);
     if (!scene_file) {
       printf("scene file %s empty or doesn't exist", scene_filename);
     }
@@ -544,32 +562,90 @@ extern "C" GAME_INITIALIZE(gameInitialize)
       }
     }
   }
+
+  #if 0
+{// parseTopLevel
+    auto file = platform.readEntireFile(state.arena, "../data/hello_world.ad");
+    initTokenizer(init_tokenizer, (char *)file.content);
+    TK = &init_tokenizer;
+
+    Token token = nextToken();
+    while (hasMore()) {
+      auto tl_temp = beginTemporaryMemory(state.arena);
+      defer(endTemporaryMemory(tl_temp));
+      auto &arena = state.arena;
+      error_buffer = subArena(arena, 2048);
+
+      Typer typer = {};
+
+      if (isIdentifier(token))
+      {
+        Token after_name = nextToken();
+
+        switch (after_name.kind)
+        {
+          case ':':
+          {
+            pushContext("variable: NAME : TYPE = VALUE");
+            if (Term *type = parseAndBuildGlobal(typer)) {
+              if (requireString("=")) {
+                if (Term *rhs = parseAndBuildGlobal(typer, type)) {
+                  addGlobalBinding(token, rhs);
+                }
+              }
+            }
+          } break;
+
+          case Token_ColonEqual:
+          {
+            pushContext("variable: NAME := VALUE");
+            if (Term *rhs = parseAndBuildGlobal(typer)) {
+              addGlobalBinding(token, rhs);
+            }
+            popContext();
+          } break;
+
+          default:
+          {
+            tokenError("unexpected token after identifier");
+          } break;
+        }
+      }
+      else {
+        tokenError("unexpected token to begin top-level form");
+      }
+    }
+  }
+#endif
+
 }
 
-extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
+// DLL_EXPORT GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
+function_typedef("generated_ad_platform.h")
+DLL_EXPORT GameOutput gameUpdateAndRender(GameInput &input)
 {
-  b32 hot_reloaded = input.hot_reloaded;
+  unused_var b32 hot_reloaded = input.hot_reloaded;
   GameState &state = *(GameState *)input.arena.base;
   auto &s = state;
 
-  Arena &temp_arena  = s.temp_arena;
-  auto   temp_marker = beginTemporaryMemory(temp_arena);
+  auto temp_marker = beginTemporaryMemory(s.frame_arena);
   defer(endTemporaryMemory(temp_marker));
+  auto &arena = s.frame_arena;
 
   v2 &screen_dim      = input.screen_dim;
   v2  screen_half_dim = 0.5f * screen_dim;
   v2 pixel_to_clip = {1.f / screen_half_dim.x,
                       1.f / screen_half_dim.y};
 
-  EditorTree &eye    = *pushStruct(temp_arena, EditorTree);
-  auto &mom    = *pushStruct(temp_arena, EditorTree);
-  auto &slider = *pushStruct(temp_arena, EditorTree);
+  EditorTree &eye    = *pushStruct(arena, EditorTree);
+  auto &mom    = *pushStruct(arena, EditorTree);
+  auto &slider = *pushStruct(arena, EditorTree);
 
-  eye    = {.id=1, .name=toString(temp_arena, "eye"),
-             .next_sibling=&mom};
-  mom    = {.id=2, .name=toString(temp_arena, "mom"),
+  eye    = {.id=1, .name=toString(arena, "eye"),
+            .next_sibling=&mom};
+  mom    = {.id=2, .name=toString(arena, "mom"),
             .children=&slider, .prev_sibling=&eye};
-  slider = {.id=3, .name=toString(temp_arena, "slider"),
+  slider = {.id=3, .name=toString(arena, "slider"),
             .parent=&mom};
 
   s.first_tree = &eye;
@@ -578,11 +654,11 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   RenderGroup rgroup = {};
   rgroup.codepoints       = s.codepoints;
   rgroup.monospaced_width = (f32)s.codepoints[(u8)'a'].width;
-  rgroup.commands         = subArena(temp_arena, megaBytes(8));
-  rgroup.temp_arena       = subArena(temp_arena, kiloBytes(128));
+  rgroup.commands         = subArena(arena, megaBytes(8));
+  rgroup.arena            = subArena(arena, kiloBytes(128));
   rgroup.current_z_level  = ZLevelGeneral;
 
-  debug_drawer.arena  = subArena(temp_arena, kiloBytes(128));
+  debug_drawer.arena  = subArena(arena, kiloBytes(128));
   debug_drawer.rgroup = &rgroup;
   debug_drawer.at     = -screen_half_dim + v2{10, 10};
 
@@ -773,7 +849,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
     auto bitmap_dim = ray_bitmap.dim;
     ray_bitmap.pitch = 4*bitmap_dim.x;
 
-    u32 *bitmap = pushArray(temp_arena, bitmap_dim.x*bitmap_dim.y, u32);
+    u32 *bitmap = pushArray(arena, bitmap_dim.x*bitmap_dim.y, u32);
     u32 *dst = bitmap;
     v2 ray_bitmap_half_dim = .5f * ray_bitmap.dim;
     for (i32 y = (i32)-ray_bitmap_half_dim.y;
@@ -828,8 +904,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
         pushLine(rgroup, p0_screen+O, py_screen+O, 2.f, { 0, .2,  0, 1});
         pushLine(rgroup, p0_screen+O, pz_screen+O, 2.f, { 0,  0, .2, 1});
 
-        v3 px = px_hit.p;
         pushDebugText("eye_p: %2.f, %2.f, %2.f", eye_p.x, eye_p.y, eye_p.z);
+        // v3 px = px_hit.p;
         // pushDebugText("p0_hit: %.1f, %.1f, %.1f", p0_hit.p.x, p0_hit.p.y, p0_hit.p.z);
         // pushDebugText("p0_screen: %.1f, %.1f", p0_screen.x, p0_screen.y);
       }
@@ -839,8 +915,8 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   // Render: Create GPU commands //////////////////////////////////////////
 
   GPUCommands gcommands = {};
-  gcommands.commands      = subArena(temp_arena, megaBytes(8));
-  gcommands.vertex_buffer = subArena(temp_arena, megaBytes(8));
+  gcommands.commands      = subArena(arena, megaBytes(8));
+  gcommands.vertex_buffer = subArena(arena, megaBytes(8));
 
   i32 render_command_count = 0;
   for (i32 i=0; i < ZLevelCount_; i++) {
@@ -850,7 +926,7 @@ extern "C" GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
   i32 next_z_bucket_index[ZLevelCount_] = {};
   i32 *z_buckets[ZLevelCount_];
   for (i32 bucket_i=0; bucket_i < ZLevelCount_; bucket_i++) {
-    z_buckets[bucket_i] = pushArray(temp_arena, rgroup.z_bucket_count[bucket_i], i32);
+    z_buckets[bucket_i] = pushArray(arena, rgroup.z_bucket_count[bucket_i], i32);
   }
 
   for (i32 command_i=0; command_i < render_command_count; command_i++) {

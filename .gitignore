@@ -5,3 +5,4 @@ build
 references/
 __pycache__
 data
+libs/clang-17.0.6-python-bindings
