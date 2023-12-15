@@ -44,7 +44,7 @@ try:
         run(command) # Run in a new process group
     else:
         # Set compiler and linker flags
-        DEBUG_MODE = True
+        DEBUG_MODE = False
 
         optimization_flag = '-O0' if DEBUG_MODE else '-O2'
         constants = ['-DAUTO_MAC', '-DAUTO_INTERNAL=1', '-DAUTO_DIAGNOSTICS=1']
@@ -55,7 +55,7 @@ try:
 
         todo_llvm_path = "/usr/local/Cellar/llvm/17.0.6" # llvm-config --libdir
         print("NOTE: codegen: compile")
-        run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator,o', f'-I{todo_llvm_path}/include'] + common_compiler_flags + sanitizer)
+        run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator.o', f'-I{todo_llvm_path}/include'] + common_compiler_flags + sanitizer)
         #
         print("NOTE: codegen: link")
         run(['clang++', 'generator.o', '-o', 'generator', f'-L{todo_llvm_path}/lib', f'-I{todo_llvm_path}/include', '-lclang'] + sanitizer)
@@ -64,8 +64,8 @@ try:
         current_directory = os.getcwd()
         run(["./generator"])
 
-        print('NOTE: Compile the game to a dll')
-        run(['ccache', 'clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] +
+        print('NOTE: Compile + Link the game to produce a dylib')
+        run(['clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] +
             common_compiler_flags + sanitizer)
 
         print('NOTE: Compile osx app')

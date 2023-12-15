@@ -2,16 +2,19 @@
   Usage: Define "KV_UTILS_IMPLEMENTATION" before including this file to get the
   implementation for your compilation unit.
 
-  String printing Q: What is the "temp_arena.used++" crap?
-   No, it's because by default, we don't say "include the nil term in my string please!"
-   So that we support concatenation by default
-   HOWEVER, when interoping with C function like fprintf, we need to move arena base up,
-   so that whatever string we append on top of the arena will not get pulled in.
-   I should have remembered this fact, but I didn't, disappointing but what are ya gonna do!
+  --------------- Printing -----------------
+
+  After printing a string to an arena, there is nil-termination, but that might
+  be overwritten. You can lock the termination by simply incrementing the arena
+  base pointer.
+
+  When converting from C string to our string (using e.g "toString"), always put
+  a +1 nil terminator (and keep it there as long as the string can be referenced
+  ), because we feel like it's just a conversion, and can be converted back.
+
+  All non-nil-terminated strings must be marked explicitly with "non_nil"
 
   TODO: overhaul of the string library
-  String library: when converting from C string to our string, always put a +1 nil terminator,
-  because we feel like it's just a conversion, and can be converted back.
 */
 
 #pragma once
@@ -65,6 +68,7 @@
 #define invalidCodePath assert(false)
 #define todoErrorReport assert(false)
 #define todoIncomplete  assert(false)
+#define todoTestMe      assert(false)
 #define todoOutlaw      assert(false)
 #define todoUnknown     assert(false)
 #define invalidDefaultCase default: { assert(false); };
@@ -116,8 +120,6 @@ struct Arena
 
   i32 temp_count;
 };
-
-typedef Arena StringBuffer;
 
 inline Arena
 newArena(void *base, size_t cap)
@@ -255,11 +257,13 @@ copySize(Arena &arena, void *src, size_t size)
 /* #define copyStructNoCast(arena, src) copySize(arena, src, sizeof(*(src))) */
 #define copyArray(arena, count, src) (mytypeof(src)) copySize(arena, (src), count*sizeof(*(src)))
 
-// inline b32
-// inRange(i32 min, i32 val, i32 max)
-// {
-//     return (min <= val) && (val <= max);
-// }
+inline u8 *
+getNext(Arena &buffer)
+{
+  return (buffer.base + buffer.used);
+}
+
+/* MARK: String */
 
 inline i32
 stringLength(char *string)
@@ -281,11 +285,7 @@ struct String
   operator bool() {return chars;}
 };
 
-inline u8 *
-getNext(Arena &buffer)
-{
-  return (buffer.base + buffer.used);
-}
+typedef Arena StringBuffer;
 
 struct StartString {
   StringBuffer &buffer;
@@ -389,28 +389,39 @@ toString(Arena &arena, const char *c)
   return out;
 }
 
+inline char *
+toCString(Arena &arena, String string)
+{
+  char *out = (char *)copySize(arena, string.chars, string.length+1);
+  u8 *next = getNext(arena) - 1;
+  *next = 0;
+  return out;
+}
+
+// NOTE: "temporary" means that your string nil terminator might be stomped on in the future
+// Useful for passing the string to fopen or something.
+inline char *
+toCStringTemporary(String string)
+{
+  assert(*(string.chars + string.length) == 0);
+  return string.chars;
+}
+
 inline b32
 equal(char *s1, char *s2)
 {
+  todoTestMe;
   b32 out = true;
   char *c1 = s1;
   char *c2 = s2;
-  while (true)
+  while (*c1++ == *c2++)
   {
-    if (*c1 != *c2)
-    {
-      out = false;
+    if (*c1 == 0) {
+      out = (*c2 == 0);
       break;
-    }
-    else
-    {
-      if (*c1 == 0)
-        break;
-      else
-      {
-        c1++;
-        c2++;
-      }
+    } else if (*c2 == 0) {
+      out = (*c1 == 0);
+      break;
     }
   }
   return out;
@@ -463,18 +474,18 @@ print(Arena &buffer, String s)
   return out;
 }
 
-inline void
-print(String s)
-{
-  printf("%.*s", s.length, s.chars);
-}
+// inline void  todo: we don't ever wanna use this.
+// print(String s)
+// {
+//   printf("%.*s", s.length, s.chars);
+// }
 
-internal void
-print(Arena &buffer, char character)
-{
-  char *string = (char *)pushSize(buffer, 1);
-  string[0] = character;
-}
+// internal void  todo: just use the "%c" format in printf
+// print(Arena &buffer, char character)
+// {
+//   char *string = (char *)pushSize(buffer, 1);
+//   *string = character;
+// }
 
 // todo #cleanup same as "inArena"?
 inline b32
@@ -525,20 +536,6 @@ isSubstring(String full, String sub, b32 case_sensitive=true)
   return out;
 }
 
-inline void dump() {printf("\n");}
-inline void dump(int d) {printf("%d", d);}
-inline void dump(char *c) {printf("%s", c);}
-#if 0
-inline void dump(String s) {print(0, s);}
-#endif
-
-
-inline b32
-inArena(Arena &arena, void *p)
-{
-  return ((u64)p >= (u64)arena.base && (u64)p < (u64)arena.base+arena.cap);
-}
-
 inline String
 copyString(Arena &buffer, String src)
 {
@@ -548,10 +545,23 @@ copyString(Arena &buffer, String src)
   return out;
 }
 
+inline void dump() {printf("\n");}
+inline void dump(int d) {printf("%d", d);}
+inline void dump(char *c) {printf("%s", c);}
+inline void dump(String s) {printf("%.*s", s.length, s.chars);}
+
 inline void
 concat(String *a, String b)
 {
   a->length += b.length;
+}
+
+/* MARK: End of String */
+
+inline b32
+inArena(Arena &arena, void *p)
+{
+  return ((u64)p >= (u64)arena.base && (u64)p < (u64)arena.base+arena.cap);
 }
 
 inline b32
