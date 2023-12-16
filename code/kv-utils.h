@@ -13,8 +13,6 @@
   ), because we feel like it's just a conversion, and can be converted back.
 
   All non-nil-terminated strings must be marked explicitly with "non_nil"
-
-  TODO: overhaul of the string library
 */
 
 #pragma once
@@ -238,9 +236,8 @@ resetArena(Arena &arena, b32 zero=false)
   }
 }
 
-// TODO: this should be called "copyToArena"
 inline void *
-copySize(Arena &arena, void *src, size_t size)
+pushCopySize(Arena &arena, void *src, size_t size)
 {
   void *dst = pushSize(arena, size);
   copyMemory_(src, dst, size);
@@ -253,9 +250,9 @@ copySize(Arena &arena, void *src, size_t size)
 #    define mytypeof __typeof__
 #endif
 
-#define pushCopy(arena, src) (mytypeof(src)) copySize(arena, (src), sizeof(*(src)))
+#define pushCopy(arena, src) (mytypeof(src)) pushCopySize(arena, (src), sizeof(*(src)))
 /* #define copyStructNoCast(arena, src) copySize(arena, src, sizeof(*(src))) */
-#define copyArray(arena, count, src) (mytypeof(src)) copySize(arena, (src), count*sizeof(*(src)))
+#define pushCopyArray(arena, count, src) (mytypeof(src)) pushCopySize(arena, (src), count*sizeof(*(src)))
 
 inline u8 *
 getNext(Arena &buffer)
@@ -392,7 +389,7 @@ toString(Arena &arena, const char *c)
 inline char *
 toCString(Arena &arena, String string)
 {
-  char *out = (char *)copySize(arena, string.chars, string.length+1);
+  char *out = (char *)pushCopySize(arena, string.chars, string.length+1);
   u8 *next = getNext(arena) - 1;
   *next = 0;
   return out;
@@ -540,7 +537,7 @@ inline String
 copyString(Arena &buffer, String src)
 {
   String out;
-  out.chars  = copyArray(buffer, src.length, src.chars);
+  out.chars  = pushCopyArray(buffer, src.length, src.chars);
   out.length = src.length;
   return out;
 }

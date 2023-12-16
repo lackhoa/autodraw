@@ -584,7 +584,7 @@ inString(char *string, Token &token)
     return false;
 }
 
-// TODO: Better hash function!
+// todo: Better hash function!
 internal u32
 stringHash(String string)
 {

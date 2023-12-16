@@ -55,7 +55,7 @@ struct InterpError
   ErrorAttachment attachments[16];
 };
 
-// TODO: atm the tokenizer also doubles as our error tracker, which is annoying
+// todo: atm the tokenizer also doubles as our error tracker, which is annoying
 // to think about because errors also come from the typechecker.
 struct Tokenizer
 {

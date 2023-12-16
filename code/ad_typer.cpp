@@ -9,212 +9,6 @@ Term *hole = &hole_;
 
 inline i32 slotCount(GlobalSlot *slot) { return (i32)bufLength(slot->terms); }
 
-inline void indent(Arena &buffer, i32 indentation)
-{
-  for (int id=0; id < indentation; id++)
-    print(buffer, " ");
-}
-
-inline void newlineAndIndent(Arena &buffer, i32 indentation)
-{
-  print(buffer, "\n");
-  indent(buffer, indentation);
-}
-
-// TODO this should be in parser
-void print(Arena &buffer, Ast *in0, PrintOptions opt);
-inline char *
-printComposite(Arena &buffer, CompositeAst *in, PrintOptions opt)
-{
-  char *out = (char *)getNext(buffer);
-  int    precedence = 0;        // todo: no idea what the default should be
-  Ast   *op         = 0;
-  i32    arg_count  = 0;
-
-  Arrow *op_signature = 0;
-  Constructor *op_ctor = 0;
-  b32 no_print_as_binop = false;
-  op       = in->op;
-  arg_count = in->arg_count;
-
-  precedence = precedenceOf(in->op->token.string);
-
-  Ast **printed_args = in->args;
-  i32 printed_arg_count = arg_count;
-  if (op_signature)
-  {// print out explicit args only
-    if (!print_all_args)
-    {
-      printed_args = pushArray(top_level_arena, op_signature->param_count, Ast *);
-      printed_arg_count = 0;
-      for (i32 param_i = 0; param_i < op_signature->param_count; param_i++)
-      {
-        printed_args[printed_arg_count++] = in->args[param_i];
-      }
-    }
-  }
-
-  if (printed_arg_count == 2 && !no_print_as_binop)
-  {// special path for infix binary operator
-    if (precedence < opt.no_paren_precedence)
-      print(buffer, "(");
-
-    PrintOptions arg_opt = opt;
-    // #hack to force printing parentheses when the precedence is the same (a+b)+c.
-    arg_opt.no_paren_precedence = precedence+1;
-    print(buffer, printed_args[0], arg_opt);
-
-    print(buffer, " ");
-    print(buffer, op, opt);
-    print(buffer, " ");
-
-    arg_opt.no_paren_precedence = precedence;
-    print(buffer, printed_args[1], arg_opt);
-    if (precedence < opt.no_paren_precedence)
-      print(buffer, ")");
-  }
-  else
-  {// normal prefix path
-    print(buffer, op, opt);
-    if (!(op_ctor && printed_arg_count == 0))
-    {
-      print(buffer, "(");
-      PrintOptions arg_opt        = opt;
-      arg_opt.no_paren_precedence = 0;
-      for (i32 arg_i = 0; arg_i < printed_arg_count; arg_i++)
-      {
-        print(buffer, printed_args[arg_i], arg_opt);
-        if (arg_i < printed_arg_count-1)
-          print(buffer, ", ");
-      }
-      print(buffer, ")");
-    }
-  }
-  return out;
-}
-
-void print(Arena &buffer, Ast *in0, PrintOptions opt)
-{// printAst
-  if (in0)
-  {
-    PrintOptions new_opt = opt;
-    unsetFlag(&new_opt.flags, PrintFlag_Detailed);
-    new_opt.indentation += 1;
-
-    switch (in0->kind)
-    {
-      case Ast_Hole:
-      {print(buffer, "_");} break;
-
-      case Ast_Identifier:
-      {print(buffer, in0->token.string);} break;
-
-      case Ast_RewriteAst:
-      {
-        RewriteAst *in = castAst(in0, RewriteAst);
-        print(buffer, "rewrite");
-        print(buffer, " ");
-        if (in->right_to_left) print(buffer, "<- ");
-        print(buffer, in->eq_or_proof, new_opt);
-      } break;
-
-      case Ast_CompositeAst:
-      {
-        auto *in = castAst(in0, CompositeAst);
-        printComposite(buffer, in, new_opt);
-      } break;
-
-      case Ast_ForkAst:
-      {
-        ForkAst *in = castAst(in0, ForkAst);
-        print(buffer, "fork ");
-        print(buffer, in->subject, new_opt);
-        newlineAndIndent(buffer, opt.indentation);
-        print(buffer, "{");
-        i32 case_count = in->case_count;
-        for (i32 ctor_id = 0;
-             ctor_id < case_count;
-             ctor_id++)
-        {
-          Token *ctor = in->ctors + ctor_id;
-          print(buffer, ctor->string);
-          print(buffer, ": ");
-          print(buffer, in->cases[ctor_id], new_opt);
-          if (ctor_id != case_count)
-          {
-            print(buffer, ", ");
-            newlineAndIndent(buffer, opt.indentation+1);
-          }
-        }
-        print(buffer, "}");
-      } break;
-
-      case Ast_ArrowAst:
-      {
-        ArrowAst *in = castAst(in0, ArrowAst);
-        print(buffer, "(");
-        for (int param_i = 0;
-             param_i < in->param_count;
-             param_i++)
-        {
-          print(buffer, in->param_names[param_i]);
-          print(buffer, ": ");
-          print(buffer, in->param_types[param_i], new_opt);
-          if (param_i < in->param_count-1)
-            print(buffer, ", ");
-        }
-        print(buffer, ") -> ");
-
-        print(buffer, in->output_type, new_opt);
-      } break;
-
-      case Ast_AccessorAst:
-      {
-        AccessorAst *in = castAst(in0, AccessorAst);
-        print(buffer, in->record, new_opt);
-        print(buffer, ".");
-        print(buffer, in->field_name.string);
-      } break;
-
-      case Ast_FunctionDecl: {print(buffer, "function decl");} break;
-
-      case Ast_FunctionAst: {print(buffer, "lambda");} break;
-
-      case Ast_LetAst:
-      {
-        LetAst *in = castAst(in0, LetAst);
-        print(buffer, in->lhs);
-        if (in->type)
-        {
-          print(buffer, " : ");
-          print(buffer, in->type, new_opt);
-        }
-        print(buffer, " := ");
-        print(buffer, in->rhs, new_opt);
-        print(buffer, "; ");
-        print(buffer, in->body, new_opt);
-      } break;
-
-      case Ast_UnionAst:
-      {
-        print(buffer, "<some union>");
-      } break;
-
-      case Ast_CtorAst:
-      {
-        print(buffer, "<some ctor>");
-      } break;
-
-      case Ast_SeekAst:
-      {
-        print(buffer, "<some seek>");
-      } break;
-    }
-  }
-  else
-    print(buffer, "<NULL>");
-}
-
 inline void print(Arena &buffer, Ast *in0)
 {
   return print(buffer, in0, {});
@@ -1029,7 +823,7 @@ isGlobalValue(Term *in0)
 inline Term *
 _copyTerm(Arena &arena, void *src, size_t size)
 {
-  Term *out = (Term *)copySize(arena, src, size);
+  Term *out = (Term *)pushCopySize(arena, src, size);
   out->serial = DEBUG_SERIAL++;
   return out;
 }
@@ -1082,8 +876,8 @@ copyToGlobalArena(Term *in0)
         }
         out->output_type = copyToGlobalArena(in->output_type);
         // :arrow-copy-done-later
-        out->param_names = copyArray(arena, param_count, in->param_names);
-        out->param_flags = copyArray(arena, param_count, in->param_flags);
+        out->param_names = pushCopyArray(arena, param_count, in->param_names);
+        out->param_flags = pushCopyArray(arena, param_count, in->param_flags);
         out0 = out;
       } break;
 

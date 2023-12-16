@@ -359,7 +359,7 @@ moveTree(GameState &state, i32 dx, i32 dy)
   state.hot_item = hi;
 }
 
-// TODO: Don't pass the state in whole sale like that
+// todo: Don't pass the state in whole sale like that
 inline void
 moveCursor(GameState &state, i32 dx)
 {
@@ -528,15 +528,13 @@ gameInitialize(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
           printf("scene file is old, updating it\n");
           printf("creating a backup file\n");
 
-          // TODO: cleanup this weird code
-          size_t filename_size = 256;
-          char backup_name[filename_size];
+          char backup_name[256];
 
           time_t rawtime;
           time(&rawtime);
           struct tm *timeinfo = localtime(&rawtime);
           // todo write to a backup folder, to avoid flood
-          size_t strftime_result = strftime(backup_name, filename_size, "../data/scene-%d-%m-%Y-%H-%M-%S.ad", timeinfo);
+          size_t strftime_result = strftime(backup_name, sizeof(backup_name), "../data/scene-%d-%m-%Y-%H-%M-%S.ad", timeinfo);
           if (strftime_result == 0) {
             printf("strftime failed... I don't even know!\n");
           } else {
@@ -692,7 +690,7 @@ DLL_EXPORT GameOutput gameUpdateAndRender(GameInput &input)
 
     v3 direction = {};
     i32 direction_key_held_frames = 0;  // todo this is a #hack to implement the "new-key" behavior
-    // TODO: cutnpaste code, gross
+    // todo: cutnpaste
     if (in.key_states[kVK_ANSI_L].is_down) {
       direction.E[0] = 1;
       direction_key_held_frames = maximum(direction_key_held_frames, s.key_held_frames[kVK_ANSI_L]);
@@ -767,7 +765,6 @@ DLL_EXPORT GameOutput gameUpdateAndRender(GameInput &input)
       offset = v3{};
     }
 
-    // TODO: please, no more "offset_int"
     // NOTE: "offset_int" only applicable for tiled movement
     v3 offset_int = {};
     for (i32 dim_i=0; dim_i < 3; dim_i++) {

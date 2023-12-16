@@ -234,3 +234,20 @@ u32 ParameterFlag_Poly     = 1 << 2;
 
 Ast *parseExpression(void);
 
+struct PrintOptions {
+  u32 flags;
+  u16 indentation;
+  u16 no_paren_precedence;
+  i32 print_type_depth;
+};
+
+u32 PrintFlag_Detailed     = 1 << 0;
+u32 PrintFlag_LockDetailed = 1 << 1;
+
+inline PrintOptions
+printOptionPrintType(PrintOptions options={})
+{
+  options.print_type_depth = 1;
+  return options;
+}
+

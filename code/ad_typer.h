@@ -114,7 +114,7 @@ struct Variable : Term {
 };
 
 struct TreePath {
-  i32       head;  // -1 for op (TODO: change to u8 so we can hack this on the stack)
+  i32       head;  // -1 for op (todo: change to u8 so we can hack this on the stack)
   TreePath *tail;
 };
 
@@ -173,23 +173,6 @@ struct FileList {
   char     *head_content;
   FileList *tail;
 };
-
-u32 PrintFlag_Detailed     = 1 << 0;
-u32 PrintFlag_LockDetailed = 1 << 1;
-
-struct PrintOptions {
-  u32 flags;
-  u16 indentation;
-  u16 no_paren_precedence;
-  i32 print_type_depth;
-};
-
-inline PrintOptions
-printOptionPrintType(PrintOptions options={})
-{
-  options.print_type_depth = 1;
-  return options;
-}
 
 inline Term ** toTerms(Pointer **pointers) {return (Term**)pointers;}
 

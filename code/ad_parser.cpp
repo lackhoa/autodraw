@@ -482,16 +482,16 @@ parseFunctionExpression(Arena &arena)
   // cutnpaste from "parseGlobalFunction"
   FunctionAst *out = newAst(arena, FunctionAst, lastToken());
 
-  ArrowAst *signature = 0;
-  if (peekChar() == '{') {
-    // inferred signature.
-  }
-  else if (peekChar() == '(') {
-    signature = parseArrowType(false);
-  }
-  else {
-    signature = parseNameOnlyArrowType();
-  }
+  // ArrowAst *signature = 0;
+  // if (peekChar() == '{') {
+  //   // inferred signature.
+  // }
+  // else if (peekChar() == '(') {
+  //   signature = parseArrowType(false);
+  // }
+  // else {
+  //   signature = parseNameOnlyArrowType();
+  // }
 
   NULL_WHEN_ERROR(out);
   return out;
@@ -615,7 +615,7 @@ precedenceOf(String op)
   int out = 0;  // NOTE: 0 means it's literally not a binop
   const i32 eq_precedence = 50;
 
-  // TODO: implement for real
+  // todo: implement for real
   if (equal(op, "->"))
   {
     out = eq_precedence - 20;
@@ -986,6 +986,199 @@ parseGlobalFunction(Arena *arena, Token *name, b32 is_theorem)
 }
 
 #endif
+
+void print(Arena &buffer, Ast *in0, PrintOptions opt);
+inline char *
+printComposite(Arena &buffer, CompositeAst *in, PrintOptions opt)
+{
+  char *out = (char *)getNext(buffer);
+  int    precedence = 0;        // todo: no idea what the default should be
+  Ast   *op         = 0;
+  i32    arg_count  = 0;
+
+  b32 no_print_as_binop = false;
+  op       = in->op;
+  arg_count = in->arg_count;
+
+  precedence = precedenceOf(in->op->token.string);
+
+  Ast **printed_args = in->args;
+  i32 printed_arg_count = arg_count;
+
+  if (printed_arg_count == 2 && !no_print_as_binop)
+  {// special path for infix binary operator
+    if (precedence < opt.no_paren_precedence)
+      print(buffer, "(");
+
+    PrintOptions arg_opt = opt;
+    // #hack to force printing parentheses when the precedence is the same (a+b)+c.
+    arg_opt.no_paren_precedence = precedence+1;
+    print(buffer, printed_args[0], arg_opt);
+
+    print(buffer, " ");
+    print(buffer, op, opt);
+    print(buffer, " ");
+
+    arg_opt.no_paren_precedence = precedence;
+    print(buffer, printed_args[1], arg_opt);
+    if (precedence < opt.no_paren_precedence)
+      print(buffer, ")");
+  }
+  else
+  {// normal prefix path
+    print(buffer, op, opt);
+    if (!(printed_arg_count == 0))
+    {
+      print(buffer, "(");
+      PrintOptions arg_opt        = opt;
+      arg_opt.no_paren_precedence = 0;
+      for (i32 arg_i = 0; arg_i < printed_arg_count; arg_i++)
+      {
+        print(buffer, printed_args[arg_i], arg_opt);
+        if (arg_i < printed_arg_count-1)
+          print(buffer, ", ");
+      }
+      print(buffer, ")");
+    }
+  }
+  return out;
+}
+
+inline void indent(Arena &buffer, i32 indentation)
+{
+  for (int id=0; id < indentation; id++)
+    print(buffer, " ");
+}
+
+inline void newlineAndIndent(Arena &buffer, i32 indentation)
+{
+  print(buffer, "\n");
+  indent(buffer, indentation);
+}
+
+
+void print(Arena &buffer, Ast *in0, PrintOptions opt)
+{// printAst
+  if (in0)
+  {
+    PrintOptions new_opt = opt;
+    unsetFlag(&new_opt.flags, PrintFlag_Detailed);
+    new_opt.indentation += 1;
+
+    switch (in0->kind)
+    {
+      case Ast_Hole:
+      {print(buffer, "_");} break;
+
+      case Ast_Identifier:
+      {print(buffer, in0->token.string);} break;
+
+      case Ast_RewriteAst:
+      {
+        RewriteAst *in = castAst(in0, RewriteAst);
+        print(buffer, "rewrite");
+        print(buffer, " ");
+        if (in->right_to_left) print(buffer, "<- ");
+        print(buffer, in->eq_or_proof, new_opt);
+      } break;
+
+      case Ast_CompositeAst:
+      {
+        auto *in = castAst(in0, CompositeAst);
+        printComposite(buffer, in, new_opt);
+      } break;
+
+      case Ast_ForkAst:
+      {
+        ForkAst *in = castAst(in0, ForkAst);
+        print(buffer, "fork ");
+        print(buffer, in->subject, new_opt);
+        newlineAndIndent(buffer, opt.indentation);
+        print(buffer, "{");
+        i32 case_count = in->case_count;
+        for (i32 ctor_id = 0;
+             ctor_id < case_count;
+             ctor_id++)
+        {
+          Token *ctor = in->ctors + ctor_id;
+          print(buffer, ctor->string);
+          print(buffer, ": ");
+          print(buffer, in->cases[ctor_id], new_opt);
+          if (ctor_id != case_count)
+          {
+            print(buffer, ", ");
+            newlineAndIndent(buffer, opt.indentation+1);
+          }
+        }
+        print(buffer, "}");
+      } break;
+
+      case Ast_ArrowAst:
+      {
+        ArrowAst *in = castAst(in0, ArrowAst);
+        print(buffer, "(");
+        for (int param_i = 0;
+             param_i < in->param_count;
+             param_i++)
+        {
+          print(buffer, in->param_names[param_i]);
+          print(buffer, ": ");
+          print(buffer, in->param_types[param_i], new_opt);
+          if (param_i < in->param_count-1)
+            print(buffer, ", ");
+        }
+        print(buffer, ") -> ");
+
+        print(buffer, in->output_type, new_opt);
+      } break;
+
+      case Ast_AccessorAst:
+      {
+        AccessorAst *in = castAst(in0, AccessorAst);
+        print(buffer, in->record, new_opt);
+        print(buffer, ".");
+        print(buffer, in->field_name.string);
+      } break;
+
+      case Ast_FunctionDecl: {print(buffer, "function decl");} break;
+
+      case Ast_FunctionAst: {print(buffer, "lambda");} break;
+
+      case Ast_LetAst:
+      {
+        LetAst *in = castAst(in0, LetAst);
+        print(buffer, in->lhs);
+        if (in->type)
+        {
+          print(buffer, " : ");
+          print(buffer, in->type, new_opt);
+        }
+        print(buffer, " := ");
+        print(buffer, in->rhs, new_opt);
+        print(buffer, "; ");
+        print(buffer, in->body, new_opt);
+      } break;
+
+      case Ast_UnionAst:
+      {
+        print(buffer, "<some union>");
+      } break;
+
+      case Ast_CtorAst:
+      {
+        print(buffer, "<some ctor>");
+      } break;
+
+      case Ast_SeekAst:
+      {
+        print(buffer, "<some seek>");
+      } break;
+    }
+  }
+  else
+    print(buffer, "<NULL>");
+}
+
 
 /*
   expr3 = INT | '(' expr ')'
