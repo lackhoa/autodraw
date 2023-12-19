@@ -14,6 +14,7 @@
 #import <sys/stat.h>
 #import <dlfcn.h>
 
+#define STBTT_STATIC  // Don't leak stb function names
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "imstb_truetype.h"
 
@@ -24,12 +25,12 @@
 #import "platform.h"
 #import "kv-bitmap.h"
 
-// todo: This is an experiment, we'll put all global objects that can be misused when uninitialized here
+// NOTE: We'll put global objects that can be misused when uninitialized here.
 struct OsxGlobals {
+  // todo: I'm really not fond of this global variable idea, just pass stuff in man!
   id<MTLDevice> mtl_device;
 };
 global_variable OsxGlobals *osx_globals = 0;
-// internal Arena temp_arena;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -136,36 +137,39 @@ PLATFORM_READ_ENTIRE_FILE(osxReadEntireFile)
   return out;
 }
 
-inline void
-getParentDirName(char *buffer, char *path)
+inline String
+getParentDirName(Arena arena, String path)
 {
-  i32 last_slash_index = 0;
-  i32 index = 0;
-  for (char *scan=path;
-       *scan;
-       scan++, index++) {
-    if (*scan == '/') {
+  i32 last_slash_index = -1;
+  for (i32 index=path.length-1; index >= 0; index--) {
+    if (path.chars[index] == '/') {
       last_slash_index = index;
+      break;
     }
   }
 
-  for (i32 index=0; index < last_slash_index; index++) {
-    buffer[index] = path[index];
+  String out = {.length=last_slash_index + 1};
+  assert(out.length <= path.length);
+  if (out.length > 0) {
+    out.chars = (char *)pushCopySize(arena, path.chars, out.length+1);
   }
-  buffer[last_slash_index] = 0;
+  out.chars[out.length] = 0;  // nil termination!
+  return out;
 }
 
 PLATFORM_WRITE_ENTIRE_FILE(osxWriteEntireFile)
 {
   // Create the directory along with missing parent directories
-  char dir_name[PATH_MAX];
-  getParentDirName(dir_name, filename);
-  i32 mkdir_output = mkdir(dir_name, S_IRWXU | S_IRWXG | S_IROTH);
+  u8 buffer[256] = {};
+  Arena arena = newArena(buffer, 256);
+  String dir_name = getParentDirName(arena, toString(filename));
+  //
+  i32 mkdir_output = mkdir(dir_name.chars, S_IRWXU | S_IRWXG | S_IROTH);
   if (mkdir_output == 0) {
     printf("Directory created successfully.\n");
   } else if (errno != EEXIST) {
     printf("failed to create directory %s: code %d, reason %s\n",
-           dir_name, errno, strerror(errno));
+           dir_name.chars, errno, strerror(errno));
     return 0;  // Return an error code
   }
 
@@ -213,10 +217,11 @@ internal Codepoint codepoints[128];
 
 // todo: #startup #speed Maybe store the bitmaps in the asset system, but idk if it's even faster.
 internal void
-makeCodepointTextures(Arena &arena) {
+makeCodepointTextures(Arena &arena, char *font_file_path) {
   auto temp = beginTemporaryMemory(arena);
   defer(endTemporaryMemory(temp));
-  auto read_file = osxReadEntireFile(arena, "../resources/fonts/LiberationMono-Regular.ttf");
+
+  auto read_file = osxReadEntireFile(arena, font_file_path);
   u8 *ttf_buffer = read_file.content;
   if (!ttf_buffer) {
     todoErrorReport;
@@ -267,12 +272,12 @@ makeCodepointTextures(Arena &arena) {
 //   unsigned char* bitmap = stbi_load("../resources/testTexture.png",
 //                                     &width, &height, &num_channel, 4);
 //   assert(bitmap && num_channel == 4);
-
+//   //
 //   return metalsRGBATexture(bitmap, width, height);
 // }
 
 struct GameCode {
-  char *dylib_name = "libgame.dylib";
+  String dylib_path;
   void *dl;
   GameUpdateAndRender *updateAndRender;
   GameInitialize      *initialize;
@@ -293,15 +298,15 @@ osxGetMtime(char* filename)
 
 internal b32
 osxLoadOrReloadGameCode(GameCode &game) {
-  time_t mtime = osxGetMtime(game.dylib_name);
+  time_t mtime = osxGetMtime(game.dylib_path.chars);
   if (mtime != game.mtime) {
     game.mtime = mtime;
     auto &dl = game.dl;
     dlclose(dl);
 
-    dl = dlopen(game.dylib_name, RTLD_LAZY|RTLD_GLOBAL);
+    dl = dlopen(game.dylib_path.chars, RTLD_LAZY|RTLD_GLOBAL);
     if (!dl) {
-      printf("error: can't open game dylib: %s\n", game.dylib_name);
+      printf("error: can't open game dylib: %s\n", game.dylib_path.chars);
       return false;
     }
 
@@ -313,35 +318,40 @@ osxLoadOrReloadGameCode(GameCode &game) {
     auto updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
     if (!updateAndRender) {
       assert(game.updateAndRender);  // We'll fail if the game function doesn't exist
-      printf("error: can't load gameUpdateAndRender from %s\n", game.dylib_name);
+      printf("error: can't load gameUpdateAndRender from %s\n", game.dylib_path.chars);
       return false;
     }
     game.updateAndRender = updateAndRender;
 
-    printf("Hot loaded: %s, mtime: %ld\n", game.dylib_name, mtime);
+    printf("Hot loaded: %s, mtime: %ld\n", game.dylib_path.chars, mtime);
     return true;
   }
   return false;
 }
 
-int main(int argc, const char *argv[])
+extern __attribute__((visibility("default")))
+int adMainFunction(int argc, const char *argv[])
 {
-  GameCode game = {};
-  
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
+  //
   u8 *memory_base = osxVirtualAlloc(game_memory_cap + platform_memory_cap);
-  auto platform_arena = newArena(memory_base, platform_memory_cap);
+  Arena arena = newArena(memory_base, platform_memory_cap);
   memory_base += platform_memory_cap;
-  auto temp_memory_cap = platform_memory_cap;
-  Arena temp_arena = subArena(platform_arena, temp_memory_cap);
+  //
+  size_t frame_memory_cap = megaBytes(64);
+  Arena frame_arena = subArena(arena, frame_memory_cap);
 
-  {// platform memory
-    auto cap = megaBytes(64);
-    auto memory = osxVirtualAlloc(cap);
-    temp_arena = newArena(memory, cap);
+  String autodraw_path = getParentDirName(arena, toString(argv[0]));
+
+  GameCode game = {};
+  {
+    auto dylib_path = startString(arena);
+    print(dylib_path.arena, autodraw_path);
+    print(dylib_path.arena, "/libgame.dylib");
+    game.dylib_path = endString(dylib_path);
   }
-  
+
   NSApplication *app = [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
   [app activate];  // Switch to this window, handy for development
@@ -383,10 +393,13 @@ int main(int argc, const char *argv[])
   osx_globals = &osx_globals_;
 
   {
-    u64 make_codepoint_start = mach_absolute_time();
-    makeCodepointTextures(temp_arena);
-    f32 elapsed = osxGetSecondsElapsed(make_codepoint_start);
-    printf("make codepoint textures time: %f\n", elapsed);
+    // u64 make_codepoint_start = mach_absolute_time();
+    auto font_file_path = startString(arena);
+    print(font_file_path.arena, autodraw_path);
+    print(font_file_path.arena, "/../resources/fonts/LiberationMono-Regular.ttf");
+    makeCodepointTextures(arena, endString(font_file_path).chars);
+    // f32 elapsed = osxGetSecondsElapsed(make_codepoint_start);
+    // printf("make codepoint textures time: %f\n", elapsed);
   }
   
   metal_textures[TextureIdWhite] = makeColorTexture(v4{1,1,1,1});
@@ -475,7 +488,7 @@ int main(int argc, const char *argv[])
   PlatformCode platform_code = {.readEntireFile = osxReadEntireFile,
                                 .writeEntireFile = osxWriteEntireFile};
   osxLoadOrReloadGameCode(game);
-  game.initialize(codepoints, game_input.arena, platform_code);
+  game.initialize(game_input.arena, platform_code, autodraw_path, codepoints);
 
   // NOTE: Main game loop
   u64 frame_start_tick = mach_absolute_time();
@@ -484,7 +497,7 @@ int main(int argc, const char *argv[])
   b32 initial_frame = true;
   while (osx_main_delegate->is_running)
   {
-    auto temp_marker = beginTemporaryMemory(temp_arena);
+    auto temp_marker = beginTemporaryMemory(frame_arena);
     defer(endTemporaryMemory(temp_marker));
 
     game_input.hot_reloaded = initial_frame || osxLoadOrReloadGameCode(game);
@@ -656,6 +669,10 @@ int main(int argc, const char *argv[])
     initial_frame = false;
   }
 
-  printf("objective-c autodraw finished!\n");
   return 0;
+}
+
+int main(int argc, const char *argv[])
+{
+  return adMainFunction(argc, argv);
 }

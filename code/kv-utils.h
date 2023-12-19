@@ -285,15 +285,15 @@ struct String
 typedef Arena StringBuffer;
 
 struct StartString {
-  StringBuffer &buffer;
+  StringBuffer &arena;
   char         *chars;
 };
 
 inline StartString
-startString(StringBuffer &buffer)
+startString(Arena &arena)
 {
-  char *start = (char *)(buffer.base + buffer.used);
-  return {.buffer=buffer, .chars=start};
+  char *start = (char *)getNext(arena);
+  return {.arena=arena, .chars=start};
 };
 
 inline String
@@ -301,7 +301,8 @@ endString(StartString start)
 {
   String out = {};
   out.chars = start.chars;
-  out.length = (i32)((char*)getNext(start.buffer) - start.chars);
+  out.length = (i32)((char*)getNext(start.arena) - start.chars);
+  start.arena.used++;  // nil-termination
   return out;
 }
 

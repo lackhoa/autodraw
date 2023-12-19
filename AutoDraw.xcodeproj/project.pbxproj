@@ -31,6 +31,7 @@
 		D20EA7A42AFFCD1100CA7B8D /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		D20EA7A62AFFCD1F00CA7B8D /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		D26D16C62B0397F7007ABF1F /* osx_main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = osx_main.mm; path = code/osx_main.mm; sourceTree = "<group>"; };
+		D2868E332B2E10BC00FAB61D /* 4coder.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = 4coder.xcodeproj; path = ../4ed/4coder/4coder.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +51,7 @@
 		D20EA78E2AFFC8C500CA7B8D = {
 			isa = PBXGroup;
 			children = (
+				D2868E332B2E10BC00FAB61D /* 4coder.xcodeproj */,
 				D26D16C62B0397F7007ABF1F /* osx_main.mm */,
 				D20EA7982AFFC8C500CA7B8D /* Products */,
 				D20EA7A12AFFCD0700CA7B8D /* Frameworks */,
@@ -72,6 +74,13 @@
 				D20EA7A22AFFCD0800CA7B8D /* Foundation.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		D2868E342B2E10BC00FAB61D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -119,6 +128,12 @@
 			mainGroup = D20EA78E2AFFC8C500CA7B8D;
 			productRefGroup = D20EA7982AFFC8C500CA7B8D /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = D2868E342B2E10BC00FAB61D /* Products */;
+					ProjectRef = D2868E332B2E10BC00FAB61D /* 4coder.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				D20EA7962AFFC8C500CA7B8D /* AutoDraw */,

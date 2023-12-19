@@ -1,23 +1,4 @@
 /*
-  todo:
-  - Porting our lexer code
-  - emacs: evil broken word boundary: like when you dW "foo(x,y)" you'd delete the whole thing
-  - Martin's compiler stuff
-  - Port the raytracing code and camera movement out to the language
-  - better camera control: save the camera z axis
-  - cleanup: Need the attachment system for logs
-  - autosave: we'll save the state periodically, always, every minute or so. It is up to the user to "commit" their work. Press "w" to save immediately.
-  - Fun: wrap-around cursor movement
-  - cleanup: Array accessor for vectors
-  - cleanup: Implicitly convert vectors to arrays
-  - lldb: fix u8 print, currently it's string
-  - lldb: remove breakpoint on current line, the python script isn't working out...
-  - Draw some *sick* ray-tracing to the left
-
-  - #failed test the python script dylib hook, don't add the hook if it already is
-  - #sleep lldb: tell the python script to run the damn program
-  - #sleep I need vim key bindings for the stupid terminal, like for real
-
   Rules for the renderer:
   - When you push render entries, dimensions are specified in "meter"
   - Textures and bitmaps are srgb premultiplied-alpha
@@ -272,6 +253,9 @@ struct GameState {
   Arena frame_arena;
   Codepoint *codepoints;
 
+  String data_path;
+  String scene_filename;  // todo: rename to "scene_path"
+
   TreeID editing_item;
 
   i32 cursor_coord;
@@ -466,9 +450,6 @@ screenProject(Screen screen, v3 p)
             dot(screen.y_axis, d)};
 }
 
-// todo cleanup ../data file path
-char *scene_filename = "../data/scene.ad";
-
 void
 initScene(Scene &scene) {
   scene.magic_number = scene_file_format_magic_number;
@@ -477,17 +458,17 @@ initScene(Scene &scene) {
 
 function_typedef("generated_ad_platform.h")
 DLL_EXPORT void
-gameInitialize(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
+gameInitialize(Arena &init_arena, PlatformCode &platform, String autodraw_path, Codepoint *codepoints)
 {
-  {// Testing
-    Tokenizer tk;
-    initTokenizer(tk, "+()123+234");
-    TK = &tk;
-    do {
-      eatToken();
-      printf("token kind is: %d\n", tk.last_token.kind);
-    } while (tk.last_token.kind);
-  }
+  // {// Testing tokenizer
+  //   Tokenizer tk;
+  //   initTokenizer(tk, "+()123+234");
+  //   TK = &tk;
+  //   do {
+  //     eatToken();
+  //     printf("token kind is: %d\n", tk.last_token.kind);
+  //   } while (tk.last_token.kind);
+  // }
 
   auto &state = *pushStruct(init_arena, GameState);
   state.arena = subArena(init_arena, megaBytes(512));
@@ -495,10 +476,24 @@ gameInitialize(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
   state.codepoints  = codepoints;
   state.platform    = platform;
   
+  {
+    auto data_path_ = startString(state.arena);
+    print(data_path_.arena, autodraw_path);
+    print(data_path_.arena, "../data");
+    state.data_path = endString(data_path_);
+
+    auto scene_filename_ = startString(state.arena);
+    print(scene_filename_.arena, state.data_path);
+    print(scene_filename_.arena, "/scene.ad");
+    state.scene_filename = endString(scene_filename_);
+  }
+
   {// readSceneFile
     auto temp_marker = beginTemporaryMemory(state.arena);
     defer(endTemporaryMemory(temp_marker));
     auto &arena = state.arena;
+
+    char *scene_filename = state.scene_filename.chars;
 
     // Read into a temp buffer first
     ReadFileResult scene_file = state.platform.readEntireFile(arena, scene_filename);
@@ -533,7 +528,7 @@ gameInitialize(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
           time_t rawtime;
           time(&rawtime);
           struct tm *timeinfo = localtime(&rawtime);
-          // todo write to a backup folder, to avoid flood
+          // todo write to a backup dir, to avoid flooding the data dir
           size_t strftime_result = strftime(backup_name, sizeof(backup_name), "../data/scene-%d-%m-%Y-%H-%M-%S.ad", timeinfo);
           if (strftime_result == 0) {
             printf("strftime failed... I don't even know!\n");
@@ -615,10 +610,8 @@ gameInitialize(Codepoint *codepoints, Arena &init_arena, PlatformCode &platform)
     }
   }
 #endif
-
 }
 
-// DLL_EXPORT GAME_UPDATE_AND_RENDER(gameUpdateAndRender)
 function_typedef("generated_ad_platform.h")
 DLL_EXPORT GameOutput gameUpdateAndRender(GameInput &input)
 {
@@ -679,11 +672,11 @@ DLL_EXPORT GameOutput gameUpdateAndRender(GameInput &input)
       if (!state.successfully_read_scene_file) {
         printf("WARNING: we won't overwrite the file, since we weren't able to read it");
       } else {
-        b32 write_result = s.platform.writeEntireFile((u8 *)&s.scene, sizeof(s.scene), scene_filename);
+        b32 write_result = s.platform.writeEntireFile((u8 *)&s.scene, sizeof(s.scene), state.scene_filename.chars);
         if (write_result) {
-          printf("scene data written to file: %s\n", scene_filename);
+          printf("scene data written to file: %s\n", state.scene_filename.chars);
         } else {
-          printf("failed to write to file: %s\n", scene_filename);
+          printf("failed to write to file: %s\n", state.scene_filename.chars);
         }
       }
     }
