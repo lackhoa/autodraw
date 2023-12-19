@@ -254,8 +254,7 @@ pushCopySize(Arena &arena, void *src, size_t size)
 /* #define copyStructNoCast(arena, src) copySize(arena, src, sizeof(*(src))) */
 #define pushCopyArray(arena, count, src) (mytypeof(src)) pushCopySize(arena, (src), count*sizeof(*(src)))
 
-inline u8 *
-getNext(Arena &buffer)
+inline u8 *getNext(Arena &buffer)
 {
   return (buffer.base + buffer.used);
 }
@@ -302,7 +301,8 @@ endString(StartString start)
   String out = {};
   out.chars = start.chars;
   out.length = (i32)((char*)getNext(start.arena) - start.chars);
-  start.arena.used++;  // nil-termination
+  int zero = 0;
+  pushCopy(start.arena, &zero);
   return out;
 }
 

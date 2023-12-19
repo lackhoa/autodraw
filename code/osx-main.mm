@@ -9,6 +9,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <mach/mach_time.h>
+#import <mach-o/dyld.h>
 
 #import <stdio.h>
 #import <sys/stat.h>
@@ -330,7 +331,7 @@ osxLoadOrReloadGameCode(GameCode &game) {
 }
 
 extern __attribute__((visibility("default")))
-int adMainFunction(int argc, const char *argv[])
+int adMainFunction(char *autodraw_path_chars, i32 autodraw_path_length)
 {
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
@@ -342,7 +343,7 @@ int adMainFunction(int argc, const char *argv[])
   size_t frame_memory_cap = megaBytes(64);
   Arena frame_arena = subArena(arena, frame_memory_cap);
 
-  String autodraw_path = getParentDirName(arena, toString(argv[0]));
+  String autodraw_path = String{autodraw_path_chars, autodraw_path_length};
 
   GameCode game = {};
   {
@@ -674,5 +675,12 @@ int adMainFunction(int argc, const char *argv[])
 
 int main(int argc, const char *argv[])
 {
-  return adMainFunction(argc, argv);
+  u8 buffer[2048];
+  u32 buffer_size = sizeof(buffer);
+  Arena arena = newArena(buffer, sizeof(buffer));
+  auto result = _NSGetExecutablePath((char *)buffer, &buffer_size);
+  assert(result == 0);
+  String exe_path = toString((char *)buffer);
+  String autodraw_path = getParentDirName(arena, exe_path);
+  return adMainFunction(autodraw_path.chars, autodraw_path.length);
 }
