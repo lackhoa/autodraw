@@ -1,1 +1,1 @@
-breakpoint set --file /Users/khoa/AutoDraw/code/osx-main.mm --line 680
+breakpoint set --file /Users/khoa/AutoDraw/code/osx-main.mm --line 346

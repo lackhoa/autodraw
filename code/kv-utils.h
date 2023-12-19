@@ -548,10 +548,20 @@ inline void dump(int d) {printf("%d", d);}
 inline void dump(char *c) {printf("%s", c);}
 inline void dump(String s) {printf("%.*s", s.length, s.chars);}
 
-inline void
-concat(String *a, String b)
+String
+concatenate(Arena &arena, String a, String b)
 {
-  a->length += b.length;
+  auto string = startString(arena);
+  print(string.arena, a);
+  print(string.arena, b);
+  String out = endString(string);
+  return out;
+}
+
+inline String
+concatenate(Arena &arena, String a, char *b)
+{
+  return concatenate(arena, a, toString(b));
 }
 
 /* MARK: End of String */

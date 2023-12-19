@@ -27,11 +27,6 @@
 #import "kv-bitmap.h"
 
 // NOTE: We'll put global objects that can be misused when uninitialized here.
-struct OsxGlobals {
-  // todo: I'm really not fond of this global variable idea, just pass stuff in man!
-  id<MTLDevice> mtl_device;
-};
-global_variable OsxGlobals *osx_globals = 0;
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -58,7 +53,7 @@ global_variable OsxGlobals *osx_globals = 0;
 
 ///////////////////////////////////////////////////////////////////////
 
-internal u8 *
+u8 *
 osxVirtualAlloc(size_t size)
 {
   u8 *data = 0;
@@ -74,7 +69,7 @@ osxVirtualAlloc(size_t size)
   return data;
 }
 
-internal f32
+f32
 osxGetSecondsElapsed(u64 then, u64 now)
 {
   local_persist mach_timebase_info_data_t timebase;
@@ -189,15 +184,15 @@ PLATFORM_WRITE_ENTIRE_FILE(osxWriteEntireFile)
   return 1;
 }
 
-internal id<MTLTexture>
-metal_sRGBATexture(void *bitmap, i32 dimx, i32 dimy)
+id<MTLTexture>
+metal_sRGBATexture(id<MTLDevice> mtl_device, void *bitmap, i32 dimx, i32 dimy)
 {
   id<MTLTexture> texture;
   @autoreleasepool
   {
     auto texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
                          width:dimx height:dimy mipmapped:NO];
-    texture = [osx_globals->mtl_device newTextureWithDescriptor:texture_desc];
+    texture = [mtl_device newTextureWithDescriptor:texture_desc];
     [texture replaceRegion:MTLRegionMake2D(0,0,dimx,dimy)
      mipmapLevel:0
      withBytes:bitmap
@@ -207,18 +202,17 @@ metal_sRGBATexture(void *bitmap, i32 dimx, i32 dimy)
 }
 
 inline id<MTLTexture>
-makeColorTexture(v4 color)
+makeColorTexture(id<MTLDevice> mtl_device, v4 color)
 {
   u32 packed = pack_sRGBA(color);
-  return metal_sRGBATexture(&packed, 1, 1);
+  return metal_sRGBATexture(mtl_device, &packed, 1, 1);
 }
 
-internal id<MTLTexture> metal_textures[TextureIdCount];
-internal Codepoint codepoints[128];
+id<MTLTexture> metal_textures[TextureIdCount];
+Codepoint codepoints[128];
 
 // todo: #startup #speed Maybe store the bitmaps in the asset system, but idk if it's even faster.
-internal void
-makeCodepointTextures(Arena &arena, char *font_file_path) {
+void makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device, char *font_file_path) {
   auto temp = beginTemporaryMemory(arena);
   defer(endTemporaryMemory(temp));
 
@@ -258,14 +252,14 @@ makeCodepointTextures(Arena &arena, char *font_file_path) {
 
     stbtt_FreeBitmap(mono_bitmap, 0);
     // Note: The color is white so srgb doesn't matter
-    metal_textures[ascii_char] = metal_sRGBATexture(bitmap, width, height);
+    metal_textures[ascii_char] = metal_sRGBATexture(mtl_device, bitmap, width, height);
     codepoints[ascii_char]     = {width, height, (r32)width/(r32)height, xoff, yoff};
   }
 }
 
 // #define STB_IMAGE_IMPLEMENTATION
 // #import "stb_image.h"
-// internal id<MTLTexture>
+// id<MTLTexture>
 // makeTestImageTexture()
 // {
 //   i32 width, height;
@@ -285,7 +279,7 @@ struct GameCode {
   time_t mtime;
 };
 
-internal time_t
+time_t
 osxGetMtime(char* filename)
 {
 	time_t mtime = 0;
@@ -297,7 +291,7 @@ osxGetMtime(char* filename)
 	return mtime;
 }
 
-internal b32
+b32
 osxLoadOrReloadGameCode(GameCode &game) {
   time_t mtime = osxGetMtime(game.dylib_path.chars);
   if (mtime != game.mtime) {
@@ -330,8 +324,9 @@ osxLoadOrReloadGameCode(GameCode &game) {
   return false;
 }
 
-extern __attribute__((visibility("default")))
-int adMainFunction(char *autodraw_path_chars, i32 autodraw_path_length)
+// todo: We should make "autodraw_path_chars" point to the "AutoDraw" root
+DLL_EXPORT
+int adMainFunction(char *autodraw_path_chars)
 {
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
@@ -343,15 +338,10 @@ int adMainFunction(char *autodraw_path_chars, i32 autodraw_path_length)
   size_t frame_memory_cap = megaBytes(64);
   Arena frame_arena = subArena(arena, frame_memory_cap);
 
-  String autodraw_path = String{autodraw_path_chars, autodraw_path_length};
+  String autodraw_path = toString(autodraw_path_chars);
 
   GameCode game = {};
-  {
-    auto dylib_path = startString(arena);
-    print(dylib_path.arena, autodraw_path);
-    print(dylib_path.arena, "/libgame.dylib");
-    game.dylib_path = endString(dylib_path);
-  }
+  game.dylib_path = concatenate(arena, autodraw_path, toString("/libgame.dylib"));
 
   NSApplication *app = [NSApplication sharedApplication];
   [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -387,23 +377,18 @@ int adMainFunction(char *autodraw_path_chars, i32 autodraw_path_length)
 
   [NSApp finishLaunching];
 
-  id <MTLDevice> mtl_device = MTLCreateSystemDefaultDevice();
+  id<MTLDevice> mtl_device = MTLCreateSystemDefaultDevice();
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
-
-  OsxGlobals osx_globals_ = {.mtl_device=mtl_device};
-  osx_globals = &osx_globals_;
 
   {
     // u64 make_codepoint_start = mach_absolute_time();
-    auto font_file_path = startString(arena);
-    print(font_file_path.arena, autodraw_path);
-    print(font_file_path.arena, "/../resources/fonts/LiberationMono-Regular.ttf");
-    makeCodepointTextures(arena, endString(font_file_path).chars);
+    String font_file_path = concatenate(arena, autodraw_path, toString("/../resources/fonts/LiberationMono-Regular.ttf"));
+    makeCodepointTextures(arena, mtl_device, font_file_path.chars);
     // f32 elapsed = osxGetSecondsElapsed(make_codepoint_start);
     // printf("make codepoint textures time: %f\n", elapsed);
   }
   
-  metal_textures[TextureIdWhite] = makeColorTexture(v4{1,1,1,1});
+  metal_textures[TextureIdWhite] = makeColorTexture(mtl_device, v4{1,1,1,1});
 
   CAMetalLayer *ca_metal_layer = [CAMetalLayer new];
   ca_metal_layer.frame       = main_window.contentView.frame;
@@ -415,9 +400,12 @@ int adMainFunction(char *autodraw_path_chars, i32 autodraw_path_length)
   NSError *error = nil;
   auto render_pipeline_desc = [MTLRenderPipelineDescriptor new];
   @autoreleasepool {
-    id<MTLLibrary> mtl_library = [mtl_device newLibraryWithFile: @"shaders.metallib" error:&error];
+    // Thank you NSString!
+    String shaders_metallib_ = concatenate(arena, autodraw_path, toString("/shaders.metallib"));
+    NSString *shaders_metallib = [NSString stringWithCString:shaders_metallib_.chars encoding:NSUTF8StringEncoding];
+    id<MTLLibrary> mtl_library = [mtl_device newLibraryWithFile: shaders_metallib error:&error];
     if (!mtl_library) {
-      printf("Failed to load library: %s\n", error.localizedDescription.UTF8String);
+      printf("Failed to load shader library: %s\n", error.localizedDescription.UTF8String);
       return 1;
     }
     id<MTLFunction> vert_func = [mtl_library newFunctionWithName:@"vert"];
@@ -603,7 +591,7 @@ int adMainFunction(char *autodraw_path_chars, i32 autodraw_path_length)
              withBytes:bitmap.memory
              bytesPerRow:bitmap.pitch];
           } else {
-            *texture_ptr = metal_sRGBATexture(bitmap.memory, bitmap.dim.x, bitmap.dim.y);
+            *texture_ptr = metal_sRGBATexture(mtl_device, bitmap.memory, bitmap.dim.x, bitmap.dim.y);
             texture = *texture_ptr;
           }
 
@@ -682,5 +670,5 @@ int main(int argc, const char *argv[])
   assert(result == 0);
   String exe_path = toString((char *)buffer);
   String autodraw_path = getParentDirName(arena, exe_path);
-  return adMainFunction(autodraw_path.chars, autodraw_path.length);
+  return adMainFunction(autodraw_path.chars);
 }

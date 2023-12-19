@@ -476,17 +476,8 @@ gameInitialize(Arena &init_arena, PlatformCode &platform, String autodraw_path, 
   state.codepoints  = codepoints;
   state.platform    = platform;
   
-  {
-    auto data_path_ = startString(state.arena);
-    print(data_path_.arena, autodraw_path);
-    print(data_path_.arena, "../data");
-    state.data_path = endString(data_path_);
-
-    auto scene_filename_ = startString(state.arena);
-    print(scene_filename_.arena, state.data_path);
-    print(scene_filename_.arena, "/scene.ad");
-    state.scene_filename = endString(scene_filename_);
-  }
+  state.data_path      = concatenate(state.arena, autodraw_path, "/../data");
+  state.scene_filename = concatenate(state.arena, state.data_path, "/scene.ad");
 
   {// readSceneFile
     auto temp_marker = beginTemporaryMemory(state.arena);
