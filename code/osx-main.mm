@@ -331,34 +331,11 @@ osxLoadOrReloadGameCode(GameCode &game) {
 struct ADMainInput {
   String autodraw_path;
   b32 is_fcoder_custom;
+  NSWindow *main_window;
 };
 
-b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom)
+NSWindow *adMainFunctionBodyInMainThread()
 {
-  size_t game_memory_cap     = gigaBytes(1);
-  size_t platform_memory_cap = gigaBytes(1);
-  //
-  u8 *memory_base = osxVirtualAlloc(game_memory_cap + platform_memory_cap);
-  Arena arena = newArena(memory_base, platform_memory_cap);
-  memory_base += platform_memory_cap;
-  //
-  size_t frame_memory_cap = megaBytes(64);
-  Arena frame_arena = subArena(arena, frame_memory_cap);
-
-  i32 *result = pushStruct(arena, i32);
-
-  GameCode game = {};
-  game.dylib_path = concatenate(arena, autodraw_path, toString("/libgame.dylib"));
-
-  NSApplication *app = [NSApplication sharedApplication];
-  [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-  [app activate];  // Switch to this window, handy for development
-
-  OSX_MainDelegate *osx_main_delegate = [OSX_MainDelegate new];
-  app.delegate = osx_main_delegate;
-
-  [[NSFileManager defaultManager] changeCurrentDirectoryPath:[NSBundle mainBundle].bundlePath];
-
   NSRect screen_rect = [NSScreen mainScreen].frame;
   i32 init_width  = 1280;
   i32 init_height = 720;
@@ -377,17 +354,38 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom)
                            defer: NO];
   main_window.backgroundColor = NSColor.purpleColor;
   main_window.title = @"AutoDraw";
-  main_window.delegate = osx_main_delegate;
   main_window.contentView.wantsLayer = YES;
   main_window.contentAspectRatio = NSMakeSize(16,9);
   [main_window makeKeyAndOrderFront: nil];
+  return main_window;
+}
 
-  [NSApp finishLaunching];
+b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *main_window)
+{
+  size_t game_memory_cap     = gigaBytes(1);
+  size_t platform_memory_cap = gigaBytes(1);
+  //
+  u8 *memory_base = osxVirtualAlloc(game_memory_cap + platform_memory_cap);
+  Arena arena = newArena(memory_base, platform_memory_cap);
+  memory_base += platform_memory_cap;
+  //
+  size_t frame_memory_cap = megaBytes(64);
+  Arena frame_arena = subArena(arena, frame_memory_cap);
+
+  i32 *result = pushStruct(arena, i32);
+
+  GameCode game = {};
+  game.dylib_path = concatenate(arena, autodraw_path, toString("/libgame.dylib"));
+
+  OSX_MainDelegate *osx_main_delegate = [OSX_MainDelegate new];
+  main_window.delegate = osx_main_delegate;
+
+  [[NSFileManager defaultManager] changeCurrentDirectoryPath:[NSBundle mainBundle].bundlePath];
 
   id<MTLDevice> mtl_device = MTLCreateSystemDefaultDevice();
   printf("System default GPU: %s\n", mtl_device.name.UTF8String);
 
-  {
+  {// NOTE: codepoint
     // u64 make_codepoint_start = mach_absolute_time();
     String font_file_path = concatenate(arena, autodraw_path, toString("/../resources/fonts/LiberationMono-Regular.ttf"));
     makeCodepointTextures(arena, mtl_device, font_file_path.chars);
@@ -500,8 +498,14 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom)
 
     @autoreleasepool
     {
-      // Process events
-      if (!is_fcoder_custom) {
+      if (!is_fcoder_custom)
+      {// Process events
+        NSApplication *app = [NSApplication sharedApplication];
+        app.delegate = osx_main_delegate;
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        [app activate];  // Switch to this window, handy for development
+        [NSApp finishLaunching];
+
         while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                  untilDate: nil
                                  inMode: NSDefaultRunLoopMode
@@ -573,7 +577,6 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom)
       frame_start_tick = mach_absolute_time();
 
       {// drawing to the screen
-
         auto ca_metal_drawable = [ca_metal_layer nextDrawable];
         if (!ca_metal_drawable) {
           printf("ERROR: nextDrawable timed out!\n");
@@ -672,7 +675,7 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom)
 void *adMainFunctionThread(void *ad_main_input)
 {
   ADMainInput input = *(ADMainInput *)ad_main_input;
-  b32 success = adMainFunctionBody(input.autodraw_path, input.is_fcoder_custom);
+  b32 success = adMainFunctionBody(input.autodraw_path, input.is_fcoder_custom, input.main_window);
   return (void *)((i64)success);
 }
 
@@ -680,19 +683,19 @@ void *adMainFunctionThread(void *ad_main_input)
 DLL_EXPORT
 b32 adMainFcoder(char *autodraw_path_chars)
 {
-  // Create the thread using POSIX routines.
   pthread_attr_t  attr;
   pthread_t       posix_thread_id;
   int             result;
- 
+
   result = pthread_attr_init(&attr);
   assert(!result);
- 
+  //
   ADMainInput &input = *(ADMainInput *)malloc(sizeof(ADMainInput));
-  input = {.autodraw_path=toString(autodraw_path_chars),
-           .is_fcoder_custom = true};
+  input.autodraw_path    = toString(autodraw_path_chars);
+  input.is_fcoder_custom = true;
+  input.main_window = adMainFunctionBodyInMainThread();
+  //
   int thread_error = pthread_create(&posix_thread_id, &attr, &adMainFunctionThread, &input);
- 
   if (thread_error != 0) {
     return false;
   }
@@ -708,6 +711,7 @@ int main(int argc, const char *argv[])
   i32 result = _NSGetExecutablePath((char *)buffer, &buffer_size);
   assert(result == 0);
   String exe_path = toString((char *)buffer);
-  b32 success = adMainFunctionBody(getParentDirName(arena, exe_path), false);
+  NSWindow *main_window = adMainFunctionBodyInMainThread();
+  b32 success = adMainFunctionBody(getParentDirName(arena, exe_path), false, main_window);
   return success;
 }
