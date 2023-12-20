@@ -12,11 +12,11 @@ def __lldb_init_module(debugger, internal_dict):
         target = debugger.GetTargetAtIndex(i)
         target.DeleteAllBreakpoints()
     debugger.HandleCommand('command alias py command script import ~/AutoDraw/tools/lldb_script.py')
-    debugger.HandleCommand('command source ~/AutoDraw/tools/lldb-commands.txt')
-    debugger.HandleCommand('command script import ~/AutoDraw/tools/lldb_formatters.py')
+    debugger.HandleCommand('command source ~/AutoDraw/tools/lldb_breakpoints.txt')
     # debugger.HandleCommand(f'target stop-hook add --one-liner "target symbols add libgame.dylib.dSYM"')
     debugger.HandleCommand(f'type summary add --python-function lldb_script.print_v3 v3')
     debugger.HandleCommand(f'type summary add --python-function lldb_script.print_v2 v2')
+    debugger.HandleCommand(f'env DYLD_INSERT_LIBRARIES=/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib')  # todo hard-coded
 
 def print_v3(value, internal_dict, options):
    x = value.GetChildMemberWithName('x').GetValue()

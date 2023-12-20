@@ -5,22 +5,26 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 
+// NOTE: Apple libs
 #import <Metal/Metal.h>
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <mach/mach_time.h>
 #import <mach-o/dyld.h>
 
+// NOTE: Other libraries
 #import <stdio.h>
 #import <sys/stat.h>
 #import <dlfcn.h>
-
+#import <pthread.h>
+//
 #define STBTT_STATIC  // Don't leak stb function names
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "imstb_truetype.h"
 
 #pragma clang diagnostic pop
 
+// NOTE: My libraries
 #import "kv-utils.h"
 #import "shader-interface.h"
 #import "platform.h"
@@ -324,9 +328,12 @@ osxLoadOrReloadGameCode(GameCode &game) {
   return false;
 }
 
-// todo: We should make "autodraw_path_chars" point to the "AutoDraw" root
-DLL_EXPORT
-int adMainFunction(char *autodraw_path_chars)
+struct ADMainInput {
+  String autodraw_path;
+  b32 is_fcoder_custom;
+};
+
+b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom)
 {
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
@@ -338,7 +345,7 @@ int adMainFunction(char *autodraw_path_chars)
   size_t frame_memory_cap = megaBytes(64);
   Arena frame_arena = subArena(arena, frame_memory_cap);
 
-  String autodraw_path = toString(autodraw_path_chars);
+  i32 *result = pushStruct(arena, i32);
 
   GameCode game = {};
   game.dylib_path = concatenate(arena, autodraw_path, toString("/libgame.dylib"));
@@ -406,7 +413,7 @@ int adMainFunction(char *autodraw_path_chars)
     id<MTLLibrary> mtl_library = [mtl_device newLibraryWithFile: shaders_metallib error:&error];
     if (!mtl_library) {
       printf("Failed to load shader library: %s\n", error.localizedDescription.UTF8String);
-      return 1;
+      return false;
     }
     id<MTLFunction> vert_func = [mtl_library newFunctionWithName:@"vert"];
     id<MTLFunction> frag_func = [mtl_library newFunctionWithName:@"frag"];
@@ -466,7 +473,7 @@ int adMainFunction(char *autodraw_path_chars)
   auto render_pipeline_state = [mtl_device newRenderPipelineStateWithDescriptor:render_pipeline_desc error:&error];
   if (!render_pipeline_state) {
     printf("failed to create render pipeline state: %s\n", error.localizedDescription.UTF8String);
-    return 1;
+    return false;
   }
   [render_pipeline_desc release];
 
@@ -494,41 +501,43 @@ int adMainFunction(char *autodraw_path_chars)
     @autoreleasepool
     {
       // Process events
-      while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                               untilDate: nil
-                               inMode: NSDefaultRunLoopMode
-                               dequeue: YES])
-      {
-        switch (event.type) {
-          case NSEventTypeKeyUp:
-          case NSEventTypeKeyDown: {
-            u32 modifier_flags = [event modifierFlags];
-            b32 cmd_held       = (modifier_flags & NSCommandKeyMask) > 0;
-            b32 ctrl_held      = (modifier_flags & NSControlKeyMask) > 0;
-            unused_var b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
-            unused_var b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
+      if (!is_fcoder_custom) {
+        while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                 untilDate: nil
+                                 inMode: NSDefaultRunLoopMode
+                                 dequeue: YES])
+        {
+          switch (event.type) {
+            case NSEventTypeKeyUp:
+            case NSEventTypeKeyDown: {
+              u32 modifier_flags = [event modifierFlags];
+              b32 cmd_held       = (modifier_flags & NSCommandKeyMask) > 0;
+              b32 ctrl_held      = (modifier_flags & NSControlKeyMask) > 0;
+              unused_var b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
+              unused_var b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
             
-            // We'd like to handle repeat ourselves
-            unused_var b32 is_repeat = [event isARepeat];
+              // We'd like to handle repeat ourselves
+              unused_var b32 is_repeat = [event isARepeat];
 
-            bool is_down = (event.type == NSEventTypeKeyDown);
-            if ((event.keyCode == kVK_ANSI_Q) && is_down && cmd_held) {
-              // Cmd-Q
-              osx_main_delegate->is_running = false;
-            } else if ((event.keyCode == kVK_ANSI_F) && is_down && ctrl_held && cmd_held) {
-              // Ctrl-Cmd-F
-              [main_window toggleFullScreen:nil];
-            } else {
-              switch (event.keyCode) {
-                default: {
-                  game_input.key_states[event.keyCode].is_down = is_down;
+              bool is_down = (event.type == NSEventTypeKeyDown);
+              if ((event.keyCode == kVK_ANSI_Q) && is_down && cmd_held) {
+                // Cmd-Q
+                osx_main_delegate->is_running = false;
+              } else if ((event.keyCode == kVK_ANSI_F) && is_down && ctrl_held && cmd_held) {
+                // Ctrl-Cmd-F
+                [main_window toggleFullScreen:nil];
+              } else {
+                switch (event.keyCode) {
+                  default: {
+                    game_input.key_states[event.keyCode].is_down = is_down;
+                  }
                 }
               }
-            }
-          } break;
+            } break;
 
-          default: {
-            [NSApp sendEvent: event];
+            default: {
+              [NSApp sendEvent: event];
+            }
           }
         }
       }
@@ -657,8 +666,38 @@ int adMainFunction(char *autodraw_path_chars)
     }
     initial_frame = false;
   }
+  return true;
+}
 
-  return 0;
+void *adMainFunctionThread(void *ad_main_input)
+{
+  ADMainInput input = *(ADMainInput *)ad_main_input;
+  b32 success = adMainFunctionBody(input.autodraw_path, input.is_fcoder_custom);
+  return (void *)((i64)success);
+}
+
+// todo: We should make "autodraw_path_chars" point to the "AutoDraw" root
+DLL_EXPORT
+b32 adMainFcoder(char *autodraw_path_chars)
+{
+  // Create the thread using POSIX routines.
+  pthread_attr_t  attr;
+  pthread_t       posix_thread_id;
+  int             result;
+ 
+  result = pthread_attr_init(&attr);
+  assert(!result);
+ 
+  ADMainInput &input = *(ADMainInput *)malloc(sizeof(ADMainInput));
+  input = {.autodraw_path=toString(autodraw_path_chars),
+           .is_fcoder_custom = true};
+  int thread_error = pthread_create(&posix_thread_id, &attr, &adMainFunctionThread, &input);
+ 
+  if (thread_error != 0) {
+    return false;
+  }
+
+  return true;
 }
 
 int main(int argc, const char *argv[])
@@ -666,9 +705,9 @@ int main(int argc, const char *argv[])
   u8 buffer[2048];
   u32 buffer_size = sizeof(buffer);
   Arena arena = newArena(buffer, sizeof(buffer));
-  auto result = _NSGetExecutablePath((char *)buffer, &buffer_size);
+  i32 result = _NSGetExecutablePath((char *)buffer, &buffer_size);
   assert(result == 0);
   String exe_path = toString((char *)buffer);
-  String autodraw_path = getParentDirName(arena, exe_path);
-  return adMainFunction(autodraw_path.chars);
+  b32 success = adMainFunctionBody(getParentDirName(arena, exe_path), false);
+  return success;
 }
