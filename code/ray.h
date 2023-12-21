@@ -18,9 +18,9 @@ struct Sphere {
 
 struct World {
   Material *materials;
-  u32 material_count;
+  i32 material_count;
 
-  u32 plane_count;
+  i32 plane_count;
   Plane *planes;
 
   u32 sphere_count;

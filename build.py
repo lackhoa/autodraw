@@ -7,7 +7,7 @@ import sys
 import time
 
 def run(command, update_env={}):
-    print(' '.join(command))
+    # print(' '.join(command))
     begin = time.time()
     env = os.environ.copy()
     env.update(update_env)
@@ -55,7 +55,7 @@ try:
         includes = ['-I../libs']
         sanitizer = ['-fsanitize=address'] if DEBUG_MODE else []
         #
-        warnings = ['-Werror', '-Wall', '-Wimplicit-int-float-conversion', '-Wno-unused-function',
+        warnings = ['-Werror', '-Wall', '-Wextra', '-Wimplicit-int-float-conversion', '-Wno-unused-function',
                     '-Wno-missing-braces', '-Wno-unused-parameter', '-Wno-unused-but-set-variable',
                     '-Wno-unused-variable', '-Wno-switch', '-Wno-writable-strings',
                     '-Wno-c++17-extensions', '-Wno-pointer-to-int-cast',
@@ -101,7 +101,7 @@ try:
 
         print("NOTE: Link library with 4coder")
         # todo: Hard coded build.sh path
-        run(['/Users/khoa/4coder_kv/build.sh'], update_env={'LINK_AUTODRAW_ONLY': 'true'})
+        run(['/Users/khoa/4coder_kv/build.sh'])
 
         print('NOTE: Compile shaders')
         run(['xcrun', '-sdk', 'macosx', 'metal', '-c', '../code/shaders.metal', '-o', 'shaders.air'])

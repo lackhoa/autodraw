@@ -30,22 +30,18 @@
 #import "platform.h"
 #import "kv-bitmap.h"
 
-// NOTE: We'll put global objects that can be misused when uninitialized here.
-
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
 
 @interface OSX_MainDelegate: NSObject<NSApplicationDelegate, NSWindowDelegate>
 {
   @public bool is_running;
-  @public bool window_was_resized;
 }
 @end
 
 @implementation OSX_MainDelegate
 - (NSSize)windowWillResize:(NSWindow *)window toSize:(NSSize)frame_size
 {
-  window_was_resized = true;
   return frame_size;
 }
 
@@ -334,29 +330,48 @@ struct ADMainInput {
   NSWindow *main_window;
 };
 
-NSWindow *adMainFunctionBodyInMainThread()
+// TODO: name
+NSWindow *adMainFunctionBodyInMainThread(b32 is_fcoder_custom)
 {
-  NSRect screen_rect = [NSScreen mainScreen].frame;
+  NSArray *screens = [NSScreen screens];
+  NSScreen *screen = [screens objectAtIndex:0];
+  if (is_fcoder_custom) {
+    if ([screens count] >= 2) {
+      // todo: #hack to make our window appear on the other screen
+      if (screen == [NSScreen mainScreen]) {
+        screen = [screens objectAtIndex:1];
+      }
+    }
+  }
+
   i32 init_width  = 1280;
   i32 init_height = 720;
-  NSRect ns_initial_frame = NSMakeRect((screen_rect.size.width - init_width)   * .5,
-                                       (screen_rect.size.height - init_height) * .5,
+  i32 init_origin_x = screen.frame.origin.x + (screen.frame.size.width - init_width)   * .5;
+  i32 init_origin_y = screen.frame.origin.y + (screen.frame.size.height - init_height) * .5;
+  NSRect ns_initial_frame = NSMakeRect(init_origin_x,
+                                       init_origin_y,
                                        init_width,
                                        init_height);
 
   NSWindow *main_window = [[NSWindow alloc]
-                           initWithContentRect: ns_initial_frame
+                           // initWithContentRect: ns_initial_frame
+                           initWithContentRect: screen.frame
                            styleMask: (NSWindowStyleMaskTitled |
                                        NSWindowStyleMaskClosable |
                                        NSWindowStyleMaskMiniaturizable |
                                        NSWindowStyleMaskResizable) 
                            backing: NSBackingStoreBuffered
                            defer: NO];
+  // I don't know why I have to do this to get the window to the other screen
+  [main_window setFrame:ns_initial_frame display:YES];
+  //
   main_window.backgroundColor = NSColor.purpleColor;
   main_window.title = @"AutoDraw";
   main_window.contentView.wantsLayer = YES;
   main_window.contentAspectRatio = NSMakeSize(16,9);
   [main_window makeKeyAndOrderFront: nil];
+
+
   return main_window;
 }
 
@@ -372,13 +387,8 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
   size_t frame_memory_cap = megaBytes(64);
   Arena frame_arena = subArena(arena, frame_memory_cap);
 
-  i32 *result = pushStruct(arena, i32);
-
   GameCode game = {};
   game.dylib_path = concatenate(arena, autodraw_path, toString("/libgame.dylib"));
-
-  OSX_MainDelegate *osx_main_delegate = [OSX_MainDelegate new];
-  main_window.delegate = osx_main_delegate;
 
   [[NSFileManager defaultManager] changeCurrentDirectoryPath:[NSBundle mainBundle].bundlePath];
 
@@ -484,6 +494,16 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
   osxLoadOrReloadGameCode(game);
   game.initialize(game_input.arena, platform_code, autodraw_path, codepoints);
 
+  OSX_MainDelegate *osx_main_delegate = [OSX_MainDelegate new];
+  main_window.delegate = osx_main_delegate;
+
+  if (!is_fcoder_custom) {
+    NSApplication *app = [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [app activate];  // Switch to this window, handy for development
+    [NSApp finishLaunching];
+  }
+
   // NOTE: Main game loop
   u64 frame_start_tick = mach_absolute_time();
   f32 frame_time_sec  = 0;
@@ -491,21 +511,15 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
   b32 initial_frame = true;
   while (osx_main_delegate->is_running)
   {
-    auto temp_marker = beginTemporaryMemory(frame_arena);
-    defer(endTemporaryMemory(temp_marker));
-
-    game_input.hot_reloaded = initial_frame || osxLoadOrReloadGameCode(game);
-
     @autoreleasepool
     {
+      auto temp_marker = beginTemporaryMemory(frame_arena);
+      defer(endTemporaryMemory(temp_marker));
+
+      game_input.hot_reloaded = initial_frame || osxLoadOrReloadGameCode(game);
+
       if (!is_fcoder_custom)
       {// Process events
-        NSApplication *app = [NSApplication sharedApplication];
-        app.delegate = osx_main_delegate;
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-        [app activate];  // Switch to this window, handy for development
-        [NSApp finishLaunching];
-
         while (NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                  untilDate: nil
                                  inMode: NSDefaultRunLoopMode
@@ -548,11 +562,8 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
 
       {// Frame size
         NSRect frame = main_window.contentView.frame;
-        if (osx_main_delegate->window_was_resized) {
-          osx_main_delegate->window_was_resized = false;
-          ca_metal_layer.frame        = frame;
-          ca_metal_layer.drawableSize = frame.size;
-        }
+        ca_metal_layer.frame        = frame;
+        ca_metal_layer.drawableSize = frame.size;
         game_input.screen_dim = v2{(f32)frame.size.width,
                                    (f32)frame.size.height};
       }
@@ -596,8 +607,8 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
           id<MTLTexture> *texture_ptr = &metal_textures[TextureIdRayTrace];
           id<MTLTexture> texture = *texture_ptr;
           if (texture) {
-            assert((i32)bitmap.dim.x == texture.width &&
-                   (i32)bitmap.dim.y == texture.height);  // todo: support changing dimension
+            assert((i32)bitmap.dim.x == (i32)texture.width &&
+                   (i32)bitmap.dim.y == (i32)texture.height);  // todo: support changing dimension
             [texture replaceRegion:MTLRegionMake2D(0,0,bitmap.dim.x,bitmap.dim.y)
              mipmapLevel:0
              withBytes:bitmap.memory
@@ -644,7 +655,7 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
                 break;
               }
 
-              // todo: cutnpaste
+                // todo: cutnpaste
               case GPUCommandTypeTriangleStrip: {
                 auto &command = *EAT_TYPE(next, GPUCommandTriangleStrip);
 
@@ -693,7 +704,7 @@ b32 adMainFcoder(char *autodraw_path_chars)
   ADMainInput &input = *(ADMainInput *)malloc(sizeof(ADMainInput));
   input.autodraw_path    = toString(autodraw_path_chars);
   input.is_fcoder_custom = true;
-  input.main_window = adMainFunctionBodyInMainThread();
+  input.main_window = adMainFunctionBodyInMainThread(true);
   //
   int thread_error = pthread_create(&posix_thread_id, &attr, &adMainFunctionThread, &input);
   if (thread_error != 0) {
@@ -711,7 +722,7 @@ int main(int argc, const char *argv[])
   i32 result = _NSGetExecutablePath((char *)buffer, &buffer_size);
   assert(result == 0);
   String exe_path = toString((char *)buffer);
-  NSWindow *main_window = adMainFunctionBodyInMainThread();
+  NSWindow *main_window = adMainFunctionBodyInMainThread(false);
   b32 success = adMainFunctionBody(getParentDirName(arena, exe_path), false, main_window);
   return success;
 }

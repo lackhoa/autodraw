@@ -10,6 +10,7 @@ CompileFlags:
     - -DAUTO_DIAGNOSTICS=1
     - -DKV_UTILS_IMPLEMENTATION  # NOTE: This flag isn't in the actual build, maybe we can put it there
     - -Wall
+    - -Wextra
     - -Wimplicit-int-float-conversion
     - -Wno-unused-function
     - -Wno-missing-braces

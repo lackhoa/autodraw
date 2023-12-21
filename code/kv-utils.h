@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include "kv-intrinsics.h"
+#include "limits.h"
 
 /*
   Compilers
@@ -48,9 +49,6 @@
 #define gigaBytes(value) (megaBytes(value)*1024LL)
 #define teraBytes(value) (gigaBytes(value)*1024LL)
 
-#define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
-#define arrayLength arrayCount
-
 #if COMPILER_MSVC
 #  define debugbreak __debugbreak()
 #else
@@ -71,6 +69,14 @@
 #define todoUnknown     assert(false)
 #define invalidDefaultCase default: { assert(false); };
 #define breakhere  { int x = 5; (void)x; }
+
+inline i32 safeTruncateToInt32(u64 value) {
+  assert(value < INT_MAX);
+  return value;
+}
+
+#define arrayCount(array) safeTruncateToInt32(sizeof(array) / sizeof((array)[0]))
+#define arrayLength arrayCount
 
 // source: https://groups.google.com/g/comp.std.c/c/d-6Mj5Lko_s
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__,PP_RSEQ_N())
@@ -640,8 +646,8 @@ void *xmalloc(size_t size) {
  */
 
 struct BufferHeader {
-  size_t len;
-  size_t cap;
+  i32 len;
+  i32 cap;
   char items[0];
 };
 
@@ -653,14 +659,11 @@ struct BufferHeader {
 #define bufPush(buffer, item) (bufFit_(buffer, bufLength(buffer)+1)), buffer[bufHeader_(buffer)->len++] = item
 #define bufFree(buffer) free(bufHeader_(buffer))
 
-void * bufGrow_(void *buffer, size_t new_len, size_t item_size);
-
+void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 #ifdef KV_UTILS_IMPLEMENTATION
-void *
-bufGrow_(void *buffer, size_t new_len, size_t item_size)
 {
-  size_t new_cap = maximum(bufCap(buffer)*2, new_len);
-  size_t new_size = sizeof(BufferHeader)+new_cap*item_size;
+  i32 new_cap = maximum(bufCap(buffer)*2, new_len);
+  i32 new_size = sizeof(BufferHeader)+new_cap*item_size;
   BufferHeader *new_header = 0;
   if (buffer) {
     new_header = (BufferHeader *)realloc(bufHeader_(buffer), new_size);
@@ -673,6 +676,8 @@ bufGrow_(void *buffer, size_t new_len, size_t item_size)
   assert(bufCap(buffer) >= new_len);
   return buffer;
 }
+#else
+;
 #endif // KV_UTILS_IMPLEMENTATION
 
 /* End of stretchy buffer */
