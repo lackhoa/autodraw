@@ -4,11 +4,11 @@
 
 set -e
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-FCODER_ROOT="${HOME}/4ed/build"
-CODE_HOME="$(dirname "${FCODER_ROOT}/custom/bin")"
+FCODER_ROOT="${HOME}/4coder"
+CODE_HOME="${HOME}/4ed/code/custom"
 
-echo "Workdir: ${FCODER_ROOT}"
 cd "${FCODER_ROOT}"
+echo "Workdir: $(pwd)"
 
 SOURCE="${HERE}/4coder_kv.cpp"
 
@@ -40,3 +40,7 @@ clang++ custom_4coder.o "${AUTODRAW_STATIC_LIB_PATH}/autodraw.o" -shared -o "cus
 
 rm -f "$CODE_HOME/metadata_generator"
 rm -f $preproc_file
+
+echo "NOTE: Setup 4coder config files"
+ln -sf "${HERE}/mac-bindings.4coder" "${FCODER_ROOT}/mac-bindings.4coder"
+ln -sf "${HERE}/bindings.4coder"     "${FCODER_ROOT}/bindings.4coder"

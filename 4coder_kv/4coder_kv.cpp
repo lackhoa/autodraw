@@ -3,7 +3,7 @@
 // NOTE(allen): Users can declare their own managed IDs here.
 
 #if !defined(META_PASS)
-#include "generated/managed_id_metadata.cpp"
+#  include "generated/managed_id_metadata.cpp"
 #endif
 
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
@@ -13,7 +13,7 @@ void custom_layer_init(Application_Links *app) {
     
   // NOTE(allen): setup for default framework
   default_framework_init(app);
-    
+
   // NOTE(allen): default hooks and command maps
   set_all_default_hooks(app);
   mapping_init(tctx, &framework_mapping);
