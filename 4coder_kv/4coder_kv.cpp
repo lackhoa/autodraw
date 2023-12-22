@@ -1,4 +1,4 @@
-#include "4coder_default_include.cpp"
+#include "4coder_byp_bindings.cpp"
 
 // NOTE(allen): Users can declare their own managed IDs here.
 
@@ -9,24 +9,41 @@
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
 
 void custom_layer_init(Application_Links *app) {
-  Thread_Context *tctx = get_thread_context(app);
-    
-  // NOTE(allen): setup for default framework
   default_framework_init(app);
-
-  // NOTE(allen): default hooks and command maps
   set_all_default_hooks(app);
+
+  vim_buffer_peek_list[ArrayCount(vim_default_peek_list) + 0] = BYP_peek_list[0];
+  vim_buffer_peek_list[ArrayCount(vim_default_peek_list) + 1] = BYP_peek_list[1];
+  vim_request_vtable[VIM_REQUEST_COUNT + BYP_REQUEST_Title]   = byp_apply_title;
+  vim_request_vtable[VIM_REQUEST_COUNT + BYP_REQUEST_Comment] = byp_apply_comment;
+  vim_request_vtable[VIM_REQUEST_COUNT + BYP_REQUEST_UnComment] = byp_apply_uncomment;
+
+  vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_param0] = {',', (Vim_Text_Object_Func *)byp_object_param};
+  vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_param1] = {';', (Vim_Text_Object_Func *)byp_object_param};
+  vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_camel0] = {'_', (Vim_Text_Object_Func *)byp_object_camel};
+  vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_camel1] = {'-', (Vim_Text_Object_Func *)byp_object_camel};
+  vim_init(app);
+
+  set_custom_hook(app, HookID_Tick,                     byp_tick);
+  set_custom_hook(app, HookID_NewFile,                  byp_new_file);
+  set_custom_hook(app, HookID_BeginBuffer,              vim_begin_buffer);
+  set_custom_hook(app, HookID_BufferEditRange,          vim_buffer_edit_range);
+  set_custom_hook(app, HookID_ViewChangeBuffer,         vim_view_change_buffer);
+  set_custom_hook(app, HookID_ViewEventHandler,         vim_view_input_handler);
+
+  Thread_Context *tctx = get_thread_context(app);
   mapping_init(tctx, &framework_mapping);
   String_ID global_map_id = vars_save_string_lit("keys_global");
   String_ID file_map_id = vars_save_string_lit("keys_file");
   String_ID code_map_id = vars_save_string_lit("keys_code");
-#if OS_MAC
-  setup_mac_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
-#else
-  setup_default_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
-#endif
-  setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+  byp_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+  byp_default_bindings(&framework_mapping, global_map_id, file_map_id, code_map_id);
 
-  char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
-  adMainFcoder(todo_autodraw_path);
+  vim_default_bindings(app, KeyCode_BackwardSlash);
+  byp_vim_bindings(app);
+
+  if (false) {
+    char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
+    adMainFcoder(todo_autodraw_path);
+  }
 }
