@@ -1,4 +1,6 @@
-#include "4coder_vim_include_pragma_once.h"
+#pragma once
+
+#include "4coder_vim/4coder_vim_include.h"
 #include "4coder_byp_token.h"
 #include "4coder_byp_colors.cpp"
 
@@ -323,3 +325,55 @@ VIM_COMMAND_SIG(byp_visual_uncomment){
 	}
 }
 
+Table_u64_u64 shifted_version_of_characters = {};
+//
+void kvMakeShiftedTable() {
+  Base_Allocator *base = get_base_allocator_system();
+  shifted_version_of_characters = make_table_u64_u64(base, 128);
+#define INSERT(CHAR1, CHAR2) table_insert(&shifted_version_of_characters, CHAR1, CHAR2)
+  {
+    INSERT('a', 'A');
+    INSERT('1', '!');
+    INSERT('2', '@');
+    INSERT('3', '#');
+    INSERT('4', '$');
+    INSERT('5', '%');
+    INSERT('6', '^');
+    INSERT('7', '&');
+    INSERT('8', '*');
+    INSERT('`', '~');
+    INSERT('-', '_');
+    INSERT(',', '<');
+    INSERT('.', '>');
+    INSERT(';', ':');
+    INSERT('=', '+');
+    INSERT('/', '?');
+    INSERT('\\', '|');
+  }
+#undef INSERT
+}
+//
+VIM_COMMAND_SIG(kv_shift_character)
+{
+  View_ID view = get_active_view(app, Access_ReadVisible);
+  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+  i64 pos = view_get_cursor_pos(app, view);
+
+  u8 current_character = 0;
+  buffer_read_range(app, buffer, Ii64(pos, pos+1), &current_character);
+
+  u64 replacement_char = 0;
+  if (character_is_upper(current_character)) {
+    replacement_char = character_to_lower(current_character);
+  } else if (character_is_lower(current_character)) {
+    replacement_char = character_to_upper(current_character);
+  } else {
+    table_read(&shifted_version_of_characters, (u64)current_character, &replacement_char);
+  }
+  //
+  if (replacement_char) {
+    buffer_replace_range(app, buffer, Ii64(pos, pos+1), SCu8((u8 *)&replacement_char, 1));
+  }
+
+  move_right(app);
+}

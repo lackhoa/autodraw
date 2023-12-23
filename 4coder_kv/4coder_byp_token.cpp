@@ -1,5 +1,5 @@
 #include "4coder_byp_token.h"
-#include "4coder_vim_include_pragma_once.h"
+#include "4coder_vim/4coder_vim_include.h"
 
 CUSTOM_ID(colors, defcolor_function);
 CUSTOM_ID(colors, defcolor_type);

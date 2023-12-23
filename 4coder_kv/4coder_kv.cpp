@@ -44,7 +44,7 @@ void custom_layer_init(Application_Links *app) {
   byp_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
   byp_default_bindings(&framework_mapping, global_map_id, file_map_id, code_map_id);
 
-  vim_default_bindings(app, KeyCode_BackwardSlash);
+  kvMakeShiftedTable();
   kv_vim_bindings(app);
 
   if (false) {

@@ -29,8 +29,8 @@ byp_essential_mapping(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 // NOTE(kv): The VimBind function doesn't let us overwrite bindings.
 // So I hoisted also "vim_default_bindings" out here.
 function void
-kv_vim_bindings(Application_Links *app){
-
+kv_vim_bindings(Application_Links *app)
+{
 #define N bit_1
 #define I bit_2
 #define V bit_3
@@ -53,7 +53,6 @@ kv_vim_bindings(Application_Links *app){
 	VimBind(N|MAP, undo,                                   KeyCode_U);
 	VimBind(N|MAP, undo,                              (Ctl|KeyCode_Z));
 	VimBind(N|MAP, redo,                              (Ctl|KeyCode_R));
-	VimBind(N|V|MAP, set_mark,                        (Ctl|KeyCode_Space));
 	VimBind(N|MAP, save,                              (Ctl|KeyCode_S));
 	VimBind(N|MAP, vim_open_file_in_quotes,         SUB_G, KeyCode_F);
 	VimBind(N|MAP, vim_interactive_open_or_new,   (Ctl|Sft|KeyCode_O));
@@ -160,13 +159,9 @@ kv_vim_bindings(Application_Links *app){
 	VimBind(N|V|MAP, vim_modal_percent,               (Sft|KeyCode_5));
 	VimBind(N|V|MAP, vim_bounce,                      (Ctl|KeyCode_5));
 	VimBind(N|V|MAP, vim_set_seek_char,                    KeyCode_F);
-	VimBind(N|V|MAP, vim_set_seek_char,                    KeyCode_T);
 	VimBind(N|V|MAP, vim_set_seek_char,               (Sft|KeyCode_F));
-	VimBind(N|V|MAP, vim_set_seek_char,               (Sft|KeyCode_T));
-	VimBind(N|V|MAP, vim_seek_char_forward,                KeyCode_Semicolon);
-	VimBind(N|V|MAP, vim_seek_char_backward,               KeyCode_Comma);
-	VimBind(N|V|MAP, vim_paragraph_up,                (Sft|KeyCode_LeftBracket));
-	VimBind(N|V|MAP, vim_paragraph_down,              (Sft|KeyCode_RightBracket));
+	VimBind(N|V|MAP, vim_paragraph_up,                     KeyCode_LeftBracket);
+	VimBind(N|V|MAP, vim_paragraph_down,                   KeyCode_RightBracket);
 	VimBind(N|V|MAP, vim_screen_top,                  (Sft|KeyCode_H));
 	VimBind(N|V|MAP, vim_screen_bot,                  (Sft|KeyCode_L));
 	VimBind(N|V|MAP, vim_screen_mid,                  (Sft|KeyCode_M));
@@ -185,8 +180,6 @@ kv_vim_bindings(Application_Links *app){
 
 	VimBind(N|MAP, vim_prev_jump,                     (Ctl|KeyCode_O));
 	VimBind(N|MAP, vim_next_jump,                     (Ctl|KeyCode_I));
-	VimBind(N|MAP, vim_next_jump,                     (Sft|KeyCode_I));
-	//VimBind(N|MAP, vim_next_jump,                 (Ctl|Sft|KeyCode_I));
 
 	/// Screen Adjust Binds
 	VimBind(N|V|MAP, vim_half_page_up,                (Ctl|KeyCode_U));
@@ -209,19 +202,18 @@ kv_vim_bindings(Application_Links *app){
 	VimBind(N|V|MAP, vim_play_macro,                  (Sft|KeyCode_2));
 
 	/// Window Binds (TODO(BYP): Do the rest of these, and do them properly)
-	VimBind(N|MAP, change_active_panel_backwards,     (Ctl|KeyCode_H));
-	VimBind(N|MAP, change_active_panel_backwards,     (Ctl|KeyCode_J));
-	VimBind(N|MAP, change_active_panel,               (Ctl|KeyCode_K));
-	VimBind(N|MAP, change_active_panel,               (Ctl|KeyCode_L));
+	VimBind(N|MAP, change_active_panel_backwards,      Ctl|KeyCode_H);
+	VimBind(N|MAP, change_active_panel_backwards,      Ctl|KeyCode_J);
+	VimBind(N|MAP, change_active_panel,                Ctl|KeyCode_K);
+	VimBind(N|MAP, change_active_panel,                Ctl|KeyCode_L);
 
     // KV binds
-	VimBind(N|  MAP,   redo,             Ctl|KeyCode_R);
-	VimBind(N|  MAP,   save,             Ctl|KeyCode_Return);
-	VimBind(N|  MAP,   vim_line_start,       KeyCode_0);
-	VimBind(N|  MAP,   byp_space,            KeyCode_Space);
-	VimBind(N|  MAP,   vim_insert_end,       KeyCode_A);
-    VimBind(  V|MAP,   vim_end_line,         KeyCode_A);
-    VimBind(N|V|MAP,   vim_line_start,  Meta|KeyCode_I);
+	VimBind(N|  MAP,  save,                    KeyCode_Return);
+	VimBind(N|  MAP,  byp_space,               KeyCode_Space);
+	VimBind(N|  MAP,  vim_insert_end,          KeyCode_A);
+    VimBind(  V|MAP,  vim_end_line,            KeyCode_A);
+    VimBind(N|V|MAP,  vim_line_start,     Meta|KeyCode_I);
+    VimBind(N|  MAP,  kv_shift_character,      KeyCode_Comma);
 
 	VimBind(N|MAP,   byp_request_comment,   SUB_G,       KeyCode_ForwardSlash);
 	VimBind(N|MAP,   byp_request_uncomment, SUB_G,  (Sft|KeyCode_ForwardSlash));

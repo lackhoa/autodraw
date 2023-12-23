@@ -1,5 +1,5 @@
-#include "4coder_vim_include_pragma_once.h"
-#include "4coder_byp_commands.cpp"
+#include "4coder_vim/4coder_vim_include.h"
+#include "4coder_kv_commands.cpp"
 #include "4coder_byp_draw.cpp"
 
 CUSTOM_COMMAND_SIG(byp_startup)
