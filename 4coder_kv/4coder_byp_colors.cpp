@@ -24,31 +24,31 @@ byp_copy_color_table(Color_Table *dst, Color_Table table){
 	}
 }
 
-function void
-byp_tick_colors(Application_Links *app, Frame_Info frame_info){
-	// If another function sets active, correct this to not write into a loaded theme
-	if(active_color_table.arrays != cached_color_table.arrays){
-		if(active_color_table.arrays && active_color_table.arrays->vals && active_color_table.arrays->count > 0){
-			byp_copy_color_table(&target_color_table, active_color_table);
-			active_color_table = cached_color_table;
-		}
-	}
-	b32 needs_animate = false;
-	foreach(i, active_color_table.count){
-		Color_Array *nxt_array = &target_color_table.arrays[i];
-		Color_Array *cur_array = &active_color_table.arrays[i];
-		foreach(j, cur_array->count){
-			Vec4_f32 nxt_v = unpack_color(nxt_array->vals[j]);
-			Vec4_f32 cur_v = unpack_color(cur_array->vals[j]);
-			Vec4_f32 diff = nxt_v - cur_v;
-			cur_v += diff*frame_info.animation_dt*10.f;
-			cur_array->vals[j] = pack_color(cur_v);
+// function void
+// byp_tick_colors(Application_Links *app, Frame_Info frame_info){
+// 	// If another function sets active, correct this to not write into a loaded theme
+// 	if(active_color_table.arrays != cached_color_table.arrays){
+// 		if(active_color_table.arrays && active_color_table.arrays->vals && active_color_table.arrays->count > 0){
+// 			byp_copy_color_table(&target_color_table, active_color_table);
+// 			active_color_table = cached_color_table;
+// 		}
+// 	}
+// 	b32 needs_animate = false;
+// 	foreach(i, active_color_table.count){
+// 		Color_Array *nxt_array = &target_color_table.arrays[i];
+// 		Color_Array *cur_array = &active_color_table.arrays[i];
+// 		foreach(j, cur_array->count){
+// 			Vec4_f32 nxt_v = unpack_color(nxt_array->vals[j]);
+// 			Vec4_f32 cur_v = unpack_color(cur_array->vals[j]);
+// 			Vec4_f32 diff = nxt_v - cur_v;
+// 			cur_v += diff*frame_info.animation_dt*10.f;
+// 			cur_array->vals[j] = pack_color(cur_v);
 
-			needs_animate |= (!near_zero(diff, 0.001f));
-		}
-	}
-	if(needs_animate){ animate_in_n_milliseconds(app, 0); }
-}
+// 			needs_animate |= (!near_zero(diff, 0.001f));
+// 		}
+// 	}
+// 	if(needs_animate){ animate_in_n_milliseconds(app, 0); }
+// }
 
 function void
 byp_theme_navigate(Application_Links *app, View_ID view, Lister *lister, i32 index_delta){

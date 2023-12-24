@@ -97,8 +97,8 @@ CUSTOM_DOC("When column ruler is set, spaces towards that, else just inserts one
 
 global b32 byp_bracket_opened;
 
-CUSTOM_COMMAND_SIG(byp_write_text_input)
-CUSTOM_DOC("Inserts whatever text was used to trigger this command.")
+CUSTOM_COMMAND_SIG(kv_text_input)
+CUSTOM_DOC("implement quail mode")
 {
 	User_Input in = get_current_input(app);
 	String_Const_u8 insert = to_writable(&in);
@@ -327,7 +327,7 @@ VIM_COMMAND_SIG(byp_visual_uncomment){
 
 Table_u64_u64 shifted_version_of_characters = {};
 //
-void kvMakeShiftedTable() {
+void kvInitShiftedTable() {
   Base_Allocator *base = get_base_allocator_system();
   shifted_version_of_characters = make_table_u64_u64(base, 128);
 #define INSERT(CHAR1, CHAR2) table_insert(&shifted_version_of_characters, CHAR1, CHAR2)
@@ -377,3 +377,14 @@ VIM_COMMAND_SIG(kv_shift_character)
 
   move_right(app);
 }
+
+// VIM_COMMAND_SIG(kv_upcase_region)
+// {
+//   // todo how to get vim selected region?
+//   range = get_selected_region;
+//   vim_state;
+//   String_Const_u8 string = buffer_sub_string(range);
+//   String_Const_u8 new_string = character_to_upper(string);
+//   buffer_replace_range(range, new_string);
+// }
+
