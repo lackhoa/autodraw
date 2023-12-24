@@ -1,6 +1,0 @@
-[submodule "4coder_kv/4coder_byp"]
-	path = 4coder_kv/4coder_byp
-	url = https://github.com/B-Y-P/4coder_byp.git
-[submodule "4coder_kv/4coder_vim"]
-	path = 4coder_kv/4coder_vim
-	url = https://github.com/B-Y-P/4coder_vim.git
