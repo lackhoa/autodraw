@@ -2,6 +2,7 @@
 
 #include "4coder_vim_base_types.h"
 #include "4coder_vimrc.h"
+#include "stb_ds.h"
 
 global Vim_State vim_state;
 global Table_u64_u64 vim_maps[VIM_MODE_COUNT*VIM_SUBMODE_COUNT];
@@ -49,7 +50,7 @@ function Rect_f32 vim_get_bottom_rect(Application_Links *app){
 	return result;
 }
 
-global u8 vim_quail_keys_rolling_buffer[16];
+global u8 *vim_quail_insert_buffer;
 
 struct Vim_Buffer_Peek_Entry{
 	Buffer_Identifier buffer_id;
@@ -103,7 +104,7 @@ function void vim_reset_state(){
 	vim_state.params = {};
 	vim_state.params.seek = seek;
 	vim_default_register();
-    block_zero_array(vim_quail_keys_rolling_buffer);
+    arrsetlen(vim_quail_insert_buffer, 0);
 }
 
 /// If you _really_ want to change dynamic register allocation, go for it

@@ -26,7 +26,7 @@ rectRadius(v3 radius)
 inline Rect3
 rectCenterRadius(v3 center, v3 radius)
 {
-    assert((radius.x >= 0) && (radius.y >= 0) && (radius.z >= 0));
+    kvAssert((radius.x >= 0) && (radius.y >= 0) && (radius.z >= 0));
     Rect3 result;
     result.min = center - radius;
     result.max = center + radius;

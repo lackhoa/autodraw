@@ -48,7 +48,7 @@ try:
         run(command) # Run in a new process group
     else:
         # Set compiler and linker flags
-        DEBUG_MODE = True
+        DEBUG_MODE = False
         #
         optimization_flag = '-O0' if DEBUG_MODE else '-O2'
         constants = ['-DAUTO_MAC', '-DAUTO_INTERNAL=1', '-DAUTO_DIAGNOSTICS=1']

@@ -1,7 +1,7 @@
 #include "4coder_vim/4coder_vim_include.h"
 #include "4coder_kv_core.cpp"
-
-// NOTE(allen): Users can declare their own managed IDs here.
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
 
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
@@ -9,7 +9,7 @@
 
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
   
-void kvInitShiftedTable()
+function void kvInitShiftedTable()
 {
   Base_Allocator *base = get_base_allocator_system();
   shifted_version_of_characters = make_table_u64_u64(base, 128);
@@ -35,7 +35,13 @@ void kvInitShiftedTable()
   }
 #undef INSERT
 }
-//
+
+function void kvInitVimQuailTable()
+{
+  arrsetcap(vim_quail_table, 64);
+  arrpush(vim_quail_table, (VimQuailEntry{SCu8(",."), SCu8("->")}));
+  arrpush(vim_quail_table, (VimQuailEntry{SCu8(",,"), SCu8("_")}));
+}
 
 // NOTE(kv): The VimBind function doesn't let us overwrite bindings.
 // So I hoisted also "vim_default_bindings" out here.

@@ -245,7 +245,7 @@ inline void print(Arena &buffer, Term *in0)
 inline void attach(char *key, String value)
 {
   InterpError *error = TK->error;
-  assert(error->attachment_count < arrayCount(error->attachments));
+  kvAssert(error->attachment_count < arrayCount(error->attachments));
   error->attachments[error->attachment_count++] = {key, value};
 }
 
@@ -347,7 +347,7 @@ lookupLocalName(Typer &typer, Token &token)
     LookupCurrentFrame lookup = lookupCurrentFrame(bindings, name, false);
     if (lookup.found)
     {
-      assert(lookup.slot->var_index < scope->param_count);
+      kvAssert(lookup.slot->var_index < scope->param_count);
       // out = scope->pointers[lookup.slot->var_index];  todo wtf is pointer
       break;
     }
@@ -396,7 +396,7 @@ lookupGlobalNameSlot(String key, b32 add_new)
     slot = 0;
 
   if (slot && !add_new) {
-    assert(bufLength(slot->terms) != 0);
+    kvAssert(bufLength(slot->terms) != 0);
   }
 
   return slot;
@@ -483,7 +483,7 @@ b32 equal(Term *l0, Term *r0)
           Arrow *arrow = getSignature(l->op);
 
           i32 count = l->arg_count;
-          assert(l->arg_count == r->arg_count);
+          kvAssert(l->arg_count == r->arg_count);
 
           i32 mismatch_count = 0;
           i32 false_count    = 0;
@@ -569,7 +569,7 @@ BuildTerm buildTerm(Typer &typer, Ast &in0, Term *goal0)
   // beware: Usually we mutate in-place, but we may also allocate anew.
   i32 UNUSED_VAR serial = DEBUG_SERIAL++;
 
-  assert(goal0);
+  kvAssert(goal0);
   Arena &arena = top_level_arena;
   Term *value = 0;
   b32 should_check_type = true;
@@ -807,7 +807,7 @@ BuildTerm buildTerm(Typer &typer, Ast &in0, Term *goal0)
   }
 
   if (!getError()) {
-    assert(value);
+    kvAssert(value);
   }
 
   return BuildTerm{.value=value};
@@ -923,7 +923,7 @@ inline void
 addGlobalBinding(Token &name, Term *value, String *tags=0)
 {
   Arena &arena = *global_state.top_level_arena;
-  assert(inArena(arena, value));
+  kvAssert(inArena(arena, value));
   GlobalSlot *slot = lookupGlobalNameSlot(name.string, true);
   // todo incomplete check for type conflict
 

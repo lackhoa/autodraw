@@ -178,7 +178,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                 CXToken  *tokens     = 0;
                 unsigned  num_tokens = 0;
                 clang_tokenize(state.translation_unit, source_range, &tokens, &num_tokens);
-                assert(num_tokens == 4);
+                kvAssert(num_tokens == 4);
                 CXToken dst_filename_token = tokens[2];
                 CXString dst_filename_cxstring = clang_getTokenSpelling(state.translation_unit, dst_filename_token);
                 const char *const_dst_filename_cstring = clang_getCString(dst_filename_cxstring);
@@ -209,7 +209,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                 auto &fdfile = state.opened_files[file_index];
                 if (equal(loc->dst_filename, fdfile.name)) {
                   loc->dst_filestream = fdfile.filestream;
-                  assert(loc->dst_filestream);
+                  kvAssert(loc->dst_filestream);
                   break;
                 }
               }
@@ -217,7 +217,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
               if (!loc->dst_filestream) {
                 // create new header file handle
                 FILEWithName *f = state.opened_files + state.opened_files_count++;
-                assert(state.opened_files_count < arrayCount(state.opened_files));
+                kvAssert(state.opened_files_count < arrayCount(state.opened_files));
                 f->name      = loc->dst_filename;
                 f->filestream = fopen(loc->dst_filename.chars, "w+");
                 if (!f->filestream) {
@@ -225,7 +225,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                   exit(1);
                 }
                 loc->dst_filestream = f->filestream;
-                assert(loc->dst_filestream);
+                kvAssert(loc->dst_filestream);
               }
             }
           } break;
@@ -236,7 +236,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                  loc;
                  loc = loc->next)
             {
-              assert(loc);
+              kvAssert(loc);
               b32 match_line = (cursor_line >= loc->line) && (cursor_line < loc->line+3);
               b32 match_file = equal(filename, loc->src_filename);
               if (match_line && match_file)
@@ -247,13 +247,13 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                   char *signature = printFunctionSignature(temp_arena, cursor);
                   temp_arena.used++;
                   i32 printed = fprintf(loc->dst_filestream, "%s\n", signature);
-                  assert(printed > 0);
+                  kvAssert(printed > 0);
                 } else {
-                  assert(loc->annotation_type == AnnotationTypeFunctionTypedef);
+                  kvAssert(loc->annotation_type == AnnotationTypeFunctionTypedef);
                   char *function_pointer_typedef = printFunctionTypedef(temp_arena, cursor);
                   temp_arena.used++;
                   i32 printed = fprintf(loc->dst_filestream, "%s\n\n", function_pointer_typedef);
-                  assert(printed > 0);
+                  kvAssert(printed > 0);
                 }
                 break;
               }

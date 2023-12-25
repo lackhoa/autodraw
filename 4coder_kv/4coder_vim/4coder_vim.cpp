@@ -4,6 +4,8 @@
 #include "4coder_folds.hpp"
 #include "4coder_vim_keycode_lut.h"
 #include "4coder_vim_commands.cpp"
+#include "stb_ds.h"
+#include "kv_utils.h"
 
 VIM_REQUEST_SIG(vim_apply_none){}
 VIM_REQUEST_SIG(vim_apply_yank){
@@ -113,6 +115,7 @@ vim_init(Application_Links *app){
 	init_vim_boundaries();
 	vim_reset_bottom_text();
 	vim_reset_state();
+    arrsetlen(vim_quail_insert_buffer, 64);
 
     {
 		default_color_table.arrays[defcolor_vim_filebar_pop]      = default_color_table.arrays[defcolor_mark];
@@ -318,9 +321,49 @@ function void vim_append_keycode(Key_Code code){
 #endif
 }
 
-String_Const_u8 *vim_quail_keys;
-String_Const_u8 *vim_quail_values;
-i32              vim_quail_count;
+struct VimQuailEntry
+{
+  String_Const_u8 key;
+  String_Const_u8 value;
+};
+VimQuailEntry *vim_quail_table;
+
+function b32
+vim_handle_quail(Application_Links *app, u8 character)
+{
+  if (!kvProbably(arrlen(vim_quail_insert_buffer) < 1024))
+  {
+    print_message(app, SCu8("ERROR: insert buffer too big, this should never happen!"));
+    return false;
+  }
+
+  b32 substituted = false;
+  arrput(vim_quail_insert_buffer, character);
+  View_ID   view   = get_active_view(app, Access_ReadVisible);
+  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+
+  for (i32 quail_index=0;
+       (quail_index < arrlen(vim_quail_table)) && (!substituted);
+       quail_index++)
+  {
+    String_Const_u8 key = vim_quail_table[quail_index].key;
+
+    u8 * &qbuffer = vim_quail_insert_buffer;
+    String_Const_u8 inserted = SCu8(qbuffer + (arrlen(qbuffer) - key.size), key.size);
+    substituted = (string_compare(inserted, key) == 0);
+    if (substituted)
+    {
+      i64 pos = view_get_cursor_pos(app, view) - (key.size-1);
+      auto range = Range_i64{pos, pos + (i64)(key.size-1)};
+      String_Const_u8 value = vim_quail_table[quail_index].value;
+      buffer_replace_range(app, buffer, range, value);
+      // NOTE(kv): It's not documented where the cursor ends up after "buffer_replace_range"
+      move_horizontal_lines(app, value.size);
+    }
+  }
+
+  return substituted;
+}
 
 function b32
 vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
@@ -335,50 +378,11 @@ vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
   }
   else if (event->kind == InputEventKind_TextInsert)
   {
-    // NOTE(kv): quail
     String_Const_u8 in_string = to_writable(event);
-
     if ((vim_state.mode == VIM_Insert) &&
         (in_string.size == 1))
     {
-      b32 substituted = false;
-
-      u8  *quail_buffer = vim_quail_keys_rolling_buffer;
-      i32  quail_maxlen = ArrayCount(vim_quail_keys_rolling_buffer);
-
-      // NOTE(kv): update rolling buffer
-      u8 character = in_string.str[0];
-      for (i32 index=0; index < quail_maxlen - 1; index++)
-      {
-        quail_buffer[index] = quail_buffer[index+1];
-      }
-      quail_buffer[quail_maxlen - 1] = character;
-
-      View_ID   view   = get_active_view(app, Access_ReadVisible);
-      Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-      //
-      for (i32 quail_index=0;
-           (quail_index < vim_quail_count) && (!substituted);
-           quail_index++)
-      {
-        String_Const_u8 key = vim_quail_keys[quail_index];
-        AssertAlways(key.size < quail_maxlen);
-        //
-        String_Const_u8 inserted = SCu8(quail_buffer + (quail_maxlen - key.size), key.size);
-        if (string_compare(inserted, key) == 0)
-        {
-          i64 pos = view_get_cursor_pos(app, view) - (key.size-1);
-          auto range = Range_i64{pos, pos + (i64)(key.size-1)};
-          String_Const_u8 value = vim_quail_values[quail_index];
-          buffer_replace_range(app, buffer, range, value);
-          // NOTE(kv): It's not documented where the cursor ends up after "buffer_replace_range"
-          move_horizontal_lines(app, value.size);
-          block_zero_array(vim_quail_keys_rolling_buffer);
-          substituted = true;
-        }
-      }
-
-      return substituted;
+      return vim_handle_quail(app, in_string.str[0]);
     }
     else
     {

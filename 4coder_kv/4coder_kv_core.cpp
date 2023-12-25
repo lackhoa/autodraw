@@ -4,7 +4,6 @@
 #include "4coder_kv_draw.cpp"
 #define KV_UTILS_NO_SHORT_NAMES
 #include "kv_utils.h"
-#undef KV_UTILS_NO_SHORT_NAMES
 
 Table_u64_u64 shifted_version_of_characters;
 
@@ -31,26 +30,6 @@ VIM_COMMAND_SIG(kv_shift_character)
   }
 
   move_right(app);
-}
-
-void kvInitVimQuailTable()
-{
-#define QUAIL_CAPACITY 64
-  Arena arena = make_arena_system();
-  vim_quail_keys   = push_array(&arena, String_Const_u8, QUAIL_CAPACITY);
-  vim_quail_values = push_array(&arena, String_Const_u8, QUAIL_CAPACITY);
-
-  i32 index = 0;
-
-  index = vim_quail_count++;
-  vim_quail_keys[index]   = SCu8(",.");
-  vim_quail_values[index] = SCu8("->");
-
-  index = vim_quail_count++;
-  vim_quail_keys[index]   = SCu8(",,");
-  vim_quail_values[index] = SCu8("_");
-
-#undef QUAIL_CAPACITY
 }
 
 function void

@@ -29,7 +29,7 @@ getRectDim(rect2 rect)
 inline rect2
 rectCenterRadius(v2 center, v2 radius)
 {
-    assert((radius.x >= 0) && (radius.y >= 0));
+    kvAssert((radius.x >= 0) && (radius.y >= 0));
     rect2 result;
     result.min = center - radius;
     result.max = center + radius;

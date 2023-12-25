@@ -51,7 +51,7 @@ inRange(i32 value, i32 min, i32 max)
 inline f32
 clamp(f32 value, f32 min, f32 max)
 {
-    assert(max >= min);
+    kvAssert(max >= min);
     if (value > max)
     {
         return max;

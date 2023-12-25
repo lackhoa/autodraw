@@ -1,7 +1,7 @@
 #include "ad_parser.h"
 #include "ad_lexer.cpp"
 
-#define NULL_WHEN_ERROR(name) if (noError()) {assert(name);} else {name = {};}
+#define NULL_WHEN_ERROR(name) if (noError()) {kvAssert(name);} else {name = {};}
 
 void reportError(Ast &in, char *format, ...)
 {
@@ -273,7 +273,7 @@ parseNameOnlyArrowType()
     for (;;)
     {
       i32 param_i = out->param_count++;
-      assert(param_i < cap);
+      kvAssert(param_i < cap);
       if (optionalChar('_'))
       {
         breakhere; // anonymous parameter
@@ -319,7 +319,7 @@ parseArrowType(b32 skip_output_type)
       else
       {
         i32 param_i = param_count++;
-        assert(param_i < cap);
+        kvAssert(param_i < cap);
 
         if (optionalDirective("unused"))
         {
@@ -554,7 +554,7 @@ parseOperand()
         else
         {
           i32 arg_i = new_operand->arg_count++;
-          assert(arg_i < cap);
+          kvAssert(arg_i < cap);
           if ((args[arg_i] = parseExpression()))
           {
             if (!optionalChar(','))
@@ -686,7 +686,7 @@ parseCast()
   Token token = lastToken();
   requireChar('(');
   requireChar(':');
-  assert(noError());
+  kvAssert(noError());
 
   if (Ast *type = parseExpression())
   {
@@ -845,7 +845,7 @@ insertAutoNormalizations(Arena *arena, NormList norm_list, Ast *in0)
     case Ast_RewriteAst:
     {
       RewriteAst *in = castAst(in0, RewriteAst);
-      assert(in->body);
+      kvAssert(in->body);
       insertAutoNormalizations(arena, norm_list, in->body);
     } break;
 
@@ -864,7 +864,7 @@ internal FunctionAst *
 parseGlobalFunction(Arena *arena, Token *name, b32 is_theorem)
 {
   FunctionAst *out = newAst(arena, FunctionAst, name);
-  assert(isIdentifier(name));
+  kvAssert(isIdentifier(name));
 
   if (Ast *signature0 = parseExpression())
   {
@@ -891,7 +891,7 @@ parseGlobalFunction(Arena *arena, Token *name, b32 is_theorem)
                 // should be in the function signature.
                 Token *name = lastToken();
                 i32 norm_i = norm_list.count++;
-                assert(norm_i < cap);
+                kvAssert(norm_i < cap);
                 norm_list.items[norm_i] = newAst(arena, Identifier, name);
                 if (!optionalChar(','))
                 {

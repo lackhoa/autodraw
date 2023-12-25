@@ -18,7 +18,7 @@
 #pragma once
 
 #include <stdlib.h> // malloc, free
-#include <stdio.h>  // printf
+#include <stdio.h>  // printf, perror
 #include <stdarg.h>
 #include <stddef.h>
 #include <cstdint>
@@ -294,24 +294,36 @@ rotateRight(u32 value, i32 rotateAmount)
 #  define debugbreak __builtin_trap()
 #endif
 
-#if AUTO_INTERNAL
-#  define assert(claim) if (!(claim)) { printf("%s:%d: assertion fired!", __FILE__, __LINE__); fflush(stdout); debugbreak; }
+#define kvAssert(claim) if (!(claim)) { debugbreak; }
+
+#define invalidCodePath kvAssert(false)
+#define todoErrorReport kvAssert(false)
+#define todoIncomplete  kvAssert(false)
+#define todoTestMe      kvAssert(false)
+#define todoOutlaw      kvAssert(false)
+#define todoUnknown     kvAssert(false)
+#define invalidDefaultCase default: { kvAssert(false); };
+#define breakhere       { int x = 5; (void)x; }
+
+#if KV_INTERNAL
+#    define kvSoftAssert1        kvAssert
+#    define kvProbably(CLAIM)   (kvAssert(CLAIM), true)
 #else
-#  define assert(claim)
+#    define kvSoftAssert1(CLAIM)
+#    define kvProbably(CLAIM) (CLAIM)
 #endif
 
-#define invalidCodePath assert(false)
-#define todoErrorReport assert(false)
-#define todoIncomplete  assert(false)
-#define todoTestMe      assert(false)
-#define todoOutlaw      assert(false)
-#define todoUnknown     assert(false)
-#define invalidDefaultCase default: { assert(false); };
-#define breakhere  { int x = 5; (void)x; }
+#if KV_SLOW
+#    define kvAssertSlow kvAssert
+#else
+#    define kvAssertSlow
+#endif
 
-inline i32 safeTruncateToInt32(u64 value) {
-  assert(value < INT_MAX);
-  return value;
+inline i32 safeTruncateToInt32(u64 value)
+{
+  // NOTE: this is not really "safe" but what are you gonna do
+  kvAssert(value < INT_MAX);
+  return (i32)value;
 }
 
 #define arrayCount(array) safeTruncateToInt32(sizeof(array) / sizeof((array)[0]))
@@ -386,7 +398,7 @@ pushSize(KvArena &arena, size_t size, b32 zero = false)
 {
   void *out = arena.base + arena.used;
   arena.used += size;
-  assert(arena.used <= arena.cap);
+  kvAssert(arena.used <= arena.cap);
   if (zero) zeroSize(out, size);
   return(out);
 }
@@ -395,7 +407,7 @@ inline void *
 pushSizeBackward(KvArena &arena, size_t size)
 {
   arena.cap -= size;
-  assert(arena.used <= arena.cap);
+  kvAssert(arena.used <= arena.cap);
   void *out = arena.base + arena.cap;
   return(out);
 }
@@ -456,7 +468,10 @@ inline void
 endTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
-  assert(temp.arena.used >= temp.original_used);
+  if (!kvProbably(temp.arena.used >= temp.original_used))
+  {
+    printf("Memory leak detected!\n");
+  }
   temp.arena.used = temp.original_used;
 }
 
@@ -469,7 +484,7 @@ commitTemporaryMemory(TempMemoryMarker temp)
 inline void
 checkArena(KvArena *arena)
 {
-    assert(arena->temp_count == 0);
+    kvAssert(arena->temp_count == 0);
 }
 
 inline void
@@ -646,7 +661,7 @@ toCString(KvArena &arena, String string)
 inline char *
 toCStringTemporary(String string)
 {
-  assert(*(string.chars + string.length) == 0);
+  kvAssert(*(string.chars + string.length) == 0);
   return string.chars;
 }
 
@@ -715,17 +730,11 @@ print(KvArena &buffer, String s)
     *at = 0;
     out.length = (i32)(at - out.chars);
     buffer.used += out.length;
-    assert(buffer.used <= buffer.cap);
+    kvAssert(buffer.used <= buffer.cap);  // todo: don't crash!
   }
 
   return out;
 }
-
-// inline void  todo: we don't ever wanna use this.
-// print(String s)
-// {
-//   printf("%.*s", s.length, s.chars);
-// }
 
 // todo #cleanup same as "inArena"?
 inline b32
@@ -909,7 +918,7 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
   }
   new_header->cap = new_cap;
   buffer = new_header->items;
-  assert(bufCap(buffer) >= new_len);
+  kvAssert(bufCap(buffer) >= new_len);
   return buffer;
 }
 #else

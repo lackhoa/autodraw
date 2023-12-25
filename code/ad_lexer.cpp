@@ -245,7 +245,7 @@ internal void
 reportErrorVA(i32 line, i32 column, char *format, va_list arg_list)
 {
   auto tk = TK;
-  assert(!tk->error);  // NOTE: check that the parser doesn't do useless work after failure.
+  kvAssert(!tk->error);  // NOTE: check that the parser doesn't do useless work after failure.
 
   InterpContext *context = 0;
   for (InterpContext *it = tk->context; it; it=it->next)
@@ -505,7 +505,7 @@ eatToken()
   {
     if (!token.string.length)
       token.string.length = (i32)(tk.at - token.string.chars);
-    assert(token.string.length > 0);
+    kvAssert(token.string.length > 0);
 
     switch (token.kind)
     {
@@ -610,7 +610,7 @@ eatUntilMatchingPair()
   b32 found = false;
   Token opening = tk->last_token;
   char  closing = getMatchingPair(&opening);
-  assert(closing);
+  kvAssert(closing);
   for (; !found && hasMore(); )
   {
     Token token = nextToken();

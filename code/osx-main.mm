@@ -64,9 +64,14 @@ osxVirtualAlloc(size_t size)
                                   (vm_address_t*) &data,
                                   size,
                                   VM_FLAGS_ANYWHERE);
-  assert(err == KERN_SUCCESS);
- 
-  return data;
+  if (kvProbably(err == KERN_SUCCESS))
+  {
+    return data;
+  }
+  else
+  {
+    return 0;
+  }
 }
 
 f32
@@ -145,7 +150,7 @@ getParentDirName(KvArena arena, String path)
   }
 
   String out = {.length=last_slash_index + 1};
-  assert(out.length <= path.length);
+  kvAssert(out.length <= path.length);
   if (out.length > 0) {
     out.chars = (char *)pushCopySize(arena, path.chars, out.length+1);
   }
@@ -230,7 +235,7 @@ void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_
     i32 width, height, xoff, yoff;
     u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
                                                &width, &height, &xoff, &yoff);
-    assert(width != 0 && height != 0);
+    kvSoftAssert1(width != 0 && height != 0);
     u8 *bitmap = (u8 *)pushSize(arena, 4 * width * height);
     // Blow it out to rgba bitmap
     u32 *dst = (u32 *)bitmap;
@@ -240,7 +245,6 @@ void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_
       u8 *src = src_row;
       for (i32 x=0; x < width; x++) {
         u32 au = *src++;
-        // assert(au < 256);
         f32 c = (f32)au / 255.f;
         // pre-multiplied alpha (NOTE: we assume color is white)
         c = square(c);
@@ -266,7 +270,7 @@ void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_
 //   int num_channel;
 //   unsigned char* bitmap = stbi_load("../resources/testTexture.png",
 //                                     &width, &height, &num_channel, 4);
-//   assert(bitmap && num_channel == 4);
+//   kvSoftAssert(bitmap && num_channel == 4);
 //   //
 //   return metalsRGBATexture(bitmap, width, height);
 // }
@@ -307,12 +311,13 @@ osxLoadOrReloadGameCode(GameCode &game) {
 
     if (!game.initialize){
       game.initialize = (GameInitialize *)dlsym(dl, "gameInitialize");
-      assert(game.initialize);
+      kvAssert(game.initialize);
     }
 
     auto updateAndRender = (GameUpdateAndRender *)dlsym(dl, "gameUpdateAndRender");
-    if (!updateAndRender) {
-      assert(game.updateAndRender);  // We'll fail if the game function doesn't exist
+    if (!updateAndRender)
+    {
+      kvAssert(game.updateAndRender);
       printf("error: can't load gameUpdateAndRender from %s\n", game.dylib_path.chars);
       return false;
     }
@@ -453,7 +458,7 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
       v.layouts[0].stride       = sizeof(VertexInput);
       v.layouts[0].stepRate     = 1;
       v.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-      assert(offset == sizeof(VertexInput));
+      kvAssert(offset == sizeof(VertexInput));
     }
 
     render_pipeline_desc.vertexFunction   = vert_func;
@@ -607,8 +612,8 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
           id<MTLTexture> *texture_ptr = &metal_textures[TextureIdRayTrace];
           id<MTLTexture> texture = *texture_ptr;
           if (texture) {
-            assert((i32)bitmap.dim.x == (i32)texture.width &&
-                   (i32)bitmap.dim.y == (i32)texture.height);  // todo: support changing dimension
+            kvAssert((i32)bitmap.dim.x == (i32)texture.width &&
+                     (i32)bitmap.dim.y == (i32)texture.height);  // todo: support changing dimension
             [texture replaceRegion:MTLRegionMake2D(0,0,bitmap.dim.x,bitmap.dim.y)
              mipmapLevel:0
              withBytes:bitmap.memory
@@ -699,7 +704,7 @@ b32 adMainFcoder(char *autodraw_path_chars)
   int             result;
 
   result = pthread_attr_init(&attr);
-  assert(!result);
+  kvAssert(!result);
   //
   ADMainInput &input = *(ADMainInput *)malloc(sizeof(ADMainInput));
   input.autodraw_path    = toString(autodraw_path_chars);
@@ -720,7 +725,7 @@ int main(int argc, const char *argv[])
   u32 buffer_size = sizeof(buffer);
   KvArena arena = newArena(buffer, sizeof(buffer));
   i32 result = _NSGetExecutablePath((char *)buffer, &buffer_size);
-  assert(result == 0);
+  kvAssert(result == 0);
   String exe_path = toString((char *)buffer);
   NSWindow *main_window = adMainFunctionBodyInMainThread(false);
   b32 success = adMainFunctionBody(getParentDirName(arena, exe_path), false, main_window);
