@@ -330,7 +330,7 @@ struct ADMainInput {
   NSWindow *main_window;
 };
 
-// TODO: name
+// todo: name
 NSWindow *adMainFunctionBodyInMainThread(b32 is_fcoder_custom)
 {
   NSArray *screens = [NSScreen screens];

@@ -34,7 +34,8 @@ else
     "$CODE_HOME/metadata_generator" -R "$CODE_HOME" "$PWD/$preproc_file"
     #
     echo "NOTE: COMPILING"
-    ccache clang++ -c "$SOURCE" -I"$CODE_HOME" $arch $opts $debug -std=c++11 -fPIC -o custom_4coder.o -fsanitize=address
+    # TODO: copy the library into its own folder
+    clang++ -c "$SOURCE" -I"$CODE_HOME" -I"../code" $arch $opts $debug -std=c++11 -fPIC -o custom_4coder.o -fsanitize=address
     #
     echo "NOTE: LINKING"
     AUTODRAW_STATIC_LIB_PATH="${HOME}/AutoDraw/build"
@@ -45,7 +46,5 @@ else
     rm -f $preproc_file
 
     echo "NOTE: Setup 4coder config files"
-    ln -sf "${HERE}/mac-bindings.4coder" "${FCODER_ROOT}/mac-bindings.4coder"
-    ln -sf "${HERE}/bindings.4coder"     "${FCODER_ROOT}/bindings.4coder"
-    ln -sf "${HERE}/config.4coder"       "${FCODER_ROOT}/config.4coder"
+    ln -sf "${HERE}/config.4coder" "${FCODER_ROOT}/config.4coder"
 fi
