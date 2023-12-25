@@ -1,7 +1,7 @@
 // We don't know if it will even improve startup time yet!
 
 #include <stdio.h>
-#include "kv-utils.h"
+#include "kv_utils.h"
 
 internal void
 makeCodepointTextures(Arena arena) {

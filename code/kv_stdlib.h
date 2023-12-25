@@ -9,7 +9,7 @@
 #include <string.h>
 #include <dirent.h>
 
-#include "kv-utils.h"
+#include "kv_utils.h"
 
 internal char *
 readEntireFile(char *file_name)

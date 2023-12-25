@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "kv-utils.h"
+#include "kv_utils.h"
 #include "kv-math.h"
 #include "keycodes.h"
 #include "kv-bitmap.h"
@@ -63,8 +63,8 @@ struct GPUCommandHeader {
 };
 
 struct GPUCommands {
-  Arena commands;
-  Arena vertex_buffer;
+  KvArena commands;
+  KvArena vertex_buffer;
   i32   vertex_start;
 };
 
@@ -91,7 +91,7 @@ struct GameOutput {
 
 // NOTE: GameMemory is the communication interface between the game and platform.
 struct GameInput {
-  Arena arena;                  // All memory allocated for the game by the platform
+  KvArena arena;                  // All memory allocated for the game by the platform
 
   KeyState key_states[kVK_Count];
   f32      last_frame_time_sec;

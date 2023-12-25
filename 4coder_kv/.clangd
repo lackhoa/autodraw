@@ -3,6 +3,7 @@ CompileFlags:
   Compiler: clang++
   Add:
     - -I/Users/khoa/4ed/code/custom  # todo: hardcode
+    - -I../libs
     - -ferror-limit=0
     - -std=c++11
     - -DOS_MAC=1

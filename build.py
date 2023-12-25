@@ -32,12 +32,12 @@ def mtime(path):
 FCODER_PATH = '/Users/khoa/4ed/build'  # todo hardcoded
 
 # cd to script directory
-script_dir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(script_dir)
+script_dir   = os.path.dirname(os.path.realpath(__file__))
+project_root = "/Users/khoa/AutoDraw"  # todo hard-coded
 
 try:
     os.makedirs('build', exist_ok=True)
-    os.chdir('build')
+    os.chdir(f'{project_root}/build')
 
     run_only       = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
@@ -62,12 +62,12 @@ try:
                     '-Wno-tautological-constant-out-of-range-compare', '-Wno-reorder-init-list',
                     '-Wno-macro-redefined', '-Wno-deprecated-declarations', '-Wno-unknown-attributes']
 
-        common_compiler_flags = ['-g', '-std=gnu++20', '-fno-exceptions', '-fvisibility=hidden', optimization_flag] + includes + constants + warnings
+        common_compile_flags = ['-g', '-std=gnu++20', '-fno-exceptions', '-fvisibility=hidden', optimization_flag] + includes + constants + warnings
 
         todo_llvm_path = "/usr/local/Cellar/llvm/17.0.6" # llvm-config --libdir
         print("NOTE: codegen: compile")
         run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator.o', f'-I{todo_llvm_path}/include'] +
-            common_compiler_flags +
+            common_compile_flags +
             sanitizer)
         #
         print("NOTE: codegen: link")
@@ -80,14 +80,14 @@ try:
 
         print('NOTE: Compile + Link the game to produce a dylib')
         run(['clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] +
-            common_compiler_flags +
+            common_compile_flags +
             sanitizer)
 
         print('NOTE: Compile osx app')
         #
         run(['ccache', 'clang++', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] +
             includes +
-            common_compiler_flags +
+            common_compile_flags +
             sanitizer)
 
         print("NOTE: Link osx app")
@@ -101,7 +101,7 @@ try:
 
         print("NOTE: Link library with 4coder")
         # todo: Hard coded build.sh path
-        run(['/Users/khoa/4coder_kv/build.sh'])
+        run([f'{project_root}/4coder_kv/build.sh'])
 
         print('NOTE: Compile shaders')
         run(['xcrun', '-sdk', 'macosx', 'metal', '-c', '../code/shaders.metal', '-o', 'shaders.air'])

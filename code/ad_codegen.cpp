@@ -8,7 +8,8 @@
 #include <string.h>
 #include "clang-c/Index.h"
 
-#include "kv-utils.h"
+#define KV_UTILS_IMPLEMENTATION
+#include "kv_utils.h"
 // #include "kv_stdlib.h"
 
 String forward_declare_macro  = toString("forward_declare");
@@ -43,13 +44,13 @@ struct State
   CXTranslationUnit  translation_unit;
 };
 
-global_variable Arena perm_arena;
-global_variable Arena temp_arena;
+global_variable KvArena perm_arena;
+global_variable KvArena temp_arena;
 global_variable String code_dir0;
 global_variable State state;
 
 inline String
-printCXString(Arena &buffer, CXString string)
+printCXString(KvArena &buffer, CXString string)
 {
   String out = {};
   const char *cstring = clang_getCString(string);
@@ -61,14 +62,14 @@ printCXString(Arena &buffer, CXString string)
   return out;
 }
 
-inline String toString(Arena &buffer, CXString string) {
+inline String toString(KvArena &buffer, CXString string) {
   String out = printCXString(buffer, string);
   buffer.used++;
   return out;
 }
 
 internal char *
-printFunctionSignature(Arena &buffer, CXCursor cursor)
+printFunctionSignature(KvArena &buffer, CXCursor cursor)
 {
   char *out = (char *)getNext(buffer);
 
@@ -98,7 +99,7 @@ printFunctionSignature(Arena &buffer, CXCursor cursor)
 
 // #cutnpaste from printFunctionSignature but such is the nature of C++
 internal char *
-printFunctionTypedef(Arena &buffer, CXCursor cursor)
+printFunctionTypedef(KvArena &buffer, CXCursor cursor)
 {
   char *out = (char *)getNext(buffer);
 

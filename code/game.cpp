@@ -10,7 +10,7 @@
 
 #import <time.h>
 #define KV_UTILS_IMPLEMENTATION
-#include "kv-utils.h"
+#include "kv_utils.h"
 #include "platform.h"
 #include "shader-interface.h"
 #include "kv-bitmap.h"
@@ -52,10 +52,10 @@ struct SortEntry {
 };
 
 struct RenderGroup {
-  Arena      commands;
+  KvArena      commands;
   i32        z_bucket_count[ZLevelCount_];
   ZLevel     current_z_level;
-  Arena      arena;
+  KvArena      arena;
   Codepoint *codepoints;
   i32        monospaced_width;
   // We won't specific meter_to_pixel here, it is up to the thing that does the rendering
@@ -159,7 +159,7 @@ pushLine(RenderGroup &rgroup, v2 p0, v2 p1, f32 thickness, v4 color)
 }
 
 struct DebugDrawer {
-  Arena        arena;
+  KvArena        arena;
   RenderGroup *rgroup;
   v2           at;
 };
@@ -249,8 +249,8 @@ struct Scene {
 } __attribute__((packed));
 
 struct GameState {
-  Arena arena;
-  Arena frame_arena;
+  KvArena arena;
+  KvArena frame_arena;
   Codepoint *codepoints;
 
   String data_path;
@@ -450,7 +450,7 @@ screenProject(Screen screen, v3 p)
             dot(screen.y_axis, d)};
 }
 
-void
+internal void
 initScene(Scene &scene) {
   scene.magic_number = scene_file_format_magic_number;
   scene.version      = current_scene_file_format_version;
@@ -458,18 +458,8 @@ initScene(Scene &scene) {
 
 function_typedef("generated_ad_platform.h")
 DLL_EXPORT void
-gameInitialize(Arena &init_arena, PlatformCode &platform, String autodraw_path, Codepoint *codepoints)
+gameInitialize(KvArena &init_arena, PlatformCode &platform, String autodraw_path, Codepoint *codepoints)
 {
-  // {// Testing tokenizer
-  //   Tokenizer tk;
-  //   initTokenizer(tk, "+()123+234");
-  //   TK = &tk;
-  //   do {
-  //     eatToken();
-  //     printf("token kind is: %d\n", tk.last_token.kind);
-  //   } while (tk.last_token.kind);
-  // }
-
   auto &state = *pushStruct(init_arena, GameState);
   state.arena = subArena(init_arena, megaBytes(512));
   state.frame_arena = subArenaWithRemainingMemory(init_arena);

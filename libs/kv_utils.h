@@ -21,7 +21,246 @@
 #include <stdio.h>  // printf
 #include <stdarg.h>
 #include <stddef.h>
-#include "kv-intrinsics.h"
+#include <cstdint>
+#include <float.h>
+
+/* Types */
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef int32_t  i32;
+typedef int64_t  i64;
+typedef int8_t   b8;
+typedef int32_t  b32;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef float    r32;
+typedef float    f32;
+/* Types: end */
+
+/* Intrinsics */
+
+inline void
+zeroMemory(void *dst, size_t size)
+{
+  // todo #speed
+  u8 *dst8 = (u8 *)dst;
+  while (size--) {
+    *dst8++ = 0;
+  }
+}
+
+inline void
+copyMemory_(void *src, void *dst, size_t size) // source to dest
+{
+  // todo #speed
+  u8 *dst8 = (u8 *)dst;
+  u8 *src8 = (u8 *)src;
+  while (size--) {
+    *dst8++ = *src8++;
+  }
+}
+
+inline i32
+absoslute(i32 in)
+{
+    return ((in >= 0) ? in : -in);
+}
+
+inline f32
+square(f32 x)
+{
+    f32 result = x*x;
+    return result;
+}
+
+inline f32
+squareRoot(f32 x)
+{
+#if COMPILER_MSVC
+    f32 result = sqrtf(x);
+#else
+    f32 result = __builtin_sqrtf(x);
+#endif
+    return result;
+}
+
+inline u32
+roundF32ToU32(f32 Real32)
+{
+#if COMPILER_MSVC
+    u32 Result = (u32)roundf(Real32);
+#else
+    u32 Result = (u32)__builtin_roundf(Real32);
+#endif
+    return(Result);
+}
+
+inline f32
+roundF32(f32 Real32)
+{
+#if COMPILER_MSVC
+    f32 Result = roundf(Real32);
+#else
+    f32 Result = __builtin_roundf(Real32);
+#endif
+    return(Result);
+}
+
+// todo I don't like this, just do the round myself
+// inline i32
+// roundF32ToI32(f32 Real32)
+// {
+// #if COMPILER_MSVC
+//     i32 Result = (i32)roundf(Real32);
+// #else
+//     i32 Result = (i32)__builtin_roundf(Real32);
+// #endif
+//     return(Result);
+// }
+
+inline i32
+floorF32ToI32(f32 Real32)
+{
+#if COMPILER_MSVC
+    i32 Result = (i32)floorf(Real32);
+#else
+    i32 Result = (i32)__builtin_floorf(Real32);
+#endif
+    return(Result);
+}
+
+inline i32
+ceilF32ToI32(f32 Real32)
+{
+#if COMPILER_MSVC
+    i32 Result = (i32)ceilf(Real32);
+#else
+    i32 Result = (i32)__builtin_ceilf(Real32);
+#endif
+    return(Result);
+}
+
+// NOTE: weird names to avoid name collision (haizz)
+inline f32
+kv_sin(f32 angle)
+{
+#if COMPILER_MSVC
+    f32 result = sinf(angle);
+#else
+    f32 result = __builtin_sinf(angle);
+#endif
+    return(result);
+}
+
+inline f32
+kv_cos(f32 angle)
+{
+#if COMPILER_MSVC
+    f32 result = cosf(angle);
+#else
+    f32 result = __builtin_cosf(angle);
+#endif
+    return(result);
+}
+
+inline f32
+kv_atan2(f32 y, f32 x)
+{
+#if COMPILER_MSVC
+    f32 result = atan2f(y, x);
+#else
+    f32 result = __builtin_atan2f(y, x);
+#endif
+    return(result);
+}
+
+struct bit_scan_result
+{
+    b32 found;
+    u32 index;
+};
+
+inline bit_scan_result
+findLeastSignificantSetBit(u32 mask)
+{
+    bit_scan_result result = {};
+
+#if COMPILER_MSVC
+    result.found = _BitScanForward((unsigned long *)&result.index, mask);
+#elif COMPILER_LLVM
+    if (mask != 0)
+    {
+        result.found = true;
+        result.index = __builtin_ctz(mask);
+    }
+#else
+        for (u32 index = 0;
+             index < 32;
+             index++)
+        {
+            if((mask & (1 << index)) != 0)
+            {
+                result.found = true;
+                result.index = index;
+                return result;
+            }
+        }
+#endif
+
+    return result;
+}
+
+
+inline f32
+absolute(f32 x)
+{
+#if COMPILER_MSVC
+    f32 result = (f32)fabs(x);
+#else
+    f32 result = (f32)__builtin_fabs(x);
+#endif
+    return result;
+}
+
+inline u32
+rotateLeft(u32 value, i32 rotateAmount)
+{
+#if COMPILER_MSVC
+    u32 result = _rotl(value, rotateAmount);
+#elif COMPILER_LLVM
+    u32 result = __builtin_rotateleft32(value, rotateAmount);
+#else
+    i32 r = rotateAmount & 31;
+    u32 result = (value << r) | (value >> (32 - r));
+#endif
+    return result;
+}
+
+inline u32
+rotateRight(u32 value, i32 rotateAmount)
+{
+#if COMPILER_MSVC
+    u32 result = _rotr(value, rotateAmount);
+#elif COMPILER_LLVM
+    u32 result = __builtin_rotateright32(value, rotateAmount);
+#else
+    i32 r = rotateAmount & 31;
+    u32 result = (value >> r) | (value << (32 - r));
+#endif
+    return result;
+}
+
+#if HANDMADE_WIN32
+#  define readBarrier  _ReadBarrier()
+#  define writeBarrier _WriteBarrier()
+#  define atomicCompareExchange _InterlockedCompareExchange
+#else
+// todo: Other platforms
+#endif
+
+/* Intrinsics end */
+
 #include "limits.h"
 
 /*
@@ -113,7 +352,7 @@ zeroSize(void *base, size_t size)
 #define zeroStruct(base, type) zeroSize(base, sizeof(type));
 #define zeroOut(base) zeroSize(base, sizeof(base))
 
-struct Arena
+struct KvArena
 {
   u8     *base;
   size_t  used;
@@ -125,10 +364,10 @@ struct Arena
   i32 temp_count;
 };
 
-inline Arena
+inline KvArena
 newArena(void *base, size_t cap)
 {
-    Arena arena = {};
+    KvArena arena = {};
     arena.cap          = cap;
     arena.base         = (u8 *)base;
     arena.original_cap = cap;
@@ -136,14 +375,14 @@ newArena(void *base, size_t cap)
 }
 
 inline size_t
-getArenaFree(Arena &arena)
+getArenaFree(KvArena &arena)
 {
     size_t out = arena.cap - arena.used;
     return out;
 }
 
 inline void *
-pushSize(Arena &arena, size_t size, b32 zero = false)
+pushSize(KvArena &arena, size_t size, b32 zero = false)
 {
   void *out = arena.base + arena.used;
   arena.used += size;
@@ -153,7 +392,7 @@ pushSize(Arena &arena, size_t size, b32 zero = false)
 }
 
 inline void *
-pushSizeBackward(Arena &arena, size_t size)
+pushSizeBackward(KvArena &arena, size_t size)
 {
   arena.cap -= size;
   assert(arena.used <= arena.cap);
@@ -180,18 +419,18 @@ pushSizeBackward(Arena &arena, size_t size)
 #define pushItemsAs(...) \
   auto pushItems(##__VA_ARGS__)
 
-inline Arena
-subArena(Arena &parent, size_t size)
+inline KvArena
+subArena(KvArena &parent, size_t size)
 {
   u8 *base = (u8 *)pushSize(parent, size);
-  Arena result = newArena(base, size);
+  KvArena result = newArena(base, size);
   return result;
 }
 
-inline Arena
-subArenaWithRemainingMemory(Arena &parent)
+inline KvArena
+subArenaWithRemainingMemory(KvArena &parent)
 {
-    Arena result = {};
+    KvArena result = {};
     auto size = parent.cap - parent.used;
     result.base = (u8 *)pushSize(parent, size);
     result.cap  = size;
@@ -200,13 +439,13 @@ subArenaWithRemainingMemory(Arena &parent)
 
 struct TempMemoryMarker
 {
-    Arena  &arena;
+    KvArena  &arena;
     size_t  original_used;
 };
 
 
 inline TempMemoryMarker
-beginTemporaryMemory(Arena &arena)
+beginTemporaryMemory(KvArena &arena)
 {
   TempMemoryMarker out = {arena, arena.used};
   arena.temp_count++;
@@ -228,13 +467,13 @@ commitTemporaryMemory(TempMemoryMarker temp)
 }
 
 inline void
-checkArena(Arena *arena)
+checkArena(KvArena *arena)
 {
     assert(arena->temp_count == 0);
 }
 
 inline void
-resetArena(Arena &arena, b32 zero=false)
+resetArena(KvArena &arena, b32 zero=false)
 {
   arena.used = 0;
   if (zero) {
@@ -243,7 +482,7 @@ resetArena(Arena &arena, b32 zero=false)
 }
 
 inline void *
-pushCopySize(Arena &arena, void *src, size_t size)
+pushCopySize(KvArena &arena, void *src, size_t size)
 {
   void *dst = pushSize(arena, size);
   copyMemory_(src, dst, size);
@@ -260,7 +499,7 @@ pushCopySize(Arena &arena, void *src, size_t size)
 /* #define copyStructNoCast(arena, src) copySize(arena, src, sizeof(*(src))) */
 #define pushCopyArray(arena, count, src) (mytypeof(src)) pushCopySize(arena, (src), count*sizeof(*(src)))
 
-inline u8 *getNext(Arena &buffer)
+inline u8 *getNext(KvArena &buffer)
 {
   return (buffer.base + buffer.used);
 }
@@ -287,7 +526,7 @@ struct String
   operator bool() {return chars;}
 };
 
-typedef Arena StringBuffer;
+typedef KvArena StringBuffer;
 
 struct StartString {
   StringBuffer &arena;
@@ -295,7 +534,7 @@ struct StartString {
 };
 
 inline StartString
-startString(Arena &arena)
+startString(KvArena &arena)
 {
   char *start = (char *)getNext(arena);
   return {.arena=arena, .chars=start};
@@ -380,7 +619,7 @@ toString(const char *c)
 }
 
 inline String
-toString(Arena &arena, const char *c)
+toString(KvArena &arena, const char *c)
 {
   String out = {};
   out.chars = (char *)getNext(arena);
@@ -394,7 +633,7 @@ toString(Arena &arena, const char *c)
 }
 
 inline char *
-toCString(Arena &arena, String string)
+toCString(KvArena &arena, String string)
 {
   char *out = (char *)pushCopySize(arena, string.chars, string.length+1);
   u8 *next = getNext(arena) - 1;
@@ -411,28 +650,28 @@ toCStringTemporary(String string)
   return string.chars;
 }
 
-inline b32
-equal(char *s1, char *s2)
-{
-  todoTestMe;
-  b32 out = true;
-  char *c1 = s1;
-  char *c2 = s2;
-  while (*c1++ == *c2++)
-  {
-    if (*c1 == 0) {
-      out = (*c2 == 0);
-      break;
-    } else if (*c2 == 0) {
-      out = (*c1 == 0);
-      break;
-    }
-  }
-  return out;
-}
+// inline b32
+// equal(char *s1, char *s2)
+// {
+//   todoTestMe;
+//   b32 out = true;
+//   char *c1 = s1;
+//   char *c2 = s2;
+//   while (*c1++ == *c2++)
+//   {
+//     if (*c1 == 0) {
+//       out = (*c2 == 0);
+//       break;
+//     } else if (*c2 == 0) {
+//       out = (*c1 == 0);
+//       break;
+//     }
+//   }
+//   return out;
+// }
 
-internal String
-printVA(Arena &buffer, char *format, va_list arg_list)
+inline String
+printVA(KvArena &buffer, char *format, va_list arg_list)
 {
   char *at = (char *)getNext(buffer);
   int printed = vsnprintf(at, (buffer.cap - buffer.used), format, arg_list);
@@ -440,8 +679,9 @@ printVA(Arena &buffer, char *format, va_list arg_list)
   return String{at, printed};
 }
 
-internal String
-print(Arena &buffer, char *format, ...)
+extern String
+print(KvArena &buffer, char *format, ...)
+#ifdef KV_UTILS_IMPLEMENTATION
 {
   String out = {};
 
@@ -458,9 +698,12 @@ print(Arena &buffer, char *format, ...)
 
   return out;
 }
+#else
+;
+#endif
 
 inline String
-print(Arena &buffer, String s)
+print(KvArena &buffer, String s)
 {
   String out = {};
   {
@@ -484,16 +727,9 @@ print(Arena &buffer, String s)
 //   printf("%.*s", s.length, s.chars);
 // }
 
-// internal void  todo: just use the "%c" format in printf
-// print(Arena &buffer, char character)
-// {
-//   char *string = (char *)pushSize(buffer, 1);
-//   *string = character;
-// }
-
 // todo #cleanup same as "inArena"?
 inline b32
-belongsToArena(Arena *arena, u8 *memory)
+belongsToArena(KvArena *arena, u8 *memory)
 {
   return ((memory >= arena->base) && (memory < arena->base + arena->cap));
 }
@@ -541,7 +777,7 @@ isSubstring(String full, String sub, b32 case_sensitive=true)
 }
 
 inline String
-copyString(Arena &buffer, String src)
+copyString(KvArena &buffer, String src)
 {
   String out;
   out.chars  = pushCopyArray(buffer, src.length, src.chars);
@@ -554,8 +790,8 @@ inline void dump(int d) {printf("%d", d);}
 inline void dump(char *c) {printf("%s", c);}
 inline void dump(String s) {printf("%.*s", s.length, s.chars);}
 
-String
-concatenate(Arena &arena, String a, String b)
+inline String
+concatenate(KvArena &arena, String a, String b)
 {
   auto string = startString(arena);
   print(string.arena, a);
@@ -565,7 +801,7 @@ concatenate(Arena &arena, String a, String b)
 }
 
 inline String
-concatenate(Arena &arena, String a, char *b)
+concatenate(KvArena &arena, String a, char *b)
 {
   return concatenate(arena, a, toString(b));
 }
@@ -573,7 +809,7 @@ concatenate(Arena &arena, String a, char *b)
 /* MARK: End of String */
 
 inline b32
-inArena(Arena &arena, void *p)
+inArena(KvArena &arena, void *p)
 {
   return ((u64)p >= (u64)arena.base && (u64)p < (u64)arena.base+arena.cap);
 }
@@ -632,7 +868,7 @@ privDefer<F> defer_func(F f) {
 #define DLL_EXPORT extern "C" __attribute__((visibility("default")))
 
 
-void *xmalloc(size_t size) {
+inline void *kvXmalloc(size_t size) {
   void *ptr = malloc(size);
   if (!ptr) {
     perror("xmalloc failed");
@@ -668,7 +904,7 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
   if (buffer) {
     new_header = (BufferHeader *)realloc(bufHeader_(buffer), new_size);
   } else {
-    new_header = (BufferHeader *)xmalloc(new_size);
+    new_header = (BufferHeader *)kvXmalloc(new_size);
     new_header->len = 0;
   }
   new_header->cap = new_cap;
@@ -681,3 +917,8 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 #endif // KV_UTILS_IMPLEMENTATION
 
 /* End of stretchy buffer */
+
+#ifndef KV_UTILS_NO_SHORT_NAMES
+#    define Arena   KvArena
+#    define xmalloc kvXmalloc
+#endif

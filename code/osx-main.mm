@@ -25,7 +25,7 @@
 #pragma clang diagnostic pop
 
 // NOTE: My libraries
-#import "kv-utils.h"
+#import "kv_utils.h"
 #import "shader-interface.h"
 #import "platform.h"
 #import "kv-bitmap.h"
@@ -134,7 +134,7 @@ PLATFORM_READ_ENTIRE_FILE(osxReadEntireFile)
 }
 
 inline String
-getParentDirName(Arena arena, String path)
+getParentDirName(KvArena arena, String path)
 {
   i32 last_slash_index = -1;
   for (i32 index=path.length-1; index >= 0; index--) {
@@ -157,7 +157,7 @@ PLATFORM_WRITE_ENTIRE_FILE(osxWriteEntireFile)
 {
   // Create the directory along with missing parent directories
   u8 buffer[256] = {};
-  Arena arena = newArena(buffer, 256);
+  KvArena arena = newArena(buffer, 256);
   String dir_name = getParentDirName(arena, toString(filename));
   //
   i32 mkdir_output = mkdir(dir_name.chars, S_IRWXU | S_IRWXG | S_IROTH);
@@ -212,7 +212,7 @@ id<MTLTexture> metal_textures[TextureIdCount];
 Codepoint codepoints[128];
 
 // todo: #startup #speed Maybe store the bitmaps in the asset system, but idk if it's even faster.
-void makeCodepointTextures(Arena &arena, id<MTLDevice> mtl_device, char *font_file_path) {
+void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_file_path) {
   auto temp = beginTemporaryMemory(arena);
   defer(endTemporaryMemory(temp));
 
@@ -381,11 +381,11 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
   size_t platform_memory_cap = gigaBytes(1);
   //
   u8 *memory_base = osxVirtualAlloc(game_memory_cap + platform_memory_cap);
-  Arena arena = newArena(memory_base, platform_memory_cap);
+  KvArena arena = newArena(memory_base, platform_memory_cap);
   memory_base += platform_memory_cap;
   //
   size_t frame_memory_cap = megaBytes(64);
-  Arena frame_arena = subArena(arena, frame_memory_cap);
+  KvArena frame_arena = subArena(arena, frame_memory_cap);
 
   GameCode game = {};
   game.dylib_path = concatenate(arena, autodraw_path, toString("/libgame.dylib"));
@@ -718,7 +718,7 @@ int main(int argc, const char *argv[])
 {
   u8 buffer[2048];
   u32 buffer_size = sizeof(buffer);
-  Arena arena = newArena(buffer, sizeof(buffer));
+  KvArena arena = newArena(buffer, sizeof(buffer));
   i32 result = _NSGetExecutablePath((char *)buffer, &buffer_size);
   assert(result == 0);
   String exe_path = toString((char *)buffer);
