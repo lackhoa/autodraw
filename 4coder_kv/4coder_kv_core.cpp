@@ -2,8 +2,8 @@
 #include "4coder_byp_token.h"
 #include "4coder_byp_colors.cpp"
 #include "4coder_kv_draw.cpp"
-#define KV_UTILS_NO_SHORT_NAMES
-#include "kv_utils.h"
+#define KV_NO_SHORT_NAMES
+#include "kv.h"
 
 Table_u64_u64 shifted_version_of_characters;
 

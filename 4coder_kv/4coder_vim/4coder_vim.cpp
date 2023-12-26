@@ -4,8 +4,7 @@
 #include "4coder_folds.hpp"
 #include "4coder_vim_keycode_lut.h"
 #include "4coder_vim_commands.cpp"
-#include "stb_ds.h"
-#include "kv_utils.h"
+#include "kv.h"
 
 VIM_REQUEST_SIG(vim_apply_none){}
 VIM_REQUEST_SIG(vim_apply_yank){
@@ -323,10 +322,42 @@ function void vim_append_keycode(Key_Code code){
 
 struct VimQuailEntry
 {
-  String_Const_u8 key;
-  String_Const_u8 value;
+  char *key;
+  char *value;
 };
 VimQuailEntry *vim_quail_table;
+
+// NOTE(kv): If keys are overlapping, you have to push the shorter key first in
+// order to for the quail rule to work.
+function void
+vim_quail_defrule(Application_Links *app, char *key, char *value)
+{
+  forIncrementing(table_index, 0, arrlen(vim_quail_table))
+  {
+    char *existing_key = vim_quail_table[table_index].key;
+    if (stb_prefix(key, existing_key))
+    {
+      char *existing_value = vim_quail_table[table_index].value;
+      // NOTE: If we mapped from existing_key ",." to existing_value "->",
+      // then there is a new map key ",.." to value "<>",
+      // we want the new key to be "->."
+      i32 new_key_cap = strlen(existing_value) + strlen(key);
+      char *new_key = (char *)malloc(new_key_cap);
+      if (!kvProbably(new_key))
+      {
+        return;
+      }
+      snprintf(new_key, new_key_cap, "%s%s", existing_value, key + strlen(existing_key));
+
+      Scratch_Block scratch(app);
+      printf_message(app, scratch, "quail key %s changed to %s\n", key, new_key);
+
+      key = new_key;
+      break;
+    }
+  }
+  arrpush(vim_quail_table, (VimQuailEntry{key, value}));
+}
 
 function b32
 vim_handle_quail(Application_Links *app, u8 character)
@@ -337,8 +368,9 @@ vim_handle_quail(Application_Links *app, u8 character)
     return false;
   }
 
+  char * &qbuffer = vim_quail_insert_buffer;
   b32 substituted = false;
-  arrput(vim_quail_insert_buffer, character);
+  arrput(qbuffer, character);
   View_ID   view   = get_active_view(app, Access_ReadVisible);
   Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
 
@@ -346,19 +378,30 @@ vim_handle_quail(Application_Links *app, u8 character)
        (quail_index < arrlen(vim_quail_table)) && (!substituted);
        quail_index++)
   {
-    String_Const_u8 key = vim_quail_table[quail_index].key;
+    char *key = vim_quail_table[quail_index].key;
+    i32 key_len = strlen(key);
 
-    u8 * &qbuffer = vim_quail_insert_buffer;
-    String_Const_u8 inserted = SCu8(qbuffer + (arrlen(qbuffer) - key.size), key.size);
-    substituted = (string_compare(inserted, key) == 0);
+    char *inserted = qbuffer + arrlen(qbuffer) - key_len;
+    substituted = (strncmp(inserted, key, key_len) == 0);
     if (substituted)
     {
-      i64 pos = view_get_cursor_pos(app, view) - (key.size-1);
-      auto range = Range_i64{pos, pos + (i64)(key.size-1)};
-      String_Const_u8 value = vim_quail_table[quail_index].value;
-      buffer_replace_range(app, buffer, range, value);
-      // NOTE(kv): It's not documented where the cursor ends up after "buffer_replace_range"
-      move_horizontal_lines(app, value.size);
+      // NOTE(kv): Edit buffer content
+      i64 pos = view_get_cursor_pos(app, view) - (key_len-1);
+      auto range = Range_i64{pos, pos + (i64)(key_len-1)};
+      char *replacement = vim_quail_table[quail_index].value;
+      String_Const_u8 value_scu8 = SCu8(replacement);
+      buffer_replace_range(app, buffer, range, value_scu8);
+
+      // NOTE(kv): Update cursor position.
+      move_horizontal_lines(app, strlen(replacement));
+
+      // NOTE(kv): Update the quail buffer content too, since the substituted
+      // characters may contribute to another substitution afterwards.
+      arrsetlen(qbuffer, arrlen(qbuffer) - key_len);
+      forIncrementing(value_index, 0, strlen(replacement))
+      {
+        arrput(qbuffer, replacement[value_index]);
+      }
     }
   }
 

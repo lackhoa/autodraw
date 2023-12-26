@@ -14,7 +14,7 @@ SOURCE="${HERE}/4coder_kv.cpp"
 
 if [ "$1" = "run" ]; then
     export DYLD_INSERT_LIBRARIES="/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
-    ${FCODER_ROOT}/4ed
+    ${FCODER_ROOT}/4ed > /dev/null  # Does emacs output pipe slow down 4coder? Very possible!
 else
     opts="-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 -I${HERE}/../libs"
     arch=-m64

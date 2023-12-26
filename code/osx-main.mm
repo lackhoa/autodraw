@@ -25,7 +25,9 @@
 #pragma clang diagnostic pop
 
 // NOTE: My libraries
-#import "kv_utils.h"
+#define KV_IMPLEMENTATION
+#import "kv.h"
+#undef KV_IMPLEMENTATION
 #import "shader-interface.h"
 #import "platform.h"
 #import "kv-bitmap.h"

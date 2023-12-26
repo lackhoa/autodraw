@@ -2,7 +2,8 @@
 
 #include "4coder_vim_base_types.h"
 #include "4coder_vimrc.h"
-#include "stb_ds.h"
+#define KV_NO_SHORT_NAMES
+#include "kv.h"
 
 global Vim_State vim_state;
 global Table_u64_u64 vim_maps[VIM_MODE_COUNT*VIM_SUBMODE_COUNT];
@@ -50,7 +51,7 @@ function Rect_f32 vim_get_bottom_rect(Application_Links *app){
 	return result;
 }
 
-global u8 *vim_quail_insert_buffer;
+global char *vim_quail_insert_buffer;
 
 struct Vim_Buffer_Peek_Entry{
 	Buffer_Identifier buffer_id;

@@ -1,8 +1,10 @@
 /*
-  Usage: Define "KV_UTILS_IMPLEMENTATION" before including this file to get the
+  Usage: Define "KV_IMPLEMENTATION" before including this file to get the
   implementation for your compilation unit.
 
-  --------------- Printing -----------------
+  --------------- String -----------------
+
+  Our "String" is are static length-strings, made to work with "kvArena".
 
   After printing a string to an arena, there is nil-termination, but that might
   be overwritten. You can lock the termination by simply incrementing the arena
@@ -13,9 +15,17 @@
   ), because we feel like it's just a conversion, and can be converted back.
 
   All non-nil-terminated strings must be marked explicitly with "non_nil"
+
+  todo: debate: Actually let's just use C string, because it's more ergonomic.
+  Because of printf, concate and all that.
+  If we don't have nil terminator, we're screwed when using those standard C funcitons.
+  But if we don't use nil terminator, we can't have cheap substrings (which is
+  the only attraction).
 */
 
-#pragma once
+#pragma once  // NOTE: #pragma once means that you have to define the
+              // implementation at the top of whatever your main file is, since
+              // this file ain't gonna apear twice.
 
 #include <stdlib.h> // malloc, free
 #include <stdio.h>  // printf, perror
@@ -23,6 +33,46 @@
 #include <stddef.h>
 #include <cstdint>
 #include <float.h>
+#include <string.h>
+
+/*
+  SECTION: Other single-header libraries
+*/
+
+#ifdef KV_IMPLEMENTATION
+#    define STB_DEFINE
+#    define STB_DS_IMPLEMENTATION
+#endif
+
+// NOTE: These header files are supposed to be in the same directory as this file.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+
+#    include "stb.h"
+#    include "stb_ds.h"
+
+#pragma clang diagnostic pop
+
+#undef STB_DEFINE
+#undef STB_DS_IMPLEMENTATION
+
+/*
+  Other single-header libraries
+*/
+
+
+
+
+
+
+
+
+
+
+#ifndef KV_NO_SHORT_NAMES
+#    define Arena   KvArena
+#    define xmalloc kvXmalloc
+#endif
 
 /* Types */
 typedef uint8_t  u8;
@@ -521,6 +571,13 @@ inline u8 *getNext(KvArena &buffer)
 
 /* MARK: String */
 
+struct String
+{
+  char *chars;
+  i32   length;                 // note: does not include the nil terminator
+  operator bool() {return chars;}
+};
+
 inline i32
 stringLength(char *string)
 {
@@ -533,13 +590,6 @@ stringLength(char *string)
     }
     return out;
 }
-
-struct String
-{
-  char *chars;
-  i32   length;                 // note: does not include the nil terminator
-  operator bool() {return chars;}
-};
 
 typedef KvArena StringBuffer;
 
@@ -590,13 +640,13 @@ equal(String s, const char *cstring)
 }
 
 inline b32
-equal(const char *cstring, String s)
+stringEqual(const char *cstring, String s)
 {
   return equal(s, cstring);
 }
 
 inline b32
-equal(String a, String b)
+stringEqual(String a, String b)
 {
     b32 out = true;
     if (a.length != b.length)
@@ -616,7 +666,7 @@ equal(String a, String b)
 }
 
 inline b32
-equal(String a, char c)
+stringEqual(String a, char c)
 {
   return a.length == 1 && a.chars[0] == c;
 }
@@ -696,7 +746,7 @@ printVA(KvArena &buffer, char *format, va_list arg_list)
 
 extern String
 print(KvArena &buffer, char *format, ...)
-#ifdef KV_UTILS_IMPLEMENTATION
+#ifdef KV_IMPLEMENTATION
 {
   String out = {};
 
@@ -815,6 +865,21 @@ concatenate(KvArena &arena, String a, char *b)
   return concatenate(arena, a, toString(b));
 }
 
+inline String
+concatenate(String a, String b)
+{
+  i32 length = a.length + b.length;
+  char *chars = (char *)malloc(a.length + b.length + 1);
+  if (!chars)
+  {
+    return String{};
+  }
+  strncpy(chars, a.chars, a.length);
+  strncpy(chars + a.length, b.chars, b.length);
+  chars[length] = 0;
+  return String{chars, length};
+}
+
 /* MARK: End of String */
 
 inline b32
@@ -905,7 +970,7 @@ struct BufferHeader {
 #define bufFree(buffer) free(bufHeader_(buffer))
 
 void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
-#ifdef KV_UTILS_IMPLEMENTATION
+#ifdef KV_IMPLEMENTATION
 {
   i32 new_cap = maximum(bufCap(buffer)*2, new_len);
   i32 new_size = sizeof(BufferHeader)+new_cap*item_size;
@@ -923,11 +988,9 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 }
 #else
 ;
-#endif // KV_UTILS_IMPLEMENTATION
+#endif // KV_IMPLEMENTATION
 
 /* End of stretchy buffer */
 
-#ifndef KV_UTILS_NO_SHORT_NAMES
-#    define Arena   KvArena
-#    define xmalloc kvXmalloc
-#endif
+#define forIncrementing(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; INDEX < (END); INDEX++)
+#define forIncrementingWithCondition(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; (INDEX < (END)) && (CONDITION); INDEX++)

@@ -9,15 +9,15 @@
  */
 
 #import <time.h>
-#define KV_UTILS_IMPLEMENTATION
-#include "kv_utils.h"
+#define KV_IMPLEMENTATION
+#include "kv.h"
 #include "platform.h"
 #include "shader-interface.h"
 #include "kv-bitmap.h"
 #include "ray.h"
-#include "ad_typer.cpp"
+// #include "ad_typer.cpp"
 
-global_variable Tokenizer init_tokenizer;
+// global_variable Tokenizer init_tokenizer;
 
 enum ZLevel {
   ZLevelBackdrop,

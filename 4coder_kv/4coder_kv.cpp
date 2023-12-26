@@ -1,7 +1,4 @@
-#include "4coder_vim/4coder_vim_include.h"
 #include "4coder_kv_core.cpp"
-#define STB_DS_IMPLEMENTATION
-#include "stb_ds.h"
 
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
@@ -36,11 +33,44 @@ function void kvInitShiftedTable()
 #undef INSERT
 }
 
-function void kvInitVimQuailTable()
+function void kvInitVimQuailTable(Application_Links *app)
 {
   arrsetcap(vim_quail_table, 64);
-  arrpush(vim_quail_table, (VimQuailEntry{SCu8(",."), SCu8("->")}));
-  arrpush(vim_quail_table, (VimQuailEntry{SCu8(",,"), SCu8("_")}));
+#define QUAIL_DEFRULE(KEY, VALUE) vim_quail_defrule(app, (KEY), (VALUE))
+  //
+  QUAIL_DEFRULE(",,", "_");
+  QUAIL_DEFRULE(",,.", "=>");
+  //
+  QUAIL_DEFRULE(",.", "->");
+  QUAIL_DEFRULE(",..", "<>");
+  //
+  QUAIL_DEFRULE(".,", "<-");
+  //
+  QUAIL_DEFRULE(";;", ":");
+  QUAIL_DEFRULE(";;;", ";;");
+  //
+  QUAIL_DEFRULE("11", "!");
+  QUAIL_DEFRULE("33", "#");
+  QUAIL_DEFRULE("44", "$");
+  QUAIL_DEFRULE("55", "%");
+  QUAIL_DEFRULE("77", "&");
+  QUAIL_DEFRULE("88", "*");
+  QUAIL_DEFRULE("99", "(");
+  QUAIL_DEFRULE("00", ")");
+  //
+  QUAIL_DEFRULE("[[", "{");
+  QUAIL_DEFRULE("[[[", "[[");
+  QUAIL_DEFRULE("]]", "}");
+  QUAIL_DEFRULE("]]]", "]]");
+  //
+  QUAIL_DEFRULE("''", "\"");
+  QUAIL_DEFRULE("leq", "<=");
+  QUAIL_DEFRULE("geq", ">=");
+  QUAIL_DEFRULE("gtt", ">");
+  QUAIL_DEFRULE("lessthan", "<");
+  QUAIL_DEFRULE("neq", "!=");
+  //
+#undef QUAIL_DEFRULE
 }
 
 // NOTE(kv): The VimBind function doesn't let us overwrite bindings.
@@ -127,19 +157,21 @@ kv_vim_bindings(Application_Links *app)
 	BIND(V|MAP,   vim_replace_range_next,               KeyCode_R);
 
 	/// Edit Binds
-	BIND(N|MAP,   vim_paste_before,                    KeyCode_P);
-	BIND(N|MAP,   vim_backspace_char,           (Shift|KeyCode_X));
-	BIND(N|MAP,   vim_delete_char,                     KeyCode_X);
-	BIND(N|MAP,   vim_replace_next_char,               KeyCode_R);
-	BIND(N|V|MAP, vim_combine_line,             (Shift|KeyCode_J));
-	BIND(N|V|MAP, vim_combine_line,      SUB_G, (Shift|KeyCode_J));
-	BIND(N|MAP,   vim_last_command,                    KeyCode_Period);
-	BIND(N|V|MAP, vim_select_register,          (Shift|KeyCode_Quote));
-	BIND(N|MAP,   vim_toggle_char,              (Shift|KeyCode_Tick));
-	BIND(I|MAP,   vim_select_register,            (Ctl|KeyCode_R));
-	BIND(I|MAP,   vim_delete_to_begin,            (Ctl|KeyCode_U));
-	BIND(V|MAP,   vim_move_selection_up,         (Meta|KeyCode_K));
-	BIND(V|MAP,   vim_move_selection_down,       (Meta|KeyCode_J));
+	BIND(N|MAP,     vim_paste_before,                    KeyCode_P);
+	BIND(N|MAP,     vim_backspace_char,           (Shift|KeyCode_X));
+	BIND(N|MAP,     vim_delete_char,                     KeyCode_X);
+	BIND(N|MAP,     vim_replace_next_char,               KeyCode_R);
+	BIND(N|V|MAP,   vim_combine_line,             (Shift|KeyCode_J));
+	BIND(N|V|MAP,   vim_combine_line,      SUB_G, (Shift|KeyCode_J));
+	BIND(N|MAP,     vim_last_command,                    KeyCode_Period);
+	BIND(N|V|MAP,   vim_select_register,          (Shift|KeyCode_Quote));
+	BIND(N|MAP,     vim_toggle_char,              (Shift|KeyCode_Tick));
+	BIND(I|MAP,     vim_select_register,            (Ctl|KeyCode_R));
+	BIND(I|MAP,     vim_delete_to_begin,            (Ctl|KeyCode_U));
+	BIND(V|MAP,     vim_move_selection_up,         (Meta|KeyCode_K));
+	BIND(V|MAP,     vim_move_selection_down,       (Meta|KeyCode_J));
+	BIND(N|I|V|MAP, vim_backspace_char,                  KeyCode_Backspace);
+	BIND(N|I|V|MAP, vim_delete_char,                     KeyCode_Delete);
 
 	/// Digit Binds
 	BIND(N|V|MAP, vim_modal_0,                          KeyCode_0);
@@ -152,8 +184,6 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_digit,                            KeyCode_7);
 	BIND(N|V|MAP, vim_digit,                            KeyCode_8);
 	BIND(N|V|MAP, vim_digit,                            KeyCode_9);
-	BIND(N|V|MAP, vim_digit_del,                        KeyCode_Backspace);
-	BIND(N|V|MAP, vim_digit_del,                        KeyCode_Delete);
 
 	/// Movement Binds
 	BIND(N|V|MAP, vim_left,                             KeyCode_H);
@@ -282,7 +312,7 @@ void custom_layer_init(Application_Links *app)
   kv_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
 
   kvInitShiftedTable();
-  kvInitVimQuailTable();  // TODO: init this table in the vim layer too!
+  kvInitVimQuailTable(app);  // TODO: init this table in the vim layer too!
   kv_vim_bindings(app);
 
   if (false)

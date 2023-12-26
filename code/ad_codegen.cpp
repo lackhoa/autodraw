@@ -8,8 +8,8 @@
 #include <string.h>
 #include "clang-c/Index.h"
 
-#define KV_UTILS_IMPLEMENTATION
-#include "kv_utils.h"
+#define KV_IMPLEMENTATION
+#include "kv.h"
 // #include "kv_stdlib.h"
 
 String forward_declare_macro  = toString("forward_declare");
@@ -162,9 +162,9 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
           case CXCursor_MacroExpansion:
           {// check for annotations
             AnnotationType annotation_type = AnnotationTypeNull;
-            if (equal(cursor_string0, forward_declare_macro)) {
+            if (stringEqual(cursor_string0, forward_declare_macro)) {
               annotation_type = AnnotationTypeForwardDeclare;
-            } else if (equal(cursor_string0, function_typedef_macro)) {
+            } else if (stringEqual(cursor_string0, function_typedef_macro)) {
               annotation_type = AnnotationTypeFunctionTypedef;
             }
             if (annotation_type)
@@ -207,7 +207,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                    file_index++) {
                 // see if the header file is already opened
                 auto &fdfile = state.opened_files[file_index];
-                if (equal(loc->dst_filename, fdfile.name)) {
+                if (stringEqual(loc->dst_filename, fdfile.name)) {
                   loc->dst_filestream = fdfile.filestream;
                   kvAssert(loc->dst_filestream);
                   break;
@@ -238,7 +238,7 @@ topLevelVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
             {
               kvAssert(loc);
               b32 match_line = (cursor_line >= loc->line) && (cursor_line < loc->line+3);
-              b32 match_file = equal(filename, loc->src_filename);
+              b32 match_file = stringEqual(filename, loc->src_filename);
               if (match_line && match_file)
               {// function was asked to be forward-declared
                 // printf("forward declare: %s\n", cursor_string0.chars);
