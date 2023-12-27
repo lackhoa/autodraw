@@ -2,6 +2,11 @@
   Usage: Define "KV_IMPLEMENTATION" before including this file to get the
   implementation for your compilation unit.
 
+  --------------- Naming -----------------
+
+  To avoid name conflicts, let's just put kv_ in front of names that are short.
+  For names that are long and/or unique, it probably wouldn't matter.
+
   --------------- String -----------------
 
   Our "String" is are static length-strings, made to work with "kvArena".
@@ -69,10 +74,6 @@
 
 
 
-#ifndef KV_NO_SHORT_NAMES
-#    define Arena   KvArena
-#    define xmalloc kvXmalloc
-#endif
 
 /* Types */
 typedef uint8_t  u8;
@@ -344,35 +345,35 @@ rotateRight(u32 value, i32 rotateAmount)
 #  define debugbreak __builtin_trap()
 #endif
 
-#define kvAssert(claim) if (!(claim)) { debugbreak; }
+#define kv_assert(claim) if (!(claim)) { debugbreak; }
 
-#define invalidCodePath kvAssert(false)
-#define todoErrorReport kvAssert(false)
-#define todoIncomplete  kvAssert(false)
-#define todoTestMe      kvAssert(false)
-#define todoOutlaw      kvAssert(false)
-#define todoUnknown     kvAssert(false)
-#define invalidDefaultCase default: { kvAssert(false); };
+#define invalidCodePath kv_assert(false)
+#define todoErrorReport kv_assert(false)
+#define todoIncomplete  kv_assert(false)
+#define todoTestMe      kv_assert(false)
+#define todoOutlaw      kv_assert(false)
+#define todoUnknown     kv_assert(false)
+#define invalidDefaultCase default: { kv_assert(false); };
 #define breakhere       { int x = 5; (void)x; }
 
 #if KV_INTERNAL
-#    define kvSoftAssert1        kvAssert
-#    define kvProbably(CLAIM)   (kvAssert(CLAIM), true)
+#    define softAssert      kv_assert
+#    define probably(CLAIM) (kv_assert(CLAIM), true)
 #else
-#    define kvSoftAssert1(CLAIM)
-#    define kvProbably(CLAIM) (CLAIM)
+#    define softAssert(CLAIM)
+#    define probably(CLAIM) (CLAIM)
 #endif
 
 #if KV_SLOW
-#    define kvAssertSlow kvAssert
+#    define slowAssert kv_assert
 #else
-#    define kvAssertSlow
+#    define slowAssert
 #endif
 
 inline i32 safeTruncateToInt32(u64 value)
 {
   // NOTE: this is not really "safe" but what are you gonna do
-  kvAssert(value < INT_MAX);
+  kv_assert(value < INT_MAX);
   return (i32)value;
 }
 
@@ -414,7 +415,7 @@ zeroSize(void *base, size_t size)
 #define zeroStruct(base, type) zeroSize(base, sizeof(type));
 #define zeroOut(base) zeroSize(base, sizeof(base))
 
-struct KvArena
+struct kv_Arena
 {
   u8     *base;
   size_t  used;
@@ -426,10 +427,10 @@ struct KvArena
   i32 temp_count;
 };
 
-inline KvArena
+inline kv_Arena
 newArena(void *base, size_t cap)
 {
-    KvArena arena = {};
+    kv_Arena arena = {};
     arena.cap          = cap;
     arena.base         = (u8 *)base;
     arena.original_cap = cap;
@@ -437,27 +438,27 @@ newArena(void *base, size_t cap)
 }
 
 inline size_t
-getArenaFree(KvArena &arena)
+getArenaFree(kv_Arena &arena)
 {
     size_t out = arena.cap - arena.used;
     return out;
 }
 
 inline void *
-pushSize(KvArena &arena, size_t size, b32 zero = false)
+pushSize(kv_Arena &arena, size_t size, b32 zero = false)
 {
   void *out = arena.base + arena.used;
   arena.used += size;
-  kvAssert(arena.used <= arena.cap);
+  kv_assert(arena.used <= arena.cap);
   if (zero) zeroSize(out, size);
   return(out);
 }
 
 inline void *
-pushSizeBackward(KvArena &arena, size_t size)
+pushSizeBackward(kv_Arena &arena, size_t size)
 {
   arena.cap -= size;
-  kvAssert(arena.used <= arena.cap);
+  kv_assert(arena.used <= arena.cap);
   void *out = arena.base + arena.cap;
   return(out);
 }
@@ -481,18 +482,18 @@ pushSizeBackward(KvArena &arena, size_t size)
 #define pushItemsAs(...) \
   auto pushItems(##__VA_ARGS__)
 
-inline KvArena
-subArena(KvArena &parent, size_t size)
+inline kv_Arena
+subArena(kv_Arena &parent, size_t size)
 {
   u8 *base = (u8 *)pushSize(parent, size);
-  KvArena result = newArena(base, size);
+  kv_Arena result = newArena(base, size);
   return result;
 }
 
-inline KvArena
-subArenaWithRemainingMemory(KvArena &parent)
+inline kv_Arena
+subArenaWithRemainingMemory(kv_Arena &parent)
 {
-    KvArena result = {};
+    kv_Arena result = {};
     auto size = parent.cap - parent.used;
     result.base = (u8 *)pushSize(parent, size);
     result.cap  = size;
@@ -501,13 +502,13 @@ subArenaWithRemainingMemory(KvArena &parent)
 
 struct TempMemoryMarker
 {
-    KvArena  &arena;
+    kv_Arena  &arena;
     size_t  original_used;
 };
 
 
 inline TempMemoryMarker
-beginTemporaryMemory(KvArena &arena)
+beginTemporaryMemory(kv_Arena &arena)
 {
   TempMemoryMarker out = {arena, arena.used};
   arena.temp_count++;
@@ -518,7 +519,7 @@ inline void
 endTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
-  if (!kvProbably(temp.arena.used >= temp.original_used))
+  if (!probably(temp.arena.used >= temp.original_used))
   {
     printf("Memory leak detected!\n");
   }
@@ -532,13 +533,13 @@ commitTemporaryMemory(TempMemoryMarker temp)
 }
 
 inline void
-checkArena(KvArena *arena)
+checkArena(kv_Arena *arena)
 {
-    kvAssert(arena->temp_count == 0);
+    kv_assert(arena->temp_count == 0);
 }
 
 inline void
-resetArena(KvArena &arena, b32 zero=false)
+resetArena(kv_Arena &arena, b32 zero=false)
 {
   arena.used = 0;
   if (zero) {
@@ -547,7 +548,7 @@ resetArena(KvArena &arena, b32 zero=false)
 }
 
 inline void *
-pushCopySize(KvArena &arena, void *src, size_t size)
+pushCopySize(kv_Arena &arena, void *src, size_t size)
 {
   void *dst = pushSize(arena, size);
   copyMemory_(src, dst, size);
@@ -564,7 +565,7 @@ pushCopySize(KvArena &arena, void *src, size_t size)
 /* #define copyStructNoCast(arena, src) copySize(arena, src, sizeof(*(src))) */
 #define pushCopyArray(arena, count, src) (mytypeof(src)) pushCopySize(arena, (src), count*sizeof(*(src)))
 
-inline u8 *getNext(KvArena &buffer)
+inline u8 *getNext(kv_Arena &buffer)
 {
   return (buffer.base + buffer.used);
 }
@@ -591,7 +592,7 @@ stringLength(char *string)
     return out;
 }
 
-typedef KvArena StringBuffer;
+typedef kv_Arena StringBuffer;
 
 struct StartString {
   StringBuffer &arena;
@@ -599,7 +600,7 @@ struct StartString {
 };
 
 inline StartString
-startString(KvArena &arena)
+startString(kv_Arena &arena)
 {
   char *start = (char *)getNext(arena);
   return {.arena=arena, .chars=start};
@@ -684,7 +685,7 @@ toString(const char *c)
 }
 
 inline String
-toString(KvArena &arena, const char *c)
+toString(kv_Arena &arena, const char *c)
 {
   String out = {};
   out.chars = (char *)getNext(arena);
@@ -698,7 +699,7 @@ toString(KvArena &arena, const char *c)
 }
 
 inline char *
-toCString(KvArena &arena, String string)
+toCString(kv_Arena &arena, String string)
 {
   char *out = (char *)pushCopySize(arena, string.chars, string.length+1);
   u8 *next = getNext(arena) - 1;
@@ -711,7 +712,7 @@ toCString(KvArena &arena, String string)
 inline char *
 toCStringTemporary(String string)
 {
-  kvAssert(*(string.chars + string.length) == 0);
+  kv_assert(*(string.chars + string.length) == 0);
   return string.chars;
 }
 
@@ -736,7 +737,7 @@ toCStringTemporary(String string)
 // }
 
 inline String
-printVA(KvArena &buffer, char *format, va_list arg_list)
+printVA(kv_Arena &buffer, char *format, va_list arg_list)
 {
   char *at = (char *)getNext(buffer);
   int printed = vsnprintf(at, (buffer.cap - buffer.used), format, arg_list);
@@ -745,7 +746,7 @@ printVA(KvArena &buffer, char *format, va_list arg_list)
 }
 
 extern String
-print(KvArena &buffer, char *format, ...)
+print(kv_Arena &buffer, char *format, ...)
 #ifdef KV_IMPLEMENTATION
 {
   String out = {};
@@ -768,7 +769,7 @@ print(KvArena &buffer, char *format, ...)
 #endif
 
 inline String
-print(KvArena &buffer, String s)
+print(kv_Arena &buffer, String s)
 {
   String out = {};
   {
@@ -780,7 +781,7 @@ print(KvArena &buffer, String s)
     *at = 0;
     out.length = (i32)(at - out.chars);
     buffer.used += out.length;
-    kvAssert(buffer.used <= buffer.cap);  // todo: don't crash!
+    kv_assert(buffer.used <= buffer.cap);  // todo: don't crash!
   }
 
   return out;
@@ -788,7 +789,7 @@ print(KvArena &buffer, String s)
 
 // todo #cleanup same as "inArena"?
 inline b32
-belongsToArena(KvArena *arena, u8 *memory)
+belongsToArena(kv_Arena *arena, u8 *memory)
 {
   return ((memory >= arena->base) && (memory < arena->base + arena->cap));
 }
@@ -836,7 +837,7 @@ isSubstring(String full, String sub, b32 case_sensitive=true)
 }
 
 inline String
-copyString(KvArena &buffer, String src)
+copyString(kv_Arena &buffer, String src)
 {
   String out;
   out.chars  = pushCopyArray(buffer, src.length, src.chars);
@@ -850,7 +851,7 @@ inline void dump(char *c) {printf("%s", c);}
 inline void dump(String s) {printf("%.*s", s.length, s.chars);}
 
 inline String
-concatenate(KvArena &arena, String a, String b)
+concatenate(kv_Arena &arena, String a, String b)
 {
   auto string = startString(arena);
   print(string.arena, a);
@@ -860,7 +861,7 @@ concatenate(KvArena &arena, String a, String b)
 }
 
 inline String
-concatenate(KvArena &arena, String a, char *b)
+concatenate(kv_Arena &arena, String a, char *b)
 {
   return concatenate(arena, a, toString(b));
 }
@@ -883,7 +884,7 @@ concatenate(String a, String b)
 /* MARK: End of String */
 
 inline b32
-inArena(KvArena &arena, void *p)
+inArena(kv_Arena &arena, void *p)
 {
   return ((u64)p >= (u64)arena.base && (u64)p < (u64)arena.base+arena.cap);
 }
@@ -942,10 +943,10 @@ privDefer<F> defer_func(F f) {
 #define DLL_EXPORT extern "C" __attribute__((visibility("default")))
 
 
-inline void *kvXmalloc(size_t size) {
+inline void *kv_xmalloc(size_t size) {
   void *ptr = malloc(size);
   if (!ptr) {
-    perror("xmalloc failed");
+    perror("kv_xmalloc failed");
     exit(1);
   }
   return ptr;
@@ -978,12 +979,12 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
   if (buffer) {
     new_header = (BufferHeader *)realloc(bufHeader_(buffer), new_size);
   } else {
-    new_header = (BufferHeader *)kvXmalloc(new_size);
+    new_header = (BufferHeader *)kv_xmalloc(new_size);
     new_header->len = 0;
   }
   new_header->cap = new_cap;
   buffer = new_header->items;
-  kvAssert(bufCap(buffer) >= new_len);
+  kv_assert(bufCap(buffer) >= new_len);
   return buffer;
 }
 #else
@@ -994,3 +995,11 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 
 #define forIncrementing(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; INDEX < (END); INDEX++)
 #define forIncrementingWithCondition(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; (INDEX < (END)) && (CONDITION); INDEX++)
+
+/* todo: Old names */
+#define kvXmalloc     kv_xmalloc
+#define kvAssert      kv_assert
+#define kvSoftAssert1 softAssert
+#define kvProbably    probably
+typedef kv_Arena KvArena;
+/* Old names > */

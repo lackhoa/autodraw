@@ -1,9 +1,11 @@
 #include "4coder_vim/4coder_vim_include.h"
-#include "4coder_byp_token.h"
 #include "4coder_byp_colors.cpp"
 #include "4coder_kv_draw.cpp"
-#define KV_NO_SHORT_NAMES
 #include "kv.h"
+
+#define GET_VIEW_AND_BUFFER \
+  View_ID   view = get_active_view(app, Access_ReadVisible); \
+  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible)
 
 Table_u64_u64 shifted_version_of_characters;
 
@@ -150,94 +152,60 @@ CUSTOM_DOC("Resets face size to default")
 	try_modify_face(app, face_id, &description);
 }
 
+// global b32 byp_bracket_opened;
 
-global b32 byp_bracket_opened;
+// CUSTOM_COMMAND_SIG(kv_text_input)
+// CUSTOM_DOC("implement quail mode")
+// {
+// 	User_Input in = get_current_input(app);
+// 	String_Const_u8 insert = to_writable(&in);
+// 	byp_bracket_opened = insert.str[insert.size-1] == '{';
+// 	write_text(app, insert);
+// }
 
-CUSTOM_COMMAND_SIG(kv_text_input)
-CUSTOM_DOC("implement quail mode")
-{
-	User_Input in = get_current_input(app);
-	String_Const_u8 insert = to_writable(&in);
-	byp_bracket_opened = insert.str[insert.size-1] == '{';
-	write_text(app, insert);
-}
+// CUSTOM_COMMAND_SIG(byp_auto_complete_bracket)
+// CUSTOM_DOC("Sets the right size of the view near the x position of the cursor.")
+// {
+// 	View_ID view = get_active_view(app, Access_ReadWriteVisible);
+// 	i64 pos = view_get_character_legal_pos_from_pos(app, view, view_get_cursor_pos(app, view));
+// 	Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
+// 	Token_Array token_array = get_token_array_from_buffer(app, buffer);
+// 	do{
+// 		if(token_array.tokens == 0){
+// 			if(byp_bracket_opened){
+// 				write_text(app, string_u8_litexpr("\n\n}"));
+// 				move_up(app);
+// 				byp_bracket_opened = 0;
+// 				return;
+// 			}else{
+// 				break;
+// 			}
+// 		}
 
-CUSTOM_COMMAND_SIG(byp_auto_complete_bracket)
-CUSTOM_DOC("Sets the right size of the view near the x position of the cursor.")
-{
-	View_ID view = get_active_view(app, Access_ReadWriteVisible);
-	i64 pos = view_get_character_legal_pos_from_pos(app, view, view_get_cursor_pos(app, view));
-	Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
-	Token_Array token_array = get_token_array_from_buffer(app, buffer);
-	do{
-		if(token_array.tokens == 0){
-			if(byp_bracket_opened){
-				write_text(app, string_u8_litexpr("\n\n}"));
-				move_up(app);
-				byp_bracket_opened = 0;
-				return;
-			}else{
-				break;
-			}
-		}
+// 		i64 first_index = token_index_from_pos(&token_array, pos);
+// 		Token_Iterator_Array it = token_iterator_index(0, token_array.tokens, token_array.count, first_index);
+// 		if(!token_it_dec(&it)){ break; }
 
-		i64 first_index = token_index_from_pos(&token_array, pos);
-		Token_Iterator_Array it = token_iterator_index(0, token_array.tokens, token_array.count, first_index);
-		if(!token_it_dec(&it)){ break; }
+// 		Token *token = token_it_read(&it);
+// 		if(token && byp_bracket_opened && buffer_get_char(app, buffer, token->pos) == '{'){
+// 			token_it_dec(&it);
+// 			token = token_it_read(&it);
+// 			if(token->kind == TokenBaseKind_Identifier){
+// 				if(!token_it_dec(&it)){ break; }
+// 				token = token_it_read(&it);
+// 			}
+// 			String_Const_u8 insert = string_u8_litexpr("\n\n};");
+// 			insert.size -= (token->kind != byp_TokenKind_Struct);
+// 			write_text(app, insert);
+// 			move_up(app);
+// 			byp_bracket_opened = 0;
+// 			return;
+// 		}
+// 	}while(0);
 
-		Token *token = token_it_read(&it);
-		if(token && byp_bracket_opened && buffer_get_char(app, buffer, token->pos) == '{'){
-			token_it_dec(&it);
-			token = token_it_read(&it);
-			if(token->kind == TokenBaseKind_Identifier){
-				if(!token_it_dec(&it)){ break; }
-				token = token_it_read(&it);
-			}
-			String_Const_u8 insert = string_u8_litexpr("\n\n};");
-			insert.size -= (token->kind != byp_TokenKind_Struct);
-			write_text(app, insert);
-			move_up(app);
-			byp_bracket_opened = 0;
-			return;
-		}
-	}while(0);
-
-	write_text(app, string_u8_litexpr("\n"));
-	byp_bracket_opened = 0;
-}
-
-CUSTOM_COMMAND_SIG(explorer)
-CUSTOM_DOC("Opens file explorer in hot directory")
-{
-	Scratch_Block scratch(app);
-	String_Const_u8 hot = push_hot_directory(app, scratch);
-	exec_system_command(app, 0, buffer_identifier(0), hot, string_u8_litexpr("explorer ."), 0);
-}
-
-CUSTOM_COMMAND_SIG(byp_list_all_locations_selection)
-CUSTOM_DOC("Lists locations of selection range")
-{
-	vim_normal_mode(app);
-	View_ID view = get_active_view(app, Access_ReadVisible);
-	Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-	Range_i64 range = get_view_range(app, view);
-	range.max++;
-
-	Scratch_Block scratch(app);
-	String_Const_u8 range_string = push_buffer_range(app, scratch, buffer, range);
-	list_all_locations__generic(app, range_string, ListAllLocationsFlag_CaseSensitive|ListAllLocationsFlag_MatchSubstring);
-}
-
-CUSTOM_COMMAND_SIG(byp_open_current_peek)
-CUSTOM_DOC("Sets the active view to the current peeked buffer")
-{
-	View_ID view = get_active_view(app, Access_ReadWriteVisible);
-	Buffer_ID buffer = buffer_identifier_to_id(app, vim_buffer_peek_list[vim_buffer_peek_index].buffer_id);
-	view_set_buffer(app, view, buffer, SetBuffer_KeepOriginalGUI);
-	vim_show_buffer_peek = 1;
-	vim_toggle_show_buffer_peek(app);
-}
-
+// 	write_text(app, string_u8_litexpr("\n"));
+// 	byp_bracket_opened = 0;
+// }
 
 function void
 byp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id) {
@@ -431,4 +399,11 @@ VIM_TEXT_OBJECT_SIG(byp_object_camel) {
 	if(range.min >= range.max){ range = {}; }
 
 	return range;
+}
+
+CUSTOM_COMMAND_SIG(vim_goto_definition_other_panel)
+{
+  vim_push_jump(app, get_active_view(app, Access_ReadVisible));
+  view_buffer_other_panel(app);
+  jump_to_definition_at_cursor(app);
 }

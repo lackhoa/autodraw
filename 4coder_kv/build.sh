@@ -1,11 +1,16 @@
 #!/bin/bash
 
 # NOTE: Script originally taken from 4ed/code/custom/bin/kv_buildsuper_x64-mac.sh (v4.1.7)
+#
+# todo: Compilation is slow (~5 seconds), but the slowness isn't from my side,
+# since the game also links with ~10k lines library, and it only takes ~2
+# seconds.
 
 set -e
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-FCODER_ROOT="${HOME}/4coder"
-CODE_HOME="${HOME}/4ed/code/custom"
+FCODER_ROOT="$HOME/4coder"
+CODE_HOME="$HOME/4ed/code/custom"
+AUTODRAW_ROOT="$HOME/AutoDraw"
 
 cd "${FCODER_ROOT}"
 echo "Workdir: $(pwd)"
@@ -34,12 +39,11 @@ else
     "$CODE_HOME/metadata_generator" -R "$CODE_HOME" "$PWD/$preproc_file"
     #
     echo "NOTE: COMPILING"
-    clang++ -c "$SOURCE" -I"$CODE_HOME" $arch $opts $debug -std=c++11 -fPIC -o custom_4coder.o -fsanitize=address
+    ccache clang++ -c "$SOURCE" -I"$CODE_HOME" $arch $opts $debug -std=c++11 -fPIC -o custom_4coder.o -fsanitize=address
     #
     echo "NOTE: LINKING"
-    AUTODRAW_STATIC_LIB_PATH="${HOME}/AutoDraw/build"
     FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
-    clang++ "custom_4coder.o" "${AUTODRAW_STATIC_LIB_PATH}/autodraw.o" -shared -o "custom_4coder.so" ${FRAMEWORKS} -fsanitize=address
+    clang++ "custom_4coder.o" "$AUTODRAW_ROOT/build/autodraw.o" -shared -o "custom_4coder.so" ${FRAMEWORKS} -fsanitize=address
 
     rm -f "$CODE_HOME/metadata_generator"
     rm -f $preproc_file

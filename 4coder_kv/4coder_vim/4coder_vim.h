@@ -2,7 +2,6 @@
 
 #include "4coder_vim_base_types.h"
 #include "4coder_vimrc.h"
-#define KV_NO_SHORT_NAMES
 #include "kv.h"
 
 global Vim_State vim_state;

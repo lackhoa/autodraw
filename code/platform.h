@@ -27,7 +27,7 @@ struct ReadFileResult
 #define PLATFORM_WRITE_ENTIRE_FILE(NAME) b32 NAME(u8 *content, i32 content_size, char *filename)
 typedef PLATFORM_WRITE_ENTIRE_FILE(PlatformWriteEntireFile);
 
-#define PLATFORM_READ_ENTIRE_FILE(NAME) ReadFileResult NAME(Arena &arena, char *filename)
+#define PLATFORM_READ_ENTIRE_FILE(NAME) ReadFileResult NAME(KvArena &arena, char *filename)
 typedef PLATFORM_READ_ENTIRE_FILE(PlatformReadEntireFile);
 
 struct PlatformCode {
