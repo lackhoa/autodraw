@@ -39,11 +39,11 @@ else
     "$CODE_HOME/metadata_generator" -R "$CODE_HOME" "$PWD/$preproc_file"
     #
     echo "NOTE: COMPILING"
-    ccache clang++ -c "$SOURCE" -I"$CODE_HOME" $arch $opts $debug -std=c++11 -fPIC -o custom_4coder.o -fsanitize=address
+    ccache clang++ -c "$SOURCE" -I"$CODE_HOME" $arch $opts $debug -std=c++11 -fPIC -o custom_4coder.o
     #
     echo "NOTE: LINKING"
     FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
-    clang++ "custom_4coder.o" "$AUTODRAW_ROOT/build/autodraw.o" -shared -o "custom_4coder.so" ${FRAMEWORKS} -fsanitize=address
+    clang++ "custom_4coder.o" "$AUTODRAW_ROOT/build/autodraw.o" -shared -o "custom_4coder.so" ${FRAMEWORKS}
 
     rm -f "$CODE_HOME/metadata_generator"
     rm -f $preproc_file

@@ -49,11 +49,12 @@ try:
     else:
         # Set compiler and linker flags
         DEBUG_MODE = False
+        SANITIZE_ADDRESS_ON = False
         #
         optimization_flag = '-O0' if DEBUG_MODE else '-O2'
         constants = ['-DAUTO_MAC', '-DAUTO_INTERNAL=1', '-DAUTO_DIAGNOSTICS=1']
         includes = ['-I../libs']
-        sanitizer = ['-fsanitize=address'] if DEBUG_MODE else []
+        sanitize_address = ['-fsanitize=address'] if SANITIZE_ADDRESS_ON else []
         #
         warnings = ['-Werror', '-Wall', '-Wextra', '-Wimplicit-int-float-conversion', '-Wno-unused-function',
                     '-Wno-missing-braces', '-Wno-unused-parameter', '-Wno-unused-but-set-variable',
@@ -68,11 +69,11 @@ try:
         print("NOTE: codegen: compile")
         run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator.o', f'-I{todo_llvm_path}/include'] +
             common_compile_flags +
-            sanitizer)
+            sanitize_address)
         #
         print("NOTE: codegen: link")
         run(['clang++', 'generator.o', '-o', 'generator', f'-L{todo_llvm_path}/lib', f'-I{todo_llvm_path}/include', '-lclang'] +
-            sanitizer)
+            sanitize_address)
         #
         print("NOTE: codegen: run")
         current_directory = os.getcwd()
@@ -81,14 +82,14 @@ try:
         print('NOTE: Compile + Link the game to produce a dylib')
         run(['clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] +
             common_compile_flags +
-            sanitizer)
+            sanitize_address)
 
         print('NOTE: Compile osx app')
         #
         run(['ccache', 'clang++', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] +
             includes +
             common_compile_flags +
-            sanitizer)
+            sanitize_address)
 
         print("NOTE: Link osx app")
         #
@@ -97,7 +98,7 @@ try:
         for framework in frameworks:
             framework_flags += ["-framework", framework]
         #
-        run(['clang++', 'autodraw.o', '-o', 'autodraw'] + framework_flags + sanitizer)
+        run(['clang++', 'autodraw.o', '-o', 'autodraw'] + framework_flags + sanitize_address)
 
         print("NOTE: Link library with 4coder")
         # todo: Hard coded build.sh path
