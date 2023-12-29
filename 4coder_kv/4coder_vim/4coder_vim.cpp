@@ -408,6 +408,7 @@ vim_handle_quail(Application_Links *app, u8 character)
   return substituted;
 }
 
+// NOTE(kv): There used to be two places that call this function
 function b32
 vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
 {

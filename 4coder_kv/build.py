@@ -60,23 +60,24 @@ try:
         preproc_file="4coder_command_metadata.i"
         meta_macros="-DMETA_PASS"
         #
-        print('Meta-generator: Preproc')
+        print('preproc_file: Generate')
         run(f'clang++ -I{CODE_HOME} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
         #
         print('Meta-generator: Compile & Link')
-        run(f'clang++ -I"{CODE_HOME}" {opts} {debug} -std=c++11 "{CODE_HOME}/4coder_metadata_generator.cpp" -o "{CODE_HOME}/metadata_generator"')
+        run(f'ccache clang++ -c "{CODE_HOME}/4coder_metadata_generator.cpp" -I"{CODE_HOME}" {opts} {debug} -std=c++11 -o "{CODE_HOME}/metadata_generator.o"')
+        #
+        run(f'clang++ -I"{CODE_HOME}" "{CODE_HOME}/metadata_generator.o" -o "{CODE_HOME}/metadata_generator"')
         #
         print('Meta-generator: Run')
         run(f'"{CODE_HOME}/metadata_generator" -R "{CODE_HOME}" "{os.getcwd()}/{preproc_file}"')
         #
-        print('custom_4coder.o: COMPILING')
+        print('custom_4coder.so: Compile & Link')
         run(f'ccache clang++ -c "{SOURCE}" -I"{CODE_HOME}" {arch} {opts} {debug} -std=c++11 -fPIC -o custom_4coder.o {sanitize_address}')
         #
-        print('custom_4coder.so: LINKING')
         FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
         run(f'clang++ "custom_4coder.o" "{AUTODRAW_ROOT}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
 
-        run(f'rm -f "{CODE_HOME}/metadata_generator" {preproc_file}')
+        run(f'rm -f "{CODE_HOME}/metadata_generator.o" "{CODE_HOME}/metadata_generator" {preproc_file}')
         print("NOTE: Setup 4coder config files")
         run(f'ln -sf "{HERE}/config.4coder" "{FCODER_ROOT}/config.4coder"')
 

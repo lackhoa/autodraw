@@ -1,5 +1,6 @@
-#include "4coder_kv_core.cpp"
 #include "4coder_kv_build.cpp"
+#include "4coder_kv_commands.cpp"
+#include "4coder_kv_hooks.cpp"
 
 // todo bindings: 
 
@@ -35,6 +36,33 @@ function void kvInitShiftedTable()
   }
 #undef INSERT
 }
+
+function void
+kv_essential_mapping(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
+{
+	MappingScope();
+	SelectMapping(mapping);
+
+	SelectMap(global_id);
+	BindCore(default_startup, CoreCode_Startup);
+	BindCore(vim_try_exit, CoreCode_TryExit);
+	BindCore(clipboard_record_clip, CoreCode_NewClipboardContents);
+	BindMouseWheel(mouse_wheel_scroll);
+	BindMouseWheel(mouse_wheel_change_face_size, KeyCode_Control);
+	//BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);
+
+	SelectMap(file_id);
+	ParentMap(global_id);
+	BindTextInput(write_text_input);
+	BindMouse(click_set_cursor_and_mark, MouseCode_Left);
+	BindMouseRelease(click_set_cursor, MouseCode_Left);
+	BindCore(click_set_cursor_and_mark, CoreCode_ClickActivateView);
+	BindMouseMove(click_set_cursor_if_lbutton);
+
+	SelectMap(code_id);
+	ParentMap(file_id);
+}
+
 
 function void kvInitVimQuailTable(Application_Links *app)
 {
@@ -93,21 +121,17 @@ kv_vim_bindings(Application_Links *app)
     Key_Code leader = KeyCode_BackwardSlash;
 
 	BIND(MAP, vim_normal_mode,                             KeyCode_Escape);
-	// BIND(MAP, vim_inc_buffer_peek,                 (Ctl|KeyCode_RightBracket));
-	// BIND(MAP, vim_dec_buffer_peek,                 (Ctl|KeyCode_LeftBracket));
-	// BIND(MAP, vim_toggle_show_buffer_peek,    );
-	// BIND(MAP, vim_toggle_show_buffer_peek,    );
-	// BIND(MAP, vim_scoll_buffer_peek_up,       );
-	// BIND(MAP, vim_scoll_buffer_peek_down,     );
 
 	/// Rebinds
 	BIND(N|MAP, undo,                                   KeyCode_U);
 	BIND(N|MAP, undo,                              (C|KeyCode_Z));
 	BIND(N|MAP, redo,                              (C|KeyCode_R));
 	BIND(N|MAP, vim_interactive_open_or_new,    SUB_G,  KeyCode_F);
+    BIND(N|MAP, vim_interactive_open_or_new,       M|KeyCode_F);
 	BIND(N|MAP, vim_next_4coder_jump,              M|KeyCode_N);
 	BIND(N|MAP, vim_prev_4coder_jump,              M|KeyCode_P);
 	BIND(N|MAP, view_buffer_other_panel,           M|KeyCode_D);
+    BIND(N|MAP, interactive_switch_buffer,         M|KeyCode_B);
 	// BIND(I|MAP, word_complete_drop_down,           (Ctl|KeyCode_N));
 	// BIND(I|MAP, word_complete_drop_down,           (Ctl|KeyCode_P));
 
@@ -122,6 +146,8 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP,   vim_prev_visual,          SUB_G,    KeyCode_V);
 	BIND(N|MAP,   vim_newline_below,                  KeyCode_O);
 	BIND(N|MAP,   vim_newline_above,                S|KeyCode_O);
+    BIND(N|MAP,   kv_newline_above,                 C|KeyCode_K);
+    BIND(N|MAP,   kv_newline_below,                 C|KeyCode_J);
 	// BIND(V|MAP,   vim_visual_insert,               (Shift|KeyCode_A));
 	// BIND(V|MAP,   vim_visual_insert,               (Shift|KeyCode_I));
 	// BIND(I|MAP,   vim_insert_command,          (Ctl|Shift|KeyCode_O));
@@ -146,7 +172,6 @@ kv_vim_bindings(Application_Links *app)
 	// BIND(N|V|MAP, vim_request_fold,              SUB_Z, KeyCode_F);
 	// BIND(N|V|MAP, fold_toggle_cursor,            SUB_Z, KeyCode_A);
 	// BIND(N|V|MAP, fold_pop_cursor,               SUB_Z, KeyCode_D);
-	// BIND(V|MAP,   vim_toggle_case,                 (S|KeyCode_Tick));
 	BIND(V|MAP,   vim_replace_range_next,               KeyCode_R);
 
 	/// Edit Binds
@@ -157,13 +182,8 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP,   vim_combine_line,             (S|KeyCode_J));
 	BIND(N|V|MAP,   vim_combine_line,      SUB_G, (S|KeyCode_J));
 	BIND(N|MAP,     vim_last_command,                    KeyCode_Period);
-	BIND(N|V|MAP,   vim_select_register,          (S|KeyCode_Quote));
-	BIND(N|MAP,     vim_toggle_char,              (S|KeyCode_Tick));
-	BIND(I|MAP,     vim_select_register,            (C|KeyCode_R));
-	BIND(V|MAP,     vim_move_selection_up,         (M|KeyCode_K));
-	BIND(V|MAP,     vim_move_selection_down,       (M|KeyCode_J));
-	BIND(N  |V|MAP, vim_backspace_char,               KeyCode_Backspace);
-	BIND(N  |V|MAP, vim_delete_char,                  KeyCode_Delete);
+	BIND(N|MAP,     vim_backspace_char,               KeyCode_Backspace);
+	BIND(N|MAP,     vim_delete_char,                  KeyCode_Delete);
 
 	/// Digit Binds
 	BIND(N|V|MAP, vim_modal_0,                          KeyCode_0);
@@ -250,7 +270,7 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_leader_C, SUB_Leader,  (S|KeyCode_C));
 
     // NOTE(kv) KV miscellaneous binds
-	BIND(N|  MAP,  save,                       KeyCode_Return);
+	BIND(N|  MAP,  save_all_dirty_buffers,     KeyCode_Return);
 	BIND(N|  MAP,  write_space,                KeyCode_Space);
 	BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
     BIND(  V|MAP,  vim_end_line,               KeyCode_A);
@@ -274,6 +294,7 @@ kv_vim_bindings(Application_Links *app)
 #undef BIND
 }
 
+// todo: whittle this down
 function void 
 byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 {
@@ -282,22 +303,10 @@ byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 
 	SelectMap(global_id);
 
-	Bind(project_go_to_root_directory,  KeyCode_H, KeyCode_Control);
-	Bind(save_all_dirty_buffers,        KeyCode_S, KeyCode_Control, KeyCode_Shift);
-	Bind(execute_any_cli,               KeyCode_Z, KeyCode_Alt);
-	Bind(execute_previous_cli,          KeyCode_Z, KeyCode_Alt, KeyCode_Shift);
-	Bind(quick_swap_buffer,             KeyCode_BackwardSlash, KeyCode_Alt);
-	Bind(exit_4coder,                   KeyCode_F4, KeyCode_Alt);
-
 	Bind(toggle_fullscreen, KeyCode_F11);
-
-	Bind(vim_interactive_open_or_new,                   KeyCode_O, KeyCode_Control);
-	Bind(byp_test,                                      KeyCode_BackwardSlash, KeyCode_Control);
 	Bind(increase_face_size,                            KeyCode_Equal, KeyCode_Control);
 	Bind(decrease_face_size,                            KeyCode_Minus, KeyCode_Control);
 	Bind(byp_reset_face_size,                           KeyCode_0, KeyCode_Control);
-	Bind(vim_proj_cmd_lister,                           KeyCode_X, KeyCode_Alt, KeyCode_Shift);
-
 
 	SelectMap(file_id);
 	ParentMap(global_id);
@@ -310,6 +319,7 @@ byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 	Bind(move_right,                                    KeyCode_Right);
 	Bind(seek_end_of_line,                              KeyCode_End);
 	Bind(right_adjust_view,                             KeyCode_Home);
+
 	Bind(move_up_to_blank_line_end,                     KeyCode_Up, KeyCode_Control);
 	Bind(move_down_to_blank_line_end,                   KeyCode_Down, KeyCode_Control);
 	Bind(backspace_alpha_numeric_boundary,              KeyCode_Backspace, KeyCode_Control);
@@ -334,21 +344,10 @@ byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 	Bind(save_all_dirty_buffers,                        KeyCode_S, KeyCode_Control, KeyCode_Shift);
 	Bind(search_identifier,                             KeyCode_T, KeyCode_Control);
 	Bind(list_all_locations_of_identifier,              KeyCode_T, KeyCode_Control, KeyCode_Shift);
-	Bind(paste_and_indent,                              KeyCode_V, KeyCode_Control);
-	Bind(cut,                                           KeyCode_X, KeyCode_Control);
-	Bind(redo,                                          KeyCode_Y, KeyCode_Control);
-	Bind(undo,                                          KeyCode_Z, KeyCode_Control);
-	Bind(goto_jump_at_cursor,                           KeyCode_Return);
-	Bind(goto_jump_at_cursor_same_panel,                KeyCode_Return, KeyCode_Shift);
 	Bind(view_jump_list_with_lister,                    KeyCode_Period, KeyCode_Control, KeyCode_Shift);
 
 	SelectMap(code_id);
 	ParentMap(file_id);
-
-	Bind(comment_line_toggle,                           KeyCode_Semicolon, KeyCode_Control);
-	Bind(word_complete,                                 KeyCode_Tab);
-	Bind(if0_off,                                       KeyCode_I, KeyCode_Alt);
-	Bind(open_matching_file_cpp,                        KeyCode_2, KeyCode_Alt);
 }
 
 void custom_layer_init(Application_Links *app)

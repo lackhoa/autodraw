@@ -11,9 +11,14 @@ CUSTOM_DOC("Input consumption loop for vim behavior")
 	View_ID view = get_this_ctx_view(app, Access_Always);
 	Managed_Scope scope = view_get_managed_scope(app, view);
 
-	for(;;){
+	for(;;)
+    {
 		User_Input input = get_next_input(app, EventPropertyGroup_Any, 0);
-		if(input.abort){ break; }
+		if(input.abort) {
+          break;
+        }
+
+        if (input.event.kind == InputEventKind_KeyStroke) seconds_since_last_keystroke = 0;
 
 #if VIM_USE_BOTTOM_LISTER
 		// Clicking on lister items outside of original view panel is a hack

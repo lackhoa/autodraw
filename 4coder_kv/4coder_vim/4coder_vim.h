@@ -24,6 +24,8 @@ global u8 vim_keystroke_buffer[64];
 global u64 vim_pre_keystroke_size;
 global String_u8 vim_keystroke_text = Su8(vim_keystroke_buffer, 0, ArrayCount(vim_keystroke_buffer));
 
+global f32 seconds_since_last_keystroke;
+
 // TODO(BYP): Once visual insert is more polished move these somewhere better
 global History_Group vim_history_group;
 global b32 vim_visual_insert_after;
