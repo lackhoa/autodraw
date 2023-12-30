@@ -38,12 +38,6 @@ global F4_SyntaxOptions f4_syntax_opts[] =
 };
 global i32 f4_active_syntax_opt_idx = 0;
 
-function b32
-F4_ARGBIsValid(ARGB_Color color)
-{
-    return color != 0xFF990099;
-}
-
 internal void
 F4_TickColors(Application_Links *app, Frame_Info frame_info)
 {

@@ -1,6 +1,7 @@
 #include "4coder_kv_build.cpp"
 #include "4coder_kv_commands.cpp"
 #include "4coder_kv_hooks.cpp"
+#include "4coder_kv_draw.cpp"
 
 #include "4coder_fleury/4coder_fleury.cpp"
 
@@ -8,7 +9,7 @@
 #  include "generated/managed_id_metadata.cpp"
 #endif
 
-global b32 USE_BYP_LAYER = 1;
+global b32 USE_BYP_LAYER = 0;
 
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
   
@@ -44,7 +45,7 @@ void kv_open_startup_file(Application_Links *app)
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
   View_ID view = get_this_ctx_view(app, Access_Always);
   // char *startup_file = "~/notes/thought.skm";
-  char *startup_file = "/tmp/test.cpp";
+  char *startup_file = "/tmp/example.mdesk";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -402,7 +403,7 @@ void byp_custom_layer_init(Application_Links *app)
 
   set_custom_hook(app, HookID_SaveFile,                kv_file_save);
   // set_custom_hook(app, HookID_BufferRegion,            byp_buffer_region);
-  set_custom_hook(app, HookID_RenderCaller,            byp_render_caller);
+  set_custom_hook(app, HookID_RenderCaller,            kv_render_caller);
   set_custom_hook(app, HookID_WholeScreenRenderCaller, vim_draw_whole_screen);
 
   set_custom_hook(app, HookID_Tick,             kv_tick);
@@ -428,6 +429,9 @@ void custom_layer_init(Application_Links *app)
   if (USE_BYP_LAYER)
   {
     byp_custom_layer_init(app);
+    // note(kv): fleury language experiments
+    F4_Index_Initialize();
+    F4_RegisterLanguages();
   }
   else
   {

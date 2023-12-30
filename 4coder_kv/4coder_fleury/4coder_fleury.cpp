@@ -451,6 +451,7 @@ typedef int socklen_t;
 // #endif
 #include "4coder_fleury_casey.cpp"
 #include "4coder_fleury_hooks.cpp"
+#include "4coder_fleury_render.cpp"
 #include "4coder_fleury_lang_list.h"
 
 //~ NOTE(rjf): Plots Demo File

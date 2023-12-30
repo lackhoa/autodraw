@@ -2,7 +2,6 @@
 
 #include "4coder_vim/4coder_vim_include.h"
 #include "4coder_byp_colors.cpp"
-#include "4coder_kv_draw.cpp"
 #include "kv.h"
 
 #define GET_VIEW_AND_BUFFER \
@@ -16,12 +15,6 @@ inline void print_message_cstr(Application_Links *app, char *message) {
 function void byp_make_vim_request(Application_Links *app, BYP_Vim_Request request){
 	vim_make_request(app, Vim_Request_Type(VIM_REQUEST_COUNT + request));
 }
-
-global b32 byp_relative_numbers;
-
-CUSTOM_COMMAND_SIG(byp_toggle_relative_numbers)
-CUSTOM_DOC("Toggles value for `relative_numbers`")
-{ byp_relative_numbers ^= 1; }
 
 VIM_REQUEST_SIG(byp_apply_title) {
 	Scratch_Block scratch(app);

@@ -34,4 +34,10 @@ CUSTOM_ID(colors, fleury_color_error_annotation);
 static ARGB_Color F4_ARGBFromID(Color_Table table, Managed_ID id, int subindex);
 static ARGB_Color F4_ARGBFromID(Color_Table table, Managed_ID id);
 
+inline b32
+F4_ARGBIsValid(ARGB_Color color)
+{
+    return color != 0xFF990099;
+}
+
 #endif //4CODER_FLEURY_COLORS_H
