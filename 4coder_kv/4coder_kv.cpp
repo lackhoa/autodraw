@@ -307,7 +307,7 @@ kv_vim_bindings(Application_Links *app)
     BIND(N|  MAP,  kv_shift_character,         KeyCode_Comma);
     BIND(N|  MAP,  exit_4coder,              M|KeyCode_Q);
     BIND(N|V|MAP,  vim_command_mode,           KeyCode_Semicolon);
-    BIND(N|  MAP,  reopen,                   S|KeyCode_U);
+    BIND(N|  MAP,  kv_reopen_with_confirmation,                     S|KeyCode_U);
     BIND(N|  MAP,  quick_swap_buffer,        M|KeyCode_Comma);
     // Project keys
     BIND(N|MAP,  kv_build_search,             M|KeyCode_M);

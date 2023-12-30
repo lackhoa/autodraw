@@ -100,3 +100,44 @@ VIM_TEXT_OBJECT_SIG(byp_object_camel)
 
 	return range;
 }
+
+CUSTOM_COMMAND_SIG(kv_reopen_with_confirmation)
+CUSTOM_DOC("Like reopen, but asks for confirmation")
+{
+    Query_Bar_Group group(app);
+    Query_Bar bar = {};
+    bar.prompt = SCu8("Reload current buffer from disk?");
+    if (start_query_bar(app, & bar, 0))
+    {
+      b32 cancelled = false;
+      for (;!cancelled;){
+        User_Input in = get_next_input(app, EventProperty_AnyKey, 0);
+        if (in.abort){
+          cancelled = true;
+        }
+        else{
+          switch (in.event.key.code){
+            case KeyCode_Y:
+            {
+              View_ID view = get_active_view(app, Access_ReadVisible);
+              Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+              buffer_reopen(app, buffer, 0);
+              cancelled = true;
+            }break;
+                        
+            case KeyCode_Shift:
+            case KeyCode_Control:
+            case KeyCode_Alt:
+            case KeyCode_Command:
+            case KeyCode_CapsLock:
+            {}break;
+                        
+            default:
+            {
+              cancelled = true;
+            }break;
+          }
+        }
+      }
+    }
+}
