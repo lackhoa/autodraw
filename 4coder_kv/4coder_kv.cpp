@@ -2,6 +2,8 @@
 #include "4coder_kv_commands.cpp"
 #include "4coder_kv_hooks.cpp"
 
+#include "4coder_fleury/4coder_fleury.cpp"
+
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
 #endif
@@ -360,7 +362,7 @@ byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 	ParentMap(file_id);
 }
 
-void custom_layer_init_byp(Application_Links *app)
+void byp_custom_layer_init(Application_Links *app)
 {
   default_framework_init(app);
   set_all_default_hooks(app);
@@ -410,5 +412,5 @@ void custom_layer_init_byp(Application_Links *app)
 
 void custom_layer_init(Application_Links *app)
 {
-  custom_layer_init_byp(app);
+  fleury_custom_layer_init(app);
 }
