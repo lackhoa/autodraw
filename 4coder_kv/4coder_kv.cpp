@@ -8,6 +8,8 @@
 #  include "generated/managed_id_metadata.cpp"
 #endif
 
+global b32 USE_BYP_LAYER = 1;
+
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
   
 function void kvInitShiftedTable()
@@ -37,11 +39,8 @@ function void kvInitShiftedTable()
 #undef INSERT
 }
 
-CUSTOM_COMMAND_SIG(kv_startup)
-CUSTOM_DOC("KV startup routine (modified from default_startup)")
+void kv_open_startup_file(Application_Links *app)
 {
-  default_startup(app);
-
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
   View_ID view = get_this_ctx_view(app, Access_Always);
   // char *startup_file = "~/notes/thought.skm";
@@ -53,30 +52,48 @@ CUSTOM_DOC("KV startup routine (modified from default_startup)")
   }
 }
 
-function void
-kv_essential_mapping(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
+CUSTOM_COMMAND_SIG(kv_startup)
+CUSTOM_DOC("KV startup routine (modified from default_startup)")
 {
-	MappingScope();
-	SelectMapping(mapping);
+  if (USE_BYP_LAYER)
+  {
+    default_startup(app);
+  }
+  else
+  {
+    fleury_startup(app);
+  }
+  kv_open_startup_file(app);
+}
 
-	SelectMap(global_id);
-	BindCore(kv_startup, CoreCode_Startup);
-	BindCore(vim_try_exit, CoreCode_TryExit);
-	BindCore(clipboard_record_clip, CoreCode_NewClipboardContents);
-	BindMouseWheel(mouse_wheel_scroll);
-	BindMouseWheel(mouse_wheel_change_face_size, KeyCode_Control);
-	//BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);
+// NOTE(kv): I just wanna bind my startup code.
+function void
+byp_essential_mapping(Mapping *mapping)
+{
+  String_ID global_id = vars_save_string_lit("keys_global");
+  String_ID file_id   = vars_save_string_lit("keys_file");
+  String_ID code_id   = vars_save_string_lit("keys_code");
 
-	SelectMap(file_id);
-	ParentMap(global_id);
-	BindTextInput(write_text_input);
-	BindMouse(click_set_cursor_and_mark, MouseCode_Left);
-	BindMouseRelease(click_set_cursor, MouseCode_Left);
-	BindCore(click_set_cursor_and_mark, CoreCode_ClickActivateView);
-	BindMouseMove(click_set_cursor_if_lbutton);
+  MappingScope();
+  SelectMapping(mapping);
 
-	SelectMap(code_id);
-	ParentMap(file_id);
+  SelectMap(global_id);
+  BindCore(vim_try_exit, CoreCode_TryExit);
+  BindCore(clipboard_record_clip, CoreCode_NewClipboardContents);
+  BindMouseWheel(mouse_wheel_scroll);
+  BindMouseWheel(mouse_wheel_change_face_size, KeyCode_Control);
+  //BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);
+
+  SelectMap(file_id);
+  ParentMap(global_id);
+  BindTextInput(write_text_input);
+  BindMouse(click_set_cursor_and_mark, MouseCode_Left);
+  BindMouseRelease(click_set_cursor, MouseCode_Left);
+  BindCore(click_set_cursor_and_mark, CoreCode_ClickActivateView);
+  BindMouseMove(click_set_cursor_if_lbutton);
+
+  SelectMap(code_id);
+  ParentMap(file_id);
 }
 
 function void kvInitVimQuailTable(Application_Links *app)
@@ -306,10 +323,14 @@ kv_vim_bindings(Application_Links *app)
 #undef BIND
 }
 
-// todo: whittle this down
+// todo(kv): whittle this down
 function void 
-byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
+byp_default_bindings(Mapping *mapping)
 {
+  String_ID global_id = vars_save_string_lit("keys_global");
+  String_ID file_id   = vars_save_string_lit("keys_file");
+  String_ID code_id   = vars_save_string_lit("keys_code");
+
 	MappingScope();
 	SelectMapping(mapping);
 
@@ -393,24 +414,38 @@ void byp_custom_layer_init(Application_Links *app)
 
   Thread_Context *tctx = get_thread_context(app);
   mapping_init(tctx, &framework_mapping);
-  String_ID global_map_id = vars_save_string_lit("keys_global");
-  String_ID file_map_id = vars_save_string_lit("keys_file");
-  String_ID code_map_id = vars_save_string_lit("keys_code");
-  kv_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
-
-  kvInitShiftedTable();  // TODO: init this table in the vim layer
+  byp_essential_mapping(&framework_mapping);
+  //
+  kvInitShiftedTable();  // TODO(kv): init this table in the vim layer
   kvInitVimQuailTable(app);
+  //
   kv_vim_bindings(app);
-  byp_default_bindings(&framework_mapping, global_map_id, file_map_id, code_map_id);
+  byp_default_bindings(&framework_mapping);
+}
+
+void custom_layer_init(Application_Links *app)
+{
+  if (USE_BYP_LAYER)
+  {
+    byp_custom_layer_init(app);
+  }
+  else
+  {
+    fleury_custom_layer_init(app);
+  }
+
+  {// note(kv): startup code
+    MappingScope();
+    SelectMapping(&framework_mapping);
+  
+    String_ID global_id = vars_save_string_lit("keys_global");
+    SelectMap(global_id);
+    BindCore(kv_startup, CoreCode_Startup);
+  }
 
   if (false)
   {
     char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
     adMainFcoder(todo_autodraw_path);
   }
-}
-
-void custom_layer_init(Application_Links *app)
-{
-  fleury_custom_layer_init(app);
 }

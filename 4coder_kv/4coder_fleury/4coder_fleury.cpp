@@ -491,6 +491,7 @@ void fleury_custom_layer_init(Application_Links *app)
         {
             F4_SetDefaultBindings(&framework_mapping);
         }
+        // todo(kv): Why do this twice?
         F4_SetAbsolutelyNecessaryBindings(&framework_mapping);
     }
     

@@ -16,6 +16,8 @@ BUFFER_HOOK_SIG(kv_new_file) {
 		return 0;
 	}
 
+    // todo bash shell here
+
 	return 0;
 }
 
