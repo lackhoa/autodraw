@@ -16,24 +16,10 @@ blacklist_patterns = {
  ".*",
 };
 
-load_path_here   = { .path = ".", .recursive = true, .relative = true, };
+load_path_here = { .path = ".", .recursive = true, .relative = true, };
 
 load_paths = {
   .win   = { load_path_here },
   .linux = { load_path_here },
-  .mac   = { load_path_here, { .path = "/Users/khoa/4ed/code", .recursive = true, } },
-};
-
-commands = {
- .build = {
-  .mac = "echo build & ./build.py",
-  .out = "*compilation*",
-  .footer_panel = true,
-  .save_dirty_files = true,
-  .cursor_at_end = false,
- },
-};
-
-fkey_command = {
- .F1 = "build",
+  .mac   = { load_path_here, { .path = "~/4ed/code", .recursive = true, } },
 };

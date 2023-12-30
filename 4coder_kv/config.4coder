@@ -39,10 +39,10 @@ mark_thickness = 2;
 // the lister items' roundness as a percentage of their height
 lister_roundness = 20;
 
-// Code Wrapping
+// Code
 treat_as_code = ".cpp.c.hpp.h.cc.cs.java.rs.glsl.m.mm";
-enable_virtual_whitespace = false;
-virtual_whitespace_regular_indent = 4;
+enable_virtual_whitespace = true;
+virtual_whitespace_regular_indent = 2;
 enable_code_wrapping = true;
 
 // This only applies to code files in code-wrapping mode.
@@ -57,11 +57,11 @@ automatically_load_project = true;
 
 // Indentation
 indent_with_tabs = false;
-indent_width = 4;
-default_tab_width = 4;
+indent_width = 2;
+default_tab_width = 2;
 
 // Theme
-default_theme_name = "4coder";
+default_theme_name = "theme-kv";
 
 // Font
 default_font_name = "liberation-mono.ttf";
@@ -78,10 +78,3 @@ user_name = "khoa";
 
 // Keyboard AltGr setting
 lalt_lctrl_is_altgr = false;
-
-// // Project setup configuration
-// default_compiler_bat = "cl";
-// default_flags_bat = "-FC -GR- -EHa- -nologo -Zi";
-// default_compiler_sh = "g++";
-// default_flags_sh  = "-g";
-

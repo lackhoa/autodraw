@@ -22,29 +22,47 @@ BUFFER_HOOK_SIG(kv_new_file) {
 function Tick_Function kv_tick;
 function void kv_tick(Application_Links *app, Frame_Info frame_info)
 {
-  code_index_update_tick(app);
-  if(tick_all_fade_ranges(app, frame_info.animation_dt)){
-    animate_in_n_milliseconds(app, 0);
-  }
+  default_tick(app, frame_info);
 
+  // NOTE(kv): vim
   vim_animate_filebar(app, frame_info);
   vim_animate_cursor(app, frame_info);
-
   vim_cursor_blink++;
 
+  // NOTE(kv): autosave
   f32 AUTOSAVE_PERIOD_SECONDS = 5.0f;
   seconds_since_last_keystroke += frame_info.literal_dt;
   if (seconds_since_last_keystroke > AUTOSAVE_PERIOD_SECONDS)
   {
     seconds_since_last_keystroke = 0;
-    save_all_dirty_buffers(app);
-    print_message_cstr(app, "auto-saved all dirty buffers\n");
+    b32 saved_at_least_one_buffer = false;
+    {
+      ProfileScope(app, "save all dirty buffers");
+      Scratch_Block scratch(app);
+      for (Buffer_ID buffer = get_buffer_next(app, 0, Access_ReadWriteVisible);
+           buffer != 0;
+           buffer = get_buffer_next(app, buffer, Access_ReadWriteVisible))
+      {
+        if (buffer_get_dirty_state(app, buffer) == DirtyState_UnsavedChanges)
+        {
+          saved_at_least_one_buffer = true;
+          Temp_Memory temp = begin_temp(scratch);
+          String_Const_u8 file_name = push_buffer_file_name(app, scratch, buffer);
+          buffer_save(app, buffer, file_name, 0);
+          end_temp(temp);
+        }
+      }
+    }
+    if (saved_at_least_one_buffer) {
+      print_message_cstr(app, "auto-saved all dirty buffers\n");
+    }
   }
 }
 
 // (Application_Links *app, Frame_Info frame_info, View_ID view_id)
 function Render_Caller_Function byp_render_caller;
-function void byp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
+function void
+byp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
 {
 	ProfileScope(app, "default render caller");
 
@@ -128,4 +146,3 @@ function void byp_render_caller(Application_Links *app, Frame_Info frame_info, V
 	text_layout_free(app, text_layout_id);
 	draw_set_clip(app, prev_clip);
 }
-

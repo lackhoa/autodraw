@@ -2,8 +2,6 @@
 #include "4coder_kv_commands.cpp"
 #include "4coder_kv_hooks.cpp"
 
-// todo bindings: 
-
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
 #endif
@@ -37,6 +35,22 @@ function void kvInitShiftedTable()
 #undef INSERT
 }
 
+CUSTOM_COMMAND_SIG(kv_startup)
+CUSTOM_DOC("KV startup routine (modified from default_startup)")
+{
+  default_startup(app);
+
+  set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
+  View_ID view = get_this_ctx_view(app, Access_Always);
+  // char *startup_file = "~/notes/thought.skm";
+  char *startup_file = "/tmp/test.cpp";
+  Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
+  if (view && buffer)
+  {
+    view_set_buffer(app, view, buffer, 0);
+  }
+}
+
 function void
 kv_essential_mapping(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 {
@@ -44,7 +58,7 @@ kv_essential_mapping(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 	SelectMapping(mapping);
 
 	SelectMap(global_id);
-	BindCore(default_startup, CoreCode_Startup);
+	BindCore(kv_startup, CoreCode_Startup);
 	BindCore(vim_try_exit, CoreCode_TryExit);
 	BindCore(clipboard_record_clip, CoreCode_NewClipboardContents);
 	BindMouseWheel(mouse_wheel_scroll);
@@ -62,7 +76,6 @@ kv_essential_mapping(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 	SelectMap(code_id);
 	ParentMap(file_id);
 }
-
 
 function void kvInitVimQuailTable(Application_Links *app)
 {
@@ -169,9 +182,6 @@ kv_vim_bindings(Application_Links *app)
     BIND(  V|MAP, vim_toggle_case,                      KeyCode_Comma);
 	BIND(N|V|MAP, vim_request_indent,              (S|KeyCode_Period));
 	BIND(N|V|MAP, vim_request_outdent,             (S|KeyCode_Comma));
-	// BIND(N|V|MAP, vim_request_fold,              SUB_Z, KeyCode_F);
-	// BIND(N|V|MAP, fold_toggle_cursor,            SUB_Z, KeyCode_A);
-	// BIND(N|V|MAP, fold_pop_cursor,               SUB_Z, KeyCode_D);
 	BIND(V|MAP,   vim_replace_range_next,               KeyCode_R);
 
 	/// Edit Binds
@@ -350,7 +360,7 @@ byp_default_bindings(Mapping *mapping, i64 global_id, i64 file_id, i64 code_id)
 	ParentMap(file_id);
 }
 
-void custom_layer_init(Application_Links *app)
+void custom_layer_init_byp(Application_Links *app)
 {
   default_framework_init(app);
   set_all_default_hooks(app);
@@ -391,11 +401,14 @@ void custom_layer_init(Application_Links *app)
   kv_vim_bindings(app);
   byp_default_bindings(&framework_mapping, global_map_id, file_map_id, code_map_id);
 
-  set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
-
   if (false)
   {
     char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
     adMainFcoder(todo_autodraw_path);
   }
+}
+
+void custom_layer_init(Application_Links *app)
+{
+  custom_layer_init_byp(app);
 }

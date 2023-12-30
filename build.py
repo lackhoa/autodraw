@@ -63,35 +63,34 @@ try:
                     '-Wno-tautological-constant-out-of-range-compare', '-Wno-reorder-init-list',
                     '-Wno-macro-redefined', '-Wno-deprecated-declarations', '-Wno-unknown-attributes']
 
+        # todo leave out "-g" in release mode
         common_compile_flags = ['-g', '-std=gnu++20', '-fno-exceptions', '-fvisibility=hidden', optimization_flag] + includes + constants + warnings
 
         todo_llvm_path = "/usr/local/Cellar/llvm/17.0.6" # llvm-config --libdir
-        print("NOTE: codegen: compile")
-        run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator.o', f'-I{todo_llvm_path}/include'] +
+        print("codegen: compile & link")
+        run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator.o', '-O2', f'-I{todo_llvm_path}/include'] +
             common_compile_flags +
             sanitize_address)
         #
-        print("NOTE: codegen: link")
         run(['clang++', 'generator.o', '-o', 'generator', f'-L{todo_llvm_path}/lib', f'-I{todo_llvm_path}/include', '-lclang'] +
             sanitize_address)
         #
-        print("NOTE: codegen: run")
+        print("codegen: run")
         current_directory = os.getcwd()
         run(["./generator"])
 
-        print('NOTE: Compile + Link the game to produce a dylib')
+        print('libgame.dylib: Compile + Link')
         run(['clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] +
             common_compile_flags +
             sanitize_address)
 
-        print('NOTE: Compile osx app')
+        print('autodraw: compile & link')
         #
         run(['ccache', 'clang++', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] +
             includes +
             common_compile_flags +
             sanitize_address)
 
-        print("NOTE: Link osx app")
         #
         frameworks=['Metal', 'Cocoa', 'QuartzCore']
         framework_flags=[]
@@ -102,7 +101,7 @@ try:
 
         print("NOTE: Link library with 4coder")
         # todo: Hard coded build.sh path
-        run([f'{project_root}/4coder_kv/build.sh'])
+        run([f'{project_root}/4coder_kv/build.py'])
 
         print('NOTE: Compile shaders')
         run(['xcrun', '-sdk', 'macosx', 'metal', '-c', '../code/shaders.metal', '-o', 'shaders.air'])

@@ -332,7 +332,7 @@ VimQuailEntry *vim_quail_table;
 function void
 vim_quail_defrule(Application_Links *app, char *key, char *value)
 {
-  forIncrementing(table_index, 0, arrlen(vim_quail_table))
+  for_increment(table_index, 0, arrlen(vim_quail_table))
   {
     char *existing_key = vim_quail_table[table_index].key;
     if (stb_prefix(key, existing_key))
@@ -398,7 +398,7 @@ vim_handle_quail(Application_Links *app, u8 character)
       // NOTE(kv): Update the quail buffer content too, since the substituted
       // characters may contribute to another substitution afterwards.
       arrsetlen(qbuffer, arrlen(qbuffer) - key_len);
-      forIncrementing(value_index, 0, strlen(replacement))
+      for_increment(value_index, 0, strlen(replacement))
       {
         arrput(qbuffer, replacement[value_index]);
       }

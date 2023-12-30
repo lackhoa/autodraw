@@ -44,13 +44,16 @@ try:
     run_only       = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
 
+    DEBUG_MODE = False
+    ADDRESS_SANITIZER_ON = False
+
     if run_only:
-        command = f'DYLD_INSERT_LIBRARIES="/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib" {FCODER_ROOT}/4ed > /dev/null'
+        dyld_insert_libraries="DYLD_INSERT_LIBRARIES=/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib" if ADDRESS_SANITIZER_ON else ""
+        command = f'{dyld_insert_libraries} {FCODER_ROOT}/4ed > /dev/null'
         # Does emacs output pipe slow down 4coder? Very possible!
+        os.chdir(f"{AUTODRAW_ROOT}")
         run(command) # Run in a new process group
     else:
-        DEBUG_MODE = False
-        ADDRESS_SANITIZER_ON = False
         sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
         #
         opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 -I{HERE}/../libs"
@@ -64,7 +67,7 @@ try:
         run(f'clang++ -I{CODE_HOME} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
         #
         print('Meta-generator: Compile & Link')
-        run(f'ccache clang++ -c "{CODE_HOME}/4coder_metadata_generator.cpp" -I"{CODE_HOME}" {opts} {debug} -std=c++11 -o "{CODE_HOME}/metadata_generator.o"')
+        run(f'ccache clang++ -c "{CODE_HOME}/4coder_metadata_generator.cpp" -I"{CODE_HOME}" {opts} -O2 -std=c++11 -o "{CODE_HOME}/metadata_generator.o"')
         #
         run(f'clang++ -I"{CODE_HOME}" "{CODE_HOME}/metadata_generator.o" -o "{CODE_HOME}/metadata_generator"')
         #
@@ -80,6 +83,7 @@ try:
         run(f'rm -f "{CODE_HOME}/metadata_generator.o" "{CODE_HOME}/metadata_generator" {preproc_file}')
         print("NOTE: Setup 4coder config files")
         run(f'ln -sf "{HERE}/config.4coder" "{FCODER_ROOT}/config.4coder"')
+        run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_ROOT}/themes/theme-kv.4coder"')
 
         print('Build complete!')
 

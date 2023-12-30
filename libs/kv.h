@@ -379,6 +379,7 @@ inline i32 safeTruncateToInt32(u64 value)
 
 #define arrayCount(array) safeTruncateToInt32(sizeof(array) / sizeof((array)[0]))
 #define arrayLength arrayCount
+#define array_count arrayCount
 
 // source: https://groups.google.com/g/comp.std.c/c/d-6Mj5Lko_s
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__,PP_RSEQ_N())
@@ -993,8 +994,9 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 
 /* End of stretchy buffer */
 
-#define forIncrementing(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; INDEX < (END); INDEX++)
-#define forIncrementingWithCondition(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; (INDEX < (END)) && (CONDITION); INDEX++)
+#define for_increment(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; INDEX < (END); INDEX++)
+#define for_increment_with_condition(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; (INDEX < (END)) && (CONDITION); INDEX++)
+#define breakable_block for (i32 __kv_breakable_block__=0; __kv_breakable_block__ == 0; __kv_breakable_block__++)
 
 /* todo: Old names */
 #define kvXmalloc     kv_xmalloc
