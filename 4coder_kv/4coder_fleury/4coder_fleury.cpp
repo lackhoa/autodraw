@@ -451,7 +451,7 @@ typedef int socklen_t;
 // #endif
 #include "4coder_fleury_casey.cpp"
 #include "4coder_fleury_hooks.cpp"
-#include "4coder_fleury_render.cpp"
+#include "4coder_fleury_lite.cpp"
 #include "4coder_fleury_lang_list.h"
 
 //~ NOTE(rjf): Plots Demo File
@@ -462,7 +462,7 @@ typedef int socklen_t;
 
 //~ NOTE(rjf): @f4_custom_layer_initialization
 
-void fleury_custom_layer_init(Application_Links *app)
+void fleury_custom_layer_init_original(Application_Links *app)
 {
     default_framework_init(app);
     global_frame_arena = make_arena(get_base_allocator_system());
@@ -506,6 +506,7 @@ void fleury_custom_layer_init(Application_Links *app)
         F4_RegisterLanguages();
     }
 }
+
 
 //~ NOTE(rjf): @f4_startup Whenever 4coder's core is ready for the custom layer to start up,
 // this is called.

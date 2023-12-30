@@ -1,5 +1,7 @@
 //~ NOTE(rjf): Buffer Render
 
+#pragma once
+
 #include "4coder_fleury_hooks.h"
 #include "4coder_fleury_colors.cpp"
 #include "4coder_fleury_brace.cpp"
@@ -12,9 +14,9 @@
 #include "4coder_fleury_recent_files.cpp"
 
 function void
-F4_RenderBuffer_original(Application_Links *app, View_ID view_id, Face_ID face_id,
-                         Buffer_ID buffer, Text_Layout_ID text_layout_id,
-                         Rect_f32 rect, Frame_Info frame_info)
+F4_RenderBuffer(Application_Links *app, View_ID view_id, Face_ID face_id,
+                Buffer_ID buffer, Text_Layout_ID text_layout_id,
+                Rect_f32 rect, Frame_Info frame_info)
 {
     Scratch_Block scratch(app);
     ProfileScope(app, "[Fleury] Render Buffer");
@@ -163,7 +165,7 @@ F4_DrawFileBar(Application_Links *app, View_ID view_id, Buffer_ID buffer, Face_I
 }
 
 function void
-F4_Render_original(Application_Links *app, Frame_Info frame_info, View_ID view_id)
+F4_Render(Application_Links *app, Frame_Info frame_info, View_ID view_id)
 {
     F4_RecentFiles_RefreshView(app, view_id);
     
