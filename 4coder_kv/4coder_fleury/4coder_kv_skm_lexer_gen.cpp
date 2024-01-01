@@ -18,14 +18,14 @@ build_language_model(void)
     smh_set_base_character_names();
     smh_typical_tokens();
     
-    // Jai Names
-    sm_char_name('!', "Not");
-    sm_char_name('&', "And");
-    sm_char_name('|', "Or");
-    sm_char_name('%', "Mod");
-    sm_char_name('^', "Xor");
-    sm_char_name('?', "Ternary");
-    sm_char_name('/', "Div");
+    // bookmark: skm Names
+    // sm_char_name('!', "Not");
+    // sm_char_name('&', "And");
+    // sm_char_name('|', "Or");
+    // sm_char_name('%', "Mod");
+    // sm_char_name('^', "Xor");
+    // sm_char_name('?', "Ternary");
+    // sm_char_name('/', "Div");
     
     // Jai Direct Toke Kinds
     sm_select_base_kind(TokenBaseKind_Comment);
@@ -266,7 +266,7 @@ build_language_model(void)
     AddState(backslash);
     
     AddState(operator_or_fnumber_dot);
-    AddState(operator_or_comment_slash);
+    // AddState(operator_or_comment_slash);
     
     AddState(number);
     AddState(znumber);
@@ -366,7 +366,7 @@ build_language_model(void)
     sm_case("\\", backslash);
     
     sm_case(".", operator_or_fnumber_dot);
-    sm_case("/", operator_or_comment_slash);
+    // sm_case("/", operator_or_comment_slash);
     {
         Character_Set *char_set = smo_new_char_set();
         smo_char_set_union_ops_firsts(char_set, main_ops_without_dot_or_slash);
@@ -461,19 +461,9 @@ build_language_model(void)
     
     ////
     
-    sm_select_state(operator_or_comment_slash);
-    sm_case("*", comment_block);
-    sm_case("/", comment_line);
-    {
-        Emit_Rule *emit = sm_emit_rule();
-        sm_emit_handler_direct("DivEq");
-        sm_case("=", emit);
-    }
-    {
-        Emit_Rule *emit = sm_emit_rule();
-        sm_emit_handler_direct("Div");
-        sm_fallback_peek(emit);
-    }
+    // sm_select_state(operator_or_comment_slash);
+    // sm_case("*", comment_block);
+    // sm_case("/", comment_line);
     
     ////
     

@@ -63,9 +63,11 @@ try:
         if True:
             print('Lexer: Generate (one-time thing)')
             # run(f'clang++ {HERE}/4coder_fleury/4coder_fleury_jai_lexer_gen.cpp {arch} {opts} {debug} -std=c++11 -O2 -o {HERE}/lexer_generator')
-            run(f'clang++ {HERE}/4coder_fleury/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -std=c++11 -O2 -o {HERE}/lexer_generator')
+            OPTIMIZATION="-O0"
+            run(f'clang++ {HERE}/4coder_fleury/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -Wno-tautological-compare -std=c++11 {OPTIMIZATION} -o {HERE}/lexer_generator')
+            print('running lexer generator')
             run(f'{HERE}/lexer_generator')
-            run(f'rm -rf {HERE}/lexer_generator {HERE}/lexer_generator.dSYM')
+            run(f'rm {HERE}/lexer_generator & rm -rf {HERE}/lexer_generator.dSYM')
 
         sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
         preproc_file="4coder_command_metadata.i"
