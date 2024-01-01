@@ -39,7 +39,7 @@ internal F4_LANGUAGE_INDEXFILE(F4_MD_IndexFile)
     }
 }
 
-internal F4_LANGUAGE_LEXINIT(F4_MD_LexInit)
+internal F4_LANGUAGE_LEXINIT(F4_MD_LexInit_unused)
 {
     F4_MD_LexerState *state = (F4_MD_LexerState *)state_ptr;
     state->string = contents;
@@ -58,7 +58,7 @@ F4_MD_CharIsSymbol(u8 c)
             c == '?' || c == '|' || c == '\\');
 }
 
-internal F4_LANGUAGE_LEXFULLINPUT(F4_MD_LexFullInput)
+internal F4_LANGUAGE_LEXFULLINPUT(F4_MD_LexFullInput_unused)
 {
     b32 result = false;
     F4_MD_LexerState state_ = *(F4_MD_LexerState *)state_ptr;

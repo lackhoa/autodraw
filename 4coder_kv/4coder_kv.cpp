@@ -44,8 +44,8 @@ void kv_open_startup_file(Application_Links *app)
 {
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
   View_ID view = get_this_ctx_view(app, Access_Always);
-  // char *startup_file = "~/notes/thought.skm";
-  char *startup_file = "/tmp/example.mdesk";
+  char *startup_file = "~/notes/thought.skm";
+  // char *startup_file = "/tmp/example.mdesk";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {

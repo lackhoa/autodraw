@@ -7,7 +7,7 @@ import sys
 import time
 
 def run(command, update_env={}):
-    # print(' '.join(command))
+    # print(command)
     begin = time.time()
     env = os.environ.copy()
     env.update(update_env)
@@ -34,7 +34,7 @@ HOME=os.path.expanduser("~")
 HERE = os.path.dirname(os.path.realpath(__file__))
 FCODER_ROOT=f'{HOME}/4coder'
 CODE_HOME=f'{HOME}/4ed/code/custom'
-AUTODRAW_ROOT=f'{HOME}/AutoDraw'
+AUTODRAW=f'{HOME}/AutoDraw'
 SOURCE=f'{HERE}/4coder_kv.cpp'
 
 try:
@@ -47,19 +47,27 @@ try:
     DEBUG_MODE = False
     ADDRESS_SANITIZER_ON = False
 
+    INCLUDES=f'-I{HERE}/custom_patch -I{CODE_HOME} -I{AUTODRAW}/libs'
+    opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES}"
+    arch="-m64"
+    debug="-g"
+
     if run_only:
         dyld_insert_libraries="DYLD_INSERT_LIBRARIES=/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib" if ADDRESS_SANITIZER_ON else ""
         command = f'{dyld_insert_libraries} {FCODER_ROOT}/4ed > /dev/null'
         # Does emacs output pipe slow down 4coder? Very possible!
-        os.chdir(f"{AUTODRAW_ROOT}")
+        os.chdir(f"{AUTODRAW}")
         run(command) # Run in a new process group
-    else:
-        sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
-        #
-        opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 -I{HERE}/../libs"
-        arch="-m64"
-        debug="-g"
 
+    else:
+        if True:
+            print('Lexer: Generate (one-time thing)')
+            # run(f'clang++ {HERE}/4coder_fleury/4coder_fleury_jai_lexer_gen.cpp {arch} {opts} {debug} -std=c++11 -O2 -o {HERE}/lexer_generator')
+            run(f'clang++ {HERE}/4coder_fleury/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -std=c++11 -O2 -o {HERE}/lexer_generator')
+            run(f'{HERE}/lexer_generator')
+            run(f'rm -rf {HERE}/lexer_generator {HERE}/lexer_generator.dSYM')
+
+        sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
         preproc_file="4coder_command_metadata.i"
         meta_macros="-DMETA_PASS"
         #
@@ -78,7 +86,7 @@ try:
         run(f'ccache clang++ -c "{SOURCE}" -I"{CODE_HOME}" {arch} {opts} {debug} -std=c++11 -fPIC -o custom_4coder.o {sanitize_address}')
         #
         FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
-        run(f'clang++ "custom_4coder.o" "{AUTODRAW_ROOT}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
+        run(f'clang++ "custom_4coder.o" "{AUTODRAW}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
 
         run(f'rm -f "{CODE_HOME}/metadata_generator.o" "{CODE_HOME}/metadata_generator" {preproc_file}')
         print("NOTE: Setup 4coder config files")

@@ -2,8 +2,9 @@
 CompileFlags:
   Compiler: clang++
   Add:
+    - -I/Users/khoa/AutoDraw/4coder_kv/custom_patch
     - -I/Users/khoa/4ed/code/custom  # todo: hardcode
-    - -I/Users/khoa/AutoDraw/libs      # todo: hardcode but idk what to do
+    - -I/Users/khoa/AutoDraw/libs    # todo: hardcode but idk what to do
     - -ferror-limit=0
     - -std=c++11
     - -DOS_MAC=1
