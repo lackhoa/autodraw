@@ -64,6 +64,7 @@ F4_RegisterLanguages(void)
     }
 
     // TODO(kv): skm hacking!
+    if (1)
     {
         F4_RegisterLanguage(S8Lit("skm"),
                             F4_Skm_IndexFile,

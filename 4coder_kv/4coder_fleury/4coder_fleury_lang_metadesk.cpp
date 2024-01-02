@@ -1,7 +1,7 @@
 
 #include "4coder_fleury_index.cpp"
 #include "4coder_fleury_lang.cpp"
-#include "4coder_fleury_colors.h"
+#include "4coder_fleury_colors.cpp"
 
 struct F4_MD_LexerState
 {

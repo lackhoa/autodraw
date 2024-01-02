@@ -23,16 +23,14 @@ build_language_model(void)
     // skm Operators
     Operator_Set *main_ops = sm_begin_op_set();
     //
-    sm_select_base_kind(TokenBaseKind_ScopeOpen);
-    sm_op("{");
-    sm_select_base_kind(TokenBaseKind_ScopeClose);
-    sm_op("}");
     sm_select_base_kind(TokenBaseKind_ParentheticalOpen);
     sm_op("(");
     sm_op("[");
+    sm_op("{");
     sm_select_base_kind(TokenBaseKind_ParentheticalClose);
     sm_op(")");
     sm_op("]");
+    sm_op("}");
     
     // State Machine
     State *root = sm_begin_state_machine();

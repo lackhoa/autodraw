@@ -1,4 +1,5 @@
 #include "4coder_kv_core.cpp"
+#include "4coder_fleury/4coder_fleury_lite.cpp"
 
 BUFFER_HOOK_SIG(kv_file_save)
 {
@@ -26,6 +27,11 @@ BUFFER_HOOK_SIG(kv_new_file)
 function Tick_Function kv_tick;
 function void kv_tick(Application_Links *app, Frame_Info frame_info)
 {
+  // NOTE: F4
+  linalloc_clear(&global_frame_arena);
+  F4_Index_Tick(app);
+
+  // NOTE(rjf): Default tick stuff from the 4th dimension:
   default_tick(app, frame_info);
 
   // NOTE(kv): vim
@@ -61,4 +67,20 @@ function void kv_tick(Application_Links *app, Frame_Info frame_info)
       print_message_cstr(app, "auto-saved all dirty buffers\n");
     }
   }
+}
+
+BUFFER_HOOK_SIG(kv_begin_buffer)
+{
+  vim_begin_buffer(app, buffer_id);
+  F4_BeginBuffer_lite(app, buffer_id);
+  return 0;
+}
+
+BUFFER_EDIT_RANGE_SIG(kv_buffer_edit_range)
+{
+  // NOTE(kv): Fleury
+  F4_BufferEditRange(app, buffer_id, new_range, old_cursor_range);
+  // NOTE(kv): vim
+  fold_buffer_edit_range_inner(app, buffer_id, new_range, old_cursor_range);
+  return 0;
 }

@@ -3,13 +3,11 @@
 #include "4coder_kv_hooks.cpp"
 #include "4coder_kv_draw.cpp"
 
-#include "4coder_fleury/4coder_fleury.cpp"
-
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
 #endif
 
-global b32 USE_BYP_LAYER = 0;
+global b32 USE_BYP_LAYER = 1;
 
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
   
@@ -46,6 +44,8 @@ void kv_open_startup_file(Application_Links *app)
   View_ID view = get_this_ctx_view(app, Access_Always);
   char *startup_file = "~/notes/thought.skm";
   // char *startup_file = "~/notes/test.skm";
+  // char *startup_file = "/tmp/sqlite-amalgamation-3400000/sqlite3.c";
+  // char *startup_file = "/tmp/sqlite-amalgamation-3400000/sqlite3.skm";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -56,14 +56,7 @@ void kv_open_startup_file(Application_Links *app)
 CUSTOM_COMMAND_SIG(kv_startup)
 CUSTOM_DOC("KV startup routine (modified from default_startup)")
 {
-  if (USE_BYP_LAYER)
-  {
-    default_startup(app);
-  }
-  else
-  {
-    fleury_startup(app);
-  }
+  default_startup(app);
   kv_open_startup_file(app);
 }
 
@@ -408,10 +401,12 @@ void byp_custom_layer_init(Application_Links *app)
 
   set_custom_hook(app, HookID_Tick,             kv_tick);
   set_custom_hook(app, HookID_NewFile,          kv_new_file);
-  set_custom_hook(app, HookID_BeginBuffer,      vim_begin_buffer);
-  set_custom_hook(app, HookID_BufferEditRange,  vim_buffer_edit_range);
+  set_custom_hook(app, HookID_BeginBuffer,      kv_begin_buffer);
+  set_custom_hook(app, HookID_BufferEditRange,  kv_buffer_edit_range);
   set_custom_hook(app, HookID_ViewChangeBuffer, vim_view_change_buffer);
   set_custom_hook(app, HookID_ViewEventHandler, vim_view_input_handler);
+  set_custom_hook(app, HookID_DeltaRule,        F4_DeltaRule_lite);
+  set_custom_hook_memory_size(app, HookID_DeltaRule, delta_ctx_size(sizeof(Vec2_f32)));
 
   Thread_Context *tctx = get_thread_context(app);
   mapping_init(tctx, &framework_mapping);
@@ -422,6 +417,16 @@ void byp_custom_layer_init(Application_Links *app)
   //
   kv_vim_bindings(app);
   byp_default_bindings(&framework_mapping);
+
+  // NOTE(rjf): Set up custom code index.
+  {
+    F4_Index_Initialize();
+  }
+    
+  // NOTE(rjf): Register languages.
+  {
+    F4_RegisterLanguages();
+  }
 }
 
 void custom_layer_init(Application_Links *app)

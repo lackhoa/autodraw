@@ -213,7 +213,7 @@ token.pos = (i64)(state.emit_ptr - state.base);
 token.size = (i64)(state.ptr - state.emit_ptr);
 do{
 token.sub_kind = TokenSkmKind_BraceOp;
-token.kind = 11;
+token.kind = 13;
 }while(0);
 token_list_push(arena, list, &token);
 emit_counter += 1;
@@ -233,7 +233,7 @@ token.pos = (i64)(state.emit_ptr - state.base);
 token.size = (i64)(state.ptr - state.emit_ptr);
 do{
 token.sub_kind = TokenSkmKind_BraceCl;
-token.kind = 12;
+token.kind = 14;
 }while(0);
 token_list_push(arena, list, &token);
 emit_counter += 1;

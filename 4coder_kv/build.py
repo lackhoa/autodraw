@@ -48,7 +48,7 @@ try:
     ADDRESS_SANITIZER_ON = False
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CODE_HOME} -I{AUTODRAW}/libs'
-    OPTIMIZATION='-O0'
+    OPTIMIZATION='-O2'
     opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
     arch="-m64"
     debug="-g"
@@ -61,10 +61,9 @@ try:
         run(command) # Run in a new process group
 
     else:
-        if True:
+        if False:
             print('Lexer: Generate (one-time thing)')
-            # run(f'clang++ {HERE}/4coder_fleury/4coder_fleury_jai_lexer_gen.cpp {arch} {opts} {debug} -std=c++11 -O2 -o {HERE}/lexer_generator')
-            OPTIMIZATION="-O0"
+            OPTIMIZATION="-O2"
             run(f'clang++ {HERE}/4coder_fleury/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -Wno-tautological-compare -std=c++11 {OPTIMIZATION} -o {HERE}/lexer_generator')
             print('running lexer generator')
             run(f'{HERE}/lexer_generator')
