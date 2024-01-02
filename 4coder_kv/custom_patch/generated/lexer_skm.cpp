@@ -90,11 +90,7 @@ switch (*state.ptr){
 case 0x00:case 0x01:case 0x02:case 0x03:case 0x04:case 0x05:case 0x06:
 case 0x07:case 0x08:case 0x0e:case 0x0f:case 0x10:case 0x11:case 0x12:
 case 0x13:case 0x14:case 0x15:case 0x16:case 0x17:case 0x18:case 0x19:
-case 0x1a:case 0x1b:case 0x1c:case 0x1d:case 0x1e:case 0x1f:case 0x21:
-case 0x22:case 0x23:case 0x25:case 0x26:case 0x27:case 0x2a:case 0x2b:
-case 0x2c:case 0x2d:case 0x2e:case 0x2f:case 0x3a:case 0x3b:case 0x3c:
-case 0x3d:case 0x3e:case 0x3f:case 0x40:case 0x4c:case 0x52:case 0x55:
-case 0x5c:case 0x5e:case 0x60:case 0x75:case 0x7c:case 0x7e:case 0x7f:
+case 0x1a:case 0x1b:case 0x1c:case 0x1d:case 0x1e:case 0x1f:case 0x7f:
 {
 state.ptr += 1;
 {
@@ -102,8 +98,8 @@ Token token = {};
 token.pos = (i64)(state.emit_ptr - state.base);
 token.size = (i64)(state.ptr - state.emit_ptr);
 do{
-token.sub_kind = TokenSkmKind_LexError;
-token.kind = 2;
+token.sub_kind = TokenSkmKind_Text;
+token.kind = 3;
 }while(0);
 token_list_push(arena, list, &token);
 emit_counter += 1;
@@ -122,7 +118,7 @@ goto state_label_3; // whitespace
 default:
 {
 state.ptr += 1;
-goto state_label_2; // identifier
+goto state_label_2; // text
 }break;
 case 0x28:
 {
@@ -247,7 +243,7 @@ goto state_label_1; // root
 }
 }
 {
-state_label_2: // identifier
+state_label_2: // text
 if (state.ptr == state.opl_ptr){
 if ((true)){
 {
@@ -255,6 +251,8 @@ Token token = {};
 token.pos = (i64)(state.emit_ptr - state.base);
 token.size = (i64)(state.ptr - state.emit_ptr);
 do{
+token.sub_kind = TokenSkmKind_Text;
+token.kind = 3;
 }while(0);
 token_list_push(arena, list, &token);
 emit_counter += 1;
@@ -268,18 +266,16 @@ case 0x00:case 0x01:case 0x02:case 0x03:case 0x04:case 0x05:case 0x06:
 case 0x07:case 0x08:case 0x09:case 0x0a:case 0x0b:case 0x0c:case 0x0d:
 case 0x0e:case 0x0f:case 0x10:case 0x11:case 0x12:case 0x13:case 0x14:
 case 0x15:case 0x16:case 0x17:case 0x18:case 0x19:case 0x1a:case 0x1b:
-case 0x1c:case 0x1d:case 0x1e:case 0x1f:case 0x20:case 0x21:case 0x22:
-case 0x23:case 0x25:case 0x26:case 0x27:case 0x28:case 0x29:case 0x2a:
-case 0x2b:case 0x2c:case 0x2d:case 0x2e:case 0x2f:case 0x3a:case 0x3b:
-case 0x3c:case 0x3d:case 0x3e:case 0x3f:case 0x40:case 0x5b:case 0x5c:
-case 0x5d:case 0x5e:case 0x60:case 0x7b:case 0x7c:case 0x7d:case 0x7e:
-case 0x7f:
+case 0x1c:case 0x1d:case 0x1e:case 0x1f:case 0x20:case 0x28:case 0x29:
+case 0x5b:case 0x5d:case 0x7b:case 0x7d:case 0x7f:
 {
 {
 Token token = {};
 token.pos = (i64)(state.emit_ptr - state.base);
 token.size = (i64)(state.ptr - state.emit_ptr);
 do{
+token.sub_kind = TokenSkmKind_Text;
+token.kind = 3;
 }while(0);
 token_list_push(arena, list, &token);
 emit_counter += 1;
@@ -293,7 +289,7 @@ goto state_label_1; // root
 default:
 {
 state.ptr += 1;
-goto state_label_2; // identifier
+goto state_label_2; // text
 }break;
 }
 }

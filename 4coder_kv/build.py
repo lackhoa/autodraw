@@ -48,7 +48,7 @@ try:
     ADDRESS_SANITIZER_ON = False
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CODE_HOME} -I{AUTODRAW}/libs'
-    OPTIMIZATION='-O2'
+    OPTIMIZATION='-O0'
     opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
     arch="-m64"
     debug="-g"

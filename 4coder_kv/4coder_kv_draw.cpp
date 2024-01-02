@@ -6,6 +6,145 @@ CUSTOM_COMMAND_SIG(byp_toggle_relative_numbers)
 CUSTOM_DOC("Toggles value for `relative_numbers`")
 { byp_relative_numbers ^= 1; }
 
+function b32
+kv_find_nest_side_paren(Application_Links *app, Token_Array *tokens, i64 pos,
+                        Scan_Direction scan, Nest_Delimiter_Kind delim,
+                        i64 *out)
+{
+  if (!(tokens && tokens->count)) return false;
+
+  Range_i64 range = {};
+  b32 nest_found = false;
+  {// b32 result = find_nest_side(app, buffer, pos, flags, scan, delim, &range);
+    Token_Iterator_Array it = token_iterator_pos(0, tokens, pos);
+    i32 level = 0;
+    for (;;)
+    {
+      Token *token = token_it_read(&it);
+      Nest_Delimiter_Kind token_delim_kind = NestDelim_None;
+      //
+      if (token->kind == TokenBaseKind_ParentheticalOpen)
+      {
+        token_delim_kind = NestDelim_Open;
+      }
+      else if (token->kind == TokenBaseKind_ParentheticalClose)
+      {
+        token_delim_kind = NestDelim_Close;
+      }
+            
+      if (level == 0 && token_delim_kind == delim)
+      {
+        range = Ii64_size(token->pos, token->size);
+        nest_found = true;
+        break;
+      }
+      else
+      {
+        if (token_delim_kind != NestDelim_None)
+        {
+          if (token_delim_kind == delim) { level--; }
+          else                           { level++; }
+        }
+            
+        if (scan == Scan_Forward)
+        {
+          if (!token_it_inc(&it))
+          {
+            break;
+          }
+        }
+        else
+        {
+          if (!token_it_dec(&it))
+          {
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (nest_found)
+  {
+    if (delim == NestDelim_Close) { *out = range.end;   }
+    else                          { *out = range.start; }
+  }
+  return(nest_found);
+}
+
+// NOTE(kv): Patch because the original one doesn't terminate early (and buggy!)
+function void
+kv_draw_paren_highlight(Application_Links *app, Buffer_ID buffer, Text_Layout_ID text_layout_id,
+                        i64 pos, ARGB_Color *colors, i32 color_count)
+{
+  if (!(colors && color_count)) return;
+
+  Token_Array tokens = get_token_array_from_buffer(app, buffer);
+  if (!(tokens.tokens && tokens.count)) return;
+
+  {// Nudge the cursor in case we're near parentheses.
+    Token_Iterator_Array it = token_iterator_pos(0, &tokens, pos);
+    Token *token = token_it_read(&it);
+    if (token && (token->kind == TokenBaseKind_ParentheticalOpen))
+    {
+      pos = token->pos + token->size;
+    }
+    else if ( token_it_dec_all(&it) )
+    {
+      token = token_it_read(&it);
+      if (token &&
+          token->kind == TokenBaseKind_ParentheticalClose &&
+          pos == token->pos + token->size)
+      {
+        pos = token->pos;
+      }
+    }
+  }
+
+  {// draw_enclosures(app, buffer, pos);
+    Scratch_Block scratch(app);
+    Range_i64_Array ranges;
+
+    {// get_enclosure_ranges(app, scratch, buffer, pos);
+      i32 max = 16;
+      ranges.ranges = push_array(scratch, Range_i64, max);
+      i32 original_pos = pos;
+      while ((ranges.count < max) && (pos >= 1))
+      {
+        // NOTE(kv): this algorithm is weird and inefficient: just keep two
+        // cursors and scan for parentheses, then we'd be done!
+        Range_i64 range = {};
+        // find_surrounding_nest(app, buffer, pos, FindNest_Paren, &range)
+        // NOTE(kv): "pos" has to be positive for this to work, Allen!
+        b32 find_nest_backward = kv_find_nest_side_paren(app, &tokens, pos-1,
+                                                         Scan_Backward, NestDelim_Open, &range.start);
+        b32 find_nest_forward = kv_find_nest_side_paren(app, &tokens, pos,
+                                                        Scan_Forward, NestDelim_Close, &range.end);
+        if (find_nest_backward && find_nest_forward)
+        {
+          ranges.ranges[ranges.count] = range;
+          ranges.count += 1;
+          pos = range.first;
+        }
+        else
+        {
+          break;
+        }
+      }
+    }
+
+    // Draw those parens!
+    i32 color_index = 0;
+    for (i32 range_i = ranges.count-1; range_i >= 0; range_i--)
+    {
+      Range_i64 range = ranges.ranges[range_i];
+      i32 fore_index = color_index % color_count;
+      paint_text_color_pos(app, text_layout_id, range.min, colors[fore_index]);
+      paint_text_color_pos(app, text_layout_id, range.max - 1, colors[fore_index]);
+      color_index += 1;
+    }
+  }
+}
+
 function void
 byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buffer_ID buffer, Text_Layout_ID text_layout_id, Rect_f32 rect) {
 	ProfileScope(app, "render buffer");
@@ -39,7 +178,7 @@ byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buff
 		paint_text_color_fcolor(app, text_layout_id, visible_range, fcolor_id(defcolor_text_default));
 	}else{
 		byp_draw_token_colors(app, view_id, buffer, text_layout_id);
-	}
+    }
 
 	b32 use_error_highlight = def_get_config_b32(vars_save_string_lit("use_error_highlight"));
 	b32 use_jump_highlight  = def_get_config_b32(vars_save_string_lit("use_jump_highlight"));
@@ -59,9 +198,10 @@ byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buff
 	}
 
 	b32 use_paren_helper = def_get_config_b32(vars_save_string_lit("use_paren_helper"));
-	if(use_paren_helper){
-		Color_Array colors = finalize_color_array(defcolor_text_cycle);
-		draw_paren_highlight(app, buffer, text_layout_id, cursor_pos, colors.vals, colors.count);
+	if(use_paren_helper)
+    {
+      Color_Array colors = finalize_color_array(defcolor_text_cycle);
+      kv_draw_paren_highlight(app, buffer, text_layout_id, cursor_pos, colors.vals, colors.count);
 	}
 
 	b64 show_whitespace = false;

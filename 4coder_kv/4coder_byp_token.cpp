@@ -162,7 +162,7 @@ function void byp_draw_token_colors(Application_Links *app, View_ID view, Buffer
 	}
 
 	it = token_iterator_pos(0, &token_array, Max(0, visible_range.first-1));
-	for(;;){
+	for(;;) {
 		Token *token = token_it_read(&it);
 		if(token->pos > visible_range.max){ break; }
 		String_Const_u8 lexeme = push_token_lexeme(app, scratch, buffer, token);

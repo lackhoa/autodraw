@@ -7,6 +7,8 @@
 #define LANG_NAME_CAMEL Skm
 
 #include "lexer_generator/4coder_lex_gen_main.cpp"
+#define KV_IMPLEMENTATION
+#include "kv.h"
 
 internal void
 build_language_model(void)
@@ -17,8 +19,8 @@ build_language_model(void)
     smh_set_base_character_names();
     smh_typical_tokens();
     
-    sm_select_base_kind(TokenBaseKind_Keyword);
-    sm_direct_token_kind("KeywordGeneric");
+    sm_select_base_kind(TokenBaseKind_Comment);
+    sm_direct_token_kind("Text");
     
     // skm Operators
     Operator_Set *main_ops = sm_begin_op_set();
@@ -37,7 +39,7 @@ build_language_model(void)
     
 #define AddState(N) State *N = sm_add_state(#N)
     
-    AddState(identifier);
+    AddState(text);
     AddState(whitespace);
     
     ////
@@ -50,13 +52,36 @@ build_language_model(void)
         sm_case_eof(emit);
     }
     
-    // Identifiers
-    sm_case("abcdefghijklmnopqrstvwxyz"
-            "ABCDEFGHIJKMNOPQSTVWXYZ"
-            "_$"
-            "0123456789",
-            identifier);
-    sm_case(utf8, identifier);
+    // Text
+    u8 *text_chars = 0;
+    for (i32 character=0; character < 128; character++) {
+      if (isprint(character)) {
+        switch (character) {
+          case 0:
+          case '(':
+          case '[':
+          case '{':
+          case ')':
+          case ']':
+          case '}':
+          case ' ':
+          case '\r':
+          case '\t':
+          case '\f':
+          case '\v':
+          case '\n':
+          {}break;
+
+          default:
+            arrput(text_chars, character);
+        }
+      }
+    }
+    arrput(text_chars, 0);
+    // printf("text_chars: %s\n", text_chars);
+
+    sm_case(text_chars, text);
+    sm_case(utf8, text);
     
     // Whitespace
     sm_case(" \r\t\f\v\n", whitespace);
@@ -71,21 +96,18 @@ build_language_model(void)
     
     {
         Emit_Rule *emit = sm_emit_rule();
-        sm_emit_handler_direct("LexError");
+        sm_emit_handler_direct("Text");
         sm_fallback(emit);
     }
     
     ////
     
-    sm_select_state(identifier);
-    sm_case("abcdefghijklmnopqrstuvwxyz"
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "_$"
-            "0123456789",
-            identifier);
-    sm_case(utf8, identifier);
+    sm_select_state(text);
+    sm_case(text_chars, text);
+    sm_case(utf8, text);
     {
         Emit_Rule *emit = sm_emit_rule();
+        sm_emit_handler_direct("Text");
         sm_fallback_peek(emit);
     }
     
@@ -99,4 +121,3 @@ build_language_model(void)
         sm_fallback_peek(emit);
     }
 }
-
