@@ -33,7 +33,7 @@ def mtime(path):
 HOME=os.path.expanduser("~")
 HERE = os.path.dirname(os.path.realpath(__file__))
 FCODER_ROOT=f'{HOME}/4coder'
-CODE_HOME=f'{HOME}/4ed/code/custom'
+CUSTOM=f'{HOME}/4ed/code/custom'
 AUTODRAW=f'{HOME}/AutoDraw'
 SOURCE=f'{HERE}/4coder_kv.cpp'
 
@@ -47,7 +47,7 @@ try:
     DEBUG_MODE = False
     ADDRESS_SANITIZER_ON = False
 
-    INCLUDES=f'-I{HERE}/custom_patch -I{CODE_HOME} -I{AUTODRAW}/libs'
+    INCLUDES=f'-I{HERE}/custom_patch -I{CUSTOM} -I{AUTODRAW}/libs'
     OPTIMIZATION='-O0'
     opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
     arch="-m64"
@@ -61,12 +61,13 @@ try:
         run(command) # Run in a new process group
 
     else:
-        if False:  # Lexer generator
+        if True:  # Lexer generator
             print('Lexer: Generate (one-time thing)')
             OPTIMIZATION="-O2"
-            run(f'clang++ {HERE}/4coder_fleury/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -Wno-tautological-compare -std=c++11 {OPTIMIZATION} -o {HERE}/lexer_generator')
+            run(f'clang++ {HERE}/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -Wno-tautological-compare -std=c++11 {OPTIMIZATION} -o {HERE}/lexer_generator')
+            #
             print('running lexer generator')
-            run(f'{HERE}/lexer_generator')
+            run(f'mkdir -p {HERE}/generated && {HERE}/lexer_generator {HERE}/generated')
             run(f'rm {HERE}/lexer_generator & rm -rf {HERE}/lexer_generator.dSYM')
 
         sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
@@ -74,23 +75,23 @@ try:
         meta_macros="-DMETA_PASS"
         #
         print('preproc_file: Generate')
-        run(f'clang++ -I{CODE_HOME} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
+        run(f'clang++ -I{CUSTOM} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
         #
         print('Meta-generator: Compile & Link')
-        run(f'ccache clang++ -c "{CODE_HOME}/4coder_metadata_generator.cpp" -I"{CODE_HOME}" {opts} -O2 -std=c++11 -o "{CODE_HOME}/metadata_generator.o"')
+        run(f'ccache clang++ -c "{CUSTOM}/4coder_metadata_generator.cpp" -I"{CUSTOM}" {opts} -O2 -std=c++11 -o "{CUSTOM}/metadata_generator.o"')
         #
-        run(f'clang++ -I"{CODE_HOME}" "{CODE_HOME}/metadata_generator.o" -o "{CODE_HOME}/metadata_generator"')
+        run(f'clang++ -I"{CUSTOM}" "{CUSTOM}/metadata_generator.o" -o "{CUSTOM}/metadata_generator"')
         #
         print('Meta-generator: Run')
-        run(f'"{CODE_HOME}/metadata_generator" -R "{CODE_HOME}" "{os.getcwd()}/{preproc_file}"')
+        run(f'"{CUSTOM}/metadata_generator" -R "{CUSTOM}" "{os.getcwd()}/{preproc_file}"')
         #
         print('custom_4coder.so: Compile & Link')
-        run(f'ccache clang++ -c "{SOURCE}" -I"{CODE_HOME}" {arch} {opts} {debug} -std=c++11 -fPIC -o custom_4coder.o {sanitize_address}')
+        run(f'ccache clang++ -c "{SOURCE}" -I"{CUSTOM}" {arch} {opts} {debug} -std=c++11 -fPIC -o custom_4coder.o {sanitize_address}')
         #
         FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
         run(f'clang++ "custom_4coder.o" "{AUTODRAW}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
 
-        run(f'rm -f "{CODE_HOME}/metadata_generator.o" "{CODE_HOME}/metadata_generator" {preproc_file}')
+        run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')
         print("NOTE: Setup 4coder config files")
         run(f'ln -sf "{HERE}/config.4coder" "{FCODER_ROOT}/config.4coder"')
         run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_ROOT}/themes/theme-kv.4coder"')

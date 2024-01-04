@@ -4,9 +4,9 @@
 #define FCODER_FLEURY_LANG_LIST_H
 
 // NOTE(rjf): Include language files here.
-#include "4coder_fleury_lang_jai.cpp"
-#include "4coder_fleury_lang_cpp.cpp"
-#include "4coder_fleury_lang_metadesk.cpp"
+#include "4coder_fleury/4coder_fleury_lang_jai.cpp"
+#include "4coder_fleury/4coder_fleury_lang_cpp.cpp"
+#include "4coder_fleury/4coder_fleury_lang_metadesk.cpp"
 #include "4coder_kv_lang_skm.cpp"
 
 // NOTE(rjf): @f4_register_languages Register languages.

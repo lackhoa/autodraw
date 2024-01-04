@@ -389,7 +389,7 @@ void byp_custom_layer_init(Application_Links *app)
   mapping_init(tctx, &framework_mapping);
   kv_essential_mapping(&framework_mapping);
   //
-  kvInitShiftedTable();  // TODO(kv): init this table in the vim layer
+  kvInitShiftedTable();
   kvInitVimQuailTable(app);
   //
   kv_vim_bindings(app);

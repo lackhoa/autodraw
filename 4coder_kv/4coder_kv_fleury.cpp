@@ -2,8 +2,8 @@
 // NOTE(kv): This is the part the fleury custom layer that matters to me.  It is
 // fully functional, and independent of features I haven't absorbed yet.
 
-#include "4coder_fleury_ubiquitous.cpp"
-#include "4coder_fleury_lang_list.h"
+#include "4coder_fleury/4coder_fleury_ubiquitous.cpp"
+#include "4coder_kv_lang_list.h"
 #include "kv.h"
 
 function void
