@@ -316,6 +316,12 @@ kv_vim_bindings(Application_Links *app)
     //
 	BIND(N|MAP,   byp_request_comment,   SUB_G,         KeyCode_ForwardSlash);
 	BIND(N|MAP,   byp_request_uncomment, SUB_G,   S|KeyCode_ForwardSlash);
+    //
+    BIND(N|V|MAP,   kv_sexpr_up,     M|KeyCode_K);
+    BIND(N|V|MAP,   kv_sexpr_down,   M|KeyCode_J);
+    BIND(N|V|MAP,   kv_sexpr_right,  M|KeyCode_L);
+    BIND(N|V|MAP,   kv_sexpr_left,   M|KeyCode_H);
+    BIND(N|V|MAP,   kv_sexpr_end,    M|KeyCode_Semicolon);
 
 #undef BIND
 }

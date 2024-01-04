@@ -45,20 +45,18 @@ build_language_model(void)
     
     u8 *text_chars = 0;
     for (i32 character=0; character < 128; character++) {
-      if (isprint(character)) {
-        switch (character) {
-          case 0:
-          case '(':
-          case '[':
-          case '{':
-          case ')':
-          case ']':
-          case '}':
-          {}break;
+      switch (character) {
+        case 0:
+        case '(':
+        case '[':
+        case '{':
+        case ')':
+        case ']':
+        case '}':
+        {}break;
 
-          default:
-            arrput(text_chars, character);
-        }
+        default:
+          arrput(text_chars, character);
       }
     }
     arrput(text_chars, 0);

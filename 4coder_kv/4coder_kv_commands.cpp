@@ -6,8 +6,7 @@ Table_u64_u64 shifted_version_of_characters;
 
 VIM_COMMAND_SIG(kv_shift_character)
 {
-  View_ID view = get_active_view(app, Access_ReadVisible);
-  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+  GET_VIEW_AND_BUFFER;
   i64 pos = view_get_cursor_pos(app, view);
 
   u8 current_character = 0;
@@ -103,12 +102,11 @@ VIM_COMMAND_SIG(kv_newline_below)
 CUSTOM_COMMAND_SIG(byp_reset_face_size)
 CUSTOM_DOC("Resets face size to default")
 {
-	View_ID view = get_active_view(app, Access_Always);
-	Buffer_ID buffer = view_get_buffer(app, view, Access_Always);
-	Face_ID face_id = get_face_id(app, buffer);
-	Face_Description description = get_face_description(app, face_id);
-	description.parameters.pt_size = (i32)def_get_config_u64(app, vars_save_string_lit("default_font_size"));
-	try_modify_face(app, face_id, &description);
+  GET_VIEW_AND_BUFFER;
+  Face_ID face_id = get_face_id(app, buffer);
+  Face_Description description = get_face_description(app, face_id);
+  description.parameters.pt_size = (i32)def_get_config_u64(app, vars_save_string_lit("default_font_size"));
+  try_modify_face(app, face_id, &description);
 }
 
 CUSTOM_COMMAND_SIG(kv_profile_disable_and_inspect)
@@ -116,4 +114,162 @@ CUSTOM_DOC("disable and inspect profile")
 {
   profile_disable(app);
   profile_inspect(app);
+ }
+
+inline b32 kv_is_group_opener(Token *token)
+{
+  return (token->kind == TokenBaseKind_ParentheticalOpen ||
+          token->kind == TokenBaseKind_ScopeOpen);
 }
+
+inline b32 kv_is_group_closer(Token *token)
+{
+  return (token->kind == TokenBaseKind_ParentheticalClose ||
+          token->kind == TokenBaseKind_ScopeClose);
+}
+
+inline b8 kv_is_group_opener(u8 c)
+{
+  switch (c) {
+    case '(': case '[': case '{': return true;
+    default:                      return false;
+  }
+}
+
+inline b8 kv_is_group_closer(u8 c)
+{
+  switch (c) {
+    case ')': case ']': case '}': return true;
+    default:                      return false;
+  }
+}
+
+void kv_vim_bounce(Application_Links *app)
+{
+  GET_VIEW_AND_BUFFER;
+  Vim_Motion_Block vim_motion_block(app);
+  i64 pos = view_get_cursor_pos(app, view);
+  pos = vim_scan_bounce(app, buffer, pos, Scan_Forward);
+  view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
+}
+
+inline void kv_move_to_token(Application_Links *app, Token *token)
+{
+  View_ID   view = get_active_view(app, Access_ReadVisible);
+  view_set_cursor_and_preferred_x(app, view, seek_pos(token->pos));
+}
+
+internal Token *
+kv_token_at_cursor(Application_Links *app, i64 delta=0)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Array tokens = get_token_array_from_buffer(app, buffer);
+  i64 pos = view_correct_cursor(app, view) + delta;
+  return token_from_pos(&tokens, pos);
+}
+
+internal Token_Iterator_Array
+kv_token_it_at_cursor(Application_Links *app, i64 delta=0)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Array tokens = get_token_array_from_buffer(app, buffer);
+  i64 pos = view_correct_cursor(app, view) + delta;
+  return token_iterator_pos(0, &tokens, pos);
+}
+
+VIM_COMMAND_SIG(kv_sexpr_up)
+{
+  GET_VIEW_AND_BUFFER;
+  vim_push_jump(app, view);
+  Vim_Motion_Block vim_motion_block(app);
+  Token_Array tokens = get_token_array_from_buffer(app, buffer);
+
+  i64 pos = view_correct_cursor(app, view);
+  Token_Iterator_Array token_it = token_iterator_pos(0, &tokens, pos);
+  i32 nest_level = 0;
+  while (token_it_dec(&token_it))
+  {
+    Token *token = token_it_read(&token_it);
+    if (kv_is_group_opener(token))
+    {
+      if (nest_level == 0) {
+        kv_move_to_token(app, token);
+        break;
+      }
+      else {
+        soft_assert(nest_level > 0);
+        nest_level--;
+      }
+    }
+    else if (kv_is_group_closer(token))  nest_level++; 
+  }
+}
+
+VIM_COMMAND_SIG(kv_sexpr_down)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Iterator_Array token_it = kv_token_it_at_cursor(app);
+  do
+  {
+    Token *token = token_it_read(&token_it);
+    if (kv_is_group_opener(token))
+    {
+      kv_move_to_token(app, token);
+      move_right(app);
+      break;
+    }
+  } while (token_it_inc(&token_it));
+}
+
+VIM_COMMAND_SIG(kv_sexpr_right)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Iterator_Array token_it = kv_token_it_at_cursor(app);
+  do {
+    Token *token = token_it_read(&token_it);
+    if (kv_is_group_opener(token))
+    {
+      kv_move_to_token(app, token);
+      kv_vim_bounce(app);
+      move_right(app);
+      break;
+    }
+    else if (kv_is_group_closer(token))
+    {
+      kv_move_to_token(app, token);
+      move_left(app);
+      break;
+    }
+  } while (token_it_inc(&token_it));
+}
+
+VIM_COMMAND_SIG(kv_sexpr_left)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Iterator_Array token_it = kv_token_it_at_cursor(app, -1);
+  do
+  {
+    Token *token = token_it_read(&token_it);
+    if (kv_is_group_opener(token))
+    {
+      kv_move_to_token(app, token);
+      move_right(app);
+      break;
+    }
+    else if (kv_is_group_closer(token))
+    {
+      kv_move_to_token(app, token);
+      kv_vim_bounce(app);
+      break;
+    }
+  } while (token_it_dec(&token_it));
+}
+
+VIM_COMMAND_SIG(kv_sexpr_end)
+{
+  kv_sexpr_up(app);
+  kv_sexpr_right(app);
+  move_left(app);
+  move_left(app);
+}
+

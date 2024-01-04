@@ -357,17 +357,17 @@ rotateRight(u32 value, i32 rotateAmount)
 #define breakhere       { int x = 5; (void)x; }
 
 #if KV_INTERNAL
-#    define softAssert      kv_assert
+#    define soft_assert      kv_assert
 #    define probably(CLAIM) (kv_assert(CLAIM), true)
 #else
-#    define softAssert(CLAIM)
+#    define soft_assert(CLAIM)
 #    define probably(CLAIM) (CLAIM)
 #endif
 
 #if KV_SLOW
-#    define slowAssert kv_assert
+#    define slow_assert kv_assert
 #else
-#    define slowAssert
+#    define slow_assert
 #endif
 
 inline i32 safeTruncateToInt32(u64 value)
@@ -1001,7 +1001,6 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 /* todo: Old names */
 #define kvXmalloc     kv_xmalloc
 #define kvAssert      kv_assert
-#define kvSoftAssert1 softAssert
 #define kvProbably    probably
 typedef kv_Arena KvArena;
 /* Old names > */
