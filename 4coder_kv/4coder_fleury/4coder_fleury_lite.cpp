@@ -4,6 +4,7 @@
 
 #include "4coder_fleury_ubiquitous.cpp"
 #include "4coder_fleury_lang_list.h"
+#include "kv.h"
 
 function void
 F4_Tick_lite(Application_Links *app, Frame_Info frame_info)
@@ -204,7 +205,7 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
 {
     // buffer_id, new_range, original_size
     ProfileScope(app, "[F4] Buffer Edit Range");
-    
+
     Range_i64 old_range = Ii64(old_cursor_range.min.pos, old_cursor_range.max.pos);
     
     buffer_shift_fade_ranges(buffer_id, old_range.max, (new_range.max - old_range.max));
@@ -229,6 +230,7 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
     Base_Allocator *allocator = managed_scope_allocator(app, scope);
     b32 do_full_relex = false;
     
+    // note: invalidate running lex task
     if (async_task_is_running_or_pending(&global_async_system, *lex_task_ptr)){
         async_task_cancel(app, &global_async_system, *lex_task_ptr);
         buffer_unmark_as_modified(buffer_id);
@@ -237,7 +239,8 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
     }
     
     Token_Array *ptr = scope_attachment(app, scope, attachment_tokens, Token_Array);
-    if (ptr != 0 && ptr->tokens != 0){
+    if (ptr != 0 && ptr->tokens != 0)
+    {
         ProfileBlockNamed(app, "attempt resync", profile_attempt_resync);
         
         i64 token_index_first = token_relex_first(ptr, old_range.first, 1);
@@ -247,7 +250,8 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
         if (token_index_resync_guess - token_index_first >= 4000){
             do_full_relex = true;
         }
-        else{
+        else
+        {
             Token *token_first = ptr->tokens + token_index_first;
             Token *token_resync = ptr->tokens + token_index_resync_guess;
             
@@ -272,10 +276,8 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
             
             ProfileCloseNow(profile_attempt_resync);
             
-            if (!relex.successful_resync){
-                do_full_relex = true;
-            }
-            else{
+            if (relex.successful_resync)
+            {
                 ProfileBlock(app, "apply resync");
                 
                 i64 token_index_resync = relex.first_resync_index;
@@ -309,17 +311,24 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
                 
                 buffer_mark_as_modified(buffer_id);
             }
+            else 
+            {
+              do_full_relex = true;
+            }
         }
     }
     
     if (do_full_relex){
-        *lex_task_ptr = async_task_no_dep(&global_async_system, F4_DoFullLex_ASYNC,
-                                          make_data_struct(&buffer_id));
+      print_message(app, SCu8("!!!do full relex!!!\n"));
+      *lex_task_ptr = async_task_no_dep(&global_async_system, F4_DoFullLex_ASYNC,
+                                        make_data_struct(&buffer_id));
     }
     
     // no meaning for return
     return(0);
 }
+
+
 
 void fleury_custom_layer_init(Application_Links *app)
 {

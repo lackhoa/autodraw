@@ -7,7 +7,14 @@
 #  include "generated/managed_id_metadata.cpp"
 #endif
 
-global b32 USE_BYP_LAYER = 1;
+// note: Custom layer swapout, for testing and trying out
+enum LayerToUse
+{
+  LayerToUse_kv,
+  LayerToUse_fleury,
+  LayerToUse_default_bindings,
+};
+global b32 layer_to_use = LayerToUse_kv;
 
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
   
@@ -42,10 +49,9 @@ void kv_open_startup_file(Application_Links *app)
 {
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
   View_ID view = get_this_ctx_view(app, Access_Always);
-  char *startup_file = "~/notes/thought.skm";
+  char *startup_file = "~/notes/note.skm";
   // char *startup_file = "~/notes/test.skm";
-  // char *startup_file = "/tmp/sqlite-amalgamation-3400000/sqlite3.c";
-  // char *startup_file = "/tmp/sqlite-amalgamation-3400000/sqlite3.skm";
+  // char *startup_file = "~/tmp/sqlite3.c";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -58,11 +64,13 @@ CUSTOM_DOC("KV startup routine (modified from default_startup)")
 {
   default_startup(app);
   kv_open_startup_file(app);
+  {
+    // profile_enable(app);
+  }
 }
 
-// NOTE(kv): I just wanna bind my startup code.
 function void
-byp_essential_mapping(Mapping *mapping)
+kv_essential_mapping(Mapping *mapping)
 {
   String_ID global_id = vars_save_string_lit("keys_global");
   String_ID file_id   = vars_save_string_lit("keys_file");
@@ -158,8 +166,6 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP, vim_prev_4coder_jump,              M|KeyCode_P);
 	BIND(N|MAP, view_buffer_other_panel,           M|KeyCode_D);
     BIND(N|MAP, interactive_switch_buffer,         M|KeyCode_B);
-	// BIND(I|MAP, word_complete_drop_down,           (Ctl|KeyCode_N));
-	// BIND(I|MAP, word_complete_drop_down,           (Ctl|KeyCode_P));
 
 	/// Mode Binds
 	BIND(N|V|MAP, vim_modal_i,                        KeyCode_I);
@@ -174,9 +180,6 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP,   vim_newline_above,                S|KeyCode_O);
     BIND(N|MAP,   kv_newline_above,                 C|KeyCode_K);
     BIND(N|MAP,   kv_newline_below,                 C|KeyCode_J);
-	// BIND(V|MAP,   vim_visual_insert,               (Shift|KeyCode_A));
-	// BIND(V|MAP,   vim_visual_insert,               (Shift|KeyCode_I));
-	// BIND(I|MAP,   vim_insert_command,          (Ctl|Shift|KeyCode_O));
 
 	/// Sub Mode Binds
 	BIND(N|V|MAP, vim_submode_g,                        KeyCode_G);
@@ -190,7 +193,7 @@ kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_delete_end,                  (S|KeyCode_D));
 	BIND(N|V|MAP, vim_change_end,                  (S|KeyCode_C));
 	BIND(N|V|MAP, vim_yank_end,                    (S|KeyCode_Y));
-	BIND(N|V|MAP, vim_request_auto_indent,              KeyCode_Equal);
+    BIND(N|V|MAP, auto_indent_line_at_cursor,         KeyCode_Tab);
 	BIND(N|V|MAP, vim_lowercase,            SUB_G,      KeyCode_U);
     BIND(  V|MAP, vim_toggle_case,                      KeyCode_Comma);
 	BIND(N|V|MAP, vim_request_indent,              (S|KeyCode_Period));
@@ -198,15 +201,15 @@ kv_vim_bindings(Application_Links *app)
 	BIND(V|MAP,   vim_replace_range_next,               KeyCode_R);
 
 	/// Edit Binds
-	BIND(N|MAP,     vim_paste_before,                    KeyCode_P);
+	BIND(N|MAP,     vim_paste_before,                KeyCode_P);
 	BIND(N|MAP,     vim_backspace_char,           (S|KeyCode_X));
-	BIND(N|MAP,     vim_delete_char,                     KeyCode_X);
-	BIND(N|MAP,     vim_replace_next_char,               KeyCode_R);
+	BIND(N|MAP,     vim_delete_char,                 KeyCode_X);
+	BIND(N|MAP,     vim_replace_next_char,           KeyCode_R);
 	BIND(N|V|MAP,   vim_combine_line,             (S|KeyCode_J));
 	BIND(N|V|MAP,   vim_combine_line,      SUB_G, (S|KeyCode_J));
-	BIND(N|MAP,     vim_last_command,                    KeyCode_Period);
-	BIND(N|MAP,     vim_backspace_char,               KeyCode_Backspace);
-	BIND(N|MAP,     vim_delete_char,                  KeyCode_Delete);
+	BIND(N|MAP,     vim_last_command,                KeyCode_Period);
+	BIND(N|MAP,     vim_backspace_char,              KeyCode_Backspace);
+	BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
 
 	/// Digit Binds
 	BIND(N|V|MAP, vim_modal_0,                          KeyCode_0);
@@ -317,7 +320,6 @@ kv_vim_bindings(Application_Links *app)
 #undef BIND
 }
 
-// todo(kv): whittle this down
 function void 
 byp_default_bindings(Mapping *mapping)
 {
@@ -325,56 +327,31 @@ byp_default_bindings(Mapping *mapping)
   String_ID file_id   = vars_save_string_lit("keys_file");
   String_ID code_id   = vars_save_string_lit("keys_code");
 
-	MappingScope();
-	SelectMapping(mapping);
+  MappingScope();
+  SelectMapping(mapping);
 
-	SelectMap(global_id);
+  SelectMap(global_id);
 
-	Bind(toggle_fullscreen, KeyCode_F11);
-	Bind(increase_face_size,                            KeyCode_Equal, KeyCode_Control);
-	Bind(decrease_face_size,                            KeyCode_Minus, KeyCode_Control);
-	Bind(byp_reset_face_size,                           KeyCode_0, KeyCode_Control);
+  Bind(toggle_fullscreen,   KeyCode_F11);
+  Bind(increase_face_size,  KeyCode_Equal, KeyCode_Control);
+  Bind(decrease_face_size,  KeyCode_Minus, KeyCode_Control);
+  Bind(byp_reset_face_size, KeyCode_0, KeyCode_Control);
+  Bind(exit_4coder,         KeyCode_Control, KeyCode_Q);
 
-	SelectMap(file_id);
-	ParentMap(global_id);
+  SelectMap(file_id);
+  ParentMap(global_id);
 
-	Bind(delete_char,                                   KeyCode_Delete);
-	Bind(backspace_char,                                KeyCode_Backspace);
-	Bind(move_up,                                       KeyCode_Up);
-	Bind(move_down,                                     KeyCode_Down);
-	Bind(move_left,                                     KeyCode_Left);
-	Bind(move_right,                                    KeyCode_Right);
-	Bind(seek_end_of_line,                              KeyCode_End);
-	Bind(right_adjust_view,                             KeyCode_Home);
+  Bind(delete_char,        KeyCode_Delete);
+  Bind(backspace_char,     KeyCode_Backspace);
+  Bind(move_up,            KeyCode_Up);
+  Bind(move_down,          KeyCode_Down);
+  Bind(move_left,          KeyCode_Left);
+  Bind(move_right,         KeyCode_Right);
+  Bind(seek_end_of_line,   KeyCode_End);
+  Bind(right_adjust_view,  KeyCode_Home);
 
-	Bind(move_up_to_blank_line_end,                     KeyCode_Up, KeyCode_Control);
-	Bind(move_down_to_blank_line_end,                   KeyCode_Down, KeyCode_Control);
-	Bind(backspace_alpha_numeric_boundary,              KeyCode_Backspace, KeyCode_Control);
-	Bind(delete_alpha_numeric_boundary,                 KeyCode_Delete, KeyCode_Control);
-	Bind(snipe_backward_whitespace_or_token_boundary,   KeyCode_Backspace, KeyCode_Alt);
-	Bind(snipe_forward_whitespace_or_token_boundary,    KeyCode_Delete, KeyCode_Alt);
-	Bind(set_mark,                                      KeyCode_Space, KeyCode_Control);
-	Bind(delete_range,                                  KeyCode_D, KeyCode_Control);
-	Bind(delete_line,                                   KeyCode_D, KeyCode_Control, KeyCode_Shift);
-	Bind(search,                                        KeyCode_F, KeyCode_Control);
-	Bind(list_all_locations,                            KeyCode_F, KeyCode_Control, KeyCode_Shift);
-	Bind(list_all_substring_locations_case_insensitive, KeyCode_F, KeyCode_Alt);
-	Bind(list_all_locations_of_selection,               KeyCode_G, KeyCode_Control, KeyCode_Shift);
-	Bind(snippet_lister,                                KeyCode_J, KeyCode_Control);
-	Bind(kill_buffer,                                   KeyCode_K, KeyCode_Control, KeyCode_Shift);
-	Bind(duplicate_line,                                KeyCode_L, KeyCode_Control);
-	Bind(cursor_mark_swap,                              KeyCode_M, KeyCode_Control);
-	Bind(query_replace,                                 KeyCode_Q, KeyCode_Control);
-	Bind(query_replace_identifier,                      KeyCode_Q, KeyCode_Control, KeyCode_Shift);
-	Bind(query_replace_selection,                       KeyCode_Q, KeyCode_Alt);
-	Bind(save,                                          KeyCode_S, KeyCode_Control);
-	Bind(save_all_dirty_buffers,                        KeyCode_S, KeyCode_Control, KeyCode_Shift);
-	Bind(search_identifier,                             KeyCode_T, KeyCode_Control);
-	Bind(list_all_locations_of_identifier,              KeyCode_T, KeyCode_Control, KeyCode_Shift);
-	Bind(view_jump_list_with_lister,                    KeyCode_Period, KeyCode_Control, KeyCode_Shift);
-
-	SelectMap(code_id);
-	ParentMap(file_id);
+  SelectMap(code_id);
+  ParentMap(file_id);
 }
 
 void byp_custom_layer_init(Application_Links *app)
@@ -410,7 +387,7 @@ void byp_custom_layer_init(Application_Links *app)
 
   Thread_Context *tctx = get_thread_context(app);
   mapping_init(tctx, &framework_mapping);
-  byp_essential_mapping(&framework_mapping);
+  kv_essential_mapping(&framework_mapping);
   //
   kvInitShiftedTable();  // TODO(kv): init this table in the vim layer
   kvInitVimQuailTable(app);
@@ -429,18 +406,42 @@ void byp_custom_layer_init(Application_Links *app)
   }
 }
 
+void default_bindings_custom_layer_init(Application_Links *app){
+    Thread_Context *tctx = get_thread_context(app);
+    
+    // NOTE(allen): setup for default framework
+    default_framework_init(app);
+    
+    // NOTE(allen): default hooks and command maps
+    set_all_default_hooks(app);
+    mapping_init(tctx, &framework_mapping);
+    String_ID global_map_id = vars_save_string_lit("keys_global");
+    String_ID file_map_id = vars_save_string_lit("keys_file");
+    String_ID code_map_id = vars_save_string_lit("keys_code");
+#if OS_MAC
+    setup_mac_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+#else
+    setup_default_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+#endif
+	setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+}
+
 void custom_layer_init(Application_Links *app)
 {
-  if (USE_BYP_LAYER)
+  if (layer_to_use == LayerToUse_kv)
   {
     byp_custom_layer_init(app);
     // note(kv): fleury language experiments
     F4_Index_Initialize();
     F4_RegisterLanguages();
   }
-  else
+  else if (layer_to_use == LayerToUse_fleury)
   {
     fleury_custom_layer_init(app);
+  }
+  else
+  {
+    default_bindings_custom_layer_init(app);
   }
 
   {// note(kv): startup code

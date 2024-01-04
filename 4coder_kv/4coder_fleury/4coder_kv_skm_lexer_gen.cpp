@@ -40,19 +40,9 @@ build_language_model(void)
 #define AddState(N) State *N = sm_add_state(#N)
     
     AddState(text);
-    AddState(whitespace);
     
     ////
     
-    sm_select_state(root);
-    
-    {// EOF
-        Emit_Rule *emit = sm_emit_rule();
-        sm_emit_handler_direct("EOF");
-        sm_case_eof(emit);
-    }
-    
-    // Text
     u8 *text_chars = 0;
     for (i32 character=0; character < 128; character++) {
       if (isprint(character)) {
@@ -64,12 +54,6 @@ build_language_model(void)
           case ')':
           case ']':
           case '}':
-          case ' ':
-          case '\r':
-          case '\t':
-          case '\f':
-          case '\v':
-          case '\n':
           {}break;
 
           default:
@@ -78,46 +62,42 @@ build_language_model(void)
       }
     }
     arrput(text_chars, 0);
-    // printf("text_chars: %s\n", text_chars);
 
-    sm_case(text_chars, text);
-    sm_case(utf8, text);
+    {// root
+      sm_select_state(root);
+
+      {
+        Emit_Rule *emit = sm_emit_rule();
+        sm_emit_handler_direct("EOF");
+        sm_case_eof(emit);
+      }
     
-    // Whitespace
-    sm_case(" \r\t\f\v\n", whitespace);
-
-    {// Operators
+      sm_case(text_chars, text);
+      // sm_case(utf8, text);  // note(kv): originally this was here, but idk why
+    
+      {
         Character_Set *op_char_set = smo_new_char_set();
         smo_char_set_union_ops_firsts(op_char_set, main_ops);
         char *char_set_array = smo_char_set_get_array(op_char_set);
         State *operator_state = smo_op_set_lexer_root(main_ops, root, "LexError");
         sm_case_peek(char_set_array, operator_state);
-    }
+      }
     
-    {
+      {
         Emit_Rule *emit = sm_emit_rule();
-        sm_emit_handler_direct("Text");
+        sm_emit_handler_direct("LexError");
         sm_fallback(emit);
+      }
     }
     
-    ////
-    
-    sm_select_state(text);
-    sm_case(text_chars, text);
-    sm_case(utf8, text);
-    {
+    {// text
+      sm_select_state(text);
+      sm_case(text_chars, text);
+      // sm_case(utf8, text);  // note(kv): originally was here, idk why
+      {
         Emit_Rule *emit = sm_emit_rule();
         sm_emit_handler_direct("Text");
         sm_fallback_peek(emit);
-    }
-    
-    ////
-    
-    sm_select_state(whitespace);
-    sm_case(" \t\r\f\v\n", whitespace);
-    {
-        Emit_Rule *emit = sm_emit_rule();
-        sm_emit_handler_direct("Whitespace");
-        sm_fallback_peek(emit);
+      }
     }
 }

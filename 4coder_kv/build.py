@@ -61,7 +61,7 @@ try:
         run(command) # Run in a new process group
 
     else:
-        if False:
+        if False:  # Lexer generator
             print('Lexer: Generate (one-time thing)')
             OPTIMIZATION="-O2"
             run(f'clang++ {HERE}/4coder_fleury/4coder_kv_skm_lexer_gen.cpp {arch} {opts} {debug} -Wno-tautological-compare -std=c++11 {OPTIMIZATION} -o {HERE}/lexer_generator')

@@ -144,10 +144,12 @@ VIM_COMMAND_SIG(vim_modal_a){
 	else{ vim_insert_mode_after(app); }
 }
 
-VIM_COMMAND_SIG(vim_newline_below){
+VIM_COMMAND_SIG(vim_newline_below)
+{
 	vim_insert_end(app);
 	vim_state.insert_index++;
 	write_text(app, string_u8_litexpr("\n"));
+    auto_indent_line_at_cursor(app);
 }
 
 VIM_COMMAND_SIG(vim_newline_above){
@@ -156,6 +158,7 @@ VIM_COMMAND_SIG(vim_newline_above){
 	vim_state.insert_index++;
 	write_text(app, string_u8_litexpr("\n"));
 	move_vertical_lines(app, -1);
+    auto_indent_line_at_cursor(app);
 }
 
 VIM_COMMAND_SIG(vim_visual_mode){

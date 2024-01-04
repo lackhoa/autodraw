@@ -16,14 +16,13 @@ use_file_bars                             = true;
 hide_file_bar_in_ui                       = true;
 use_error_highlight                       = true;
 use_jump_highlight                        = true;
-use_scope_highlight                       = true;
+use_scope_highlight                       = false;
 use_paren_helper                          = true;
-use_comment_keywords                      = true;
-lister_whole_word_backspace_when_modified = true;
+use_comment_keywords                      = false;
+lister_whole_word_backspace_when_modified = false;
 show_line_number_margins                  = false;
 enable_output_wrapping                    = false;
-
-enable_undo_fade_out = true;
+enable_undo_fade_out                      = true;
 
 // cursor_roundess is a value [0,50] setting the radius of
 // the cursor and mark's roundness as a percentage of their width

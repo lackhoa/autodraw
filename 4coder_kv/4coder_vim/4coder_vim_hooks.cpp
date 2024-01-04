@@ -31,37 +31,46 @@ CUSTOM_DOC("Input consumption loop for vim behavior")
 
 		ProfileScopeNamed(app, "before view input", view_input_profile);
 
-		// NOTE(allen): Mouse Suppression
-		Event_Property event_properties = get_event_properties(&input.event);
-		if((suppressing_mouse && (event_properties & EventPropertyGroup_AnyMouseEvent) != 0)){
-			continue;
-		}
+        // NOTE(allen): Mouse Suppression
+        Event_Property event_properties = get_event_properties(&input.event);
+        b32 is_mouse_event = event_properties & EventPropertyGroup_AnyMouseEvent;
+        if(suppressing_mouse && is_mouse_event){
+          continue;
+        }
 
-		if(vim_handle_keyboard_input(app, &input.event)){
-			vim_cursor_blink = 0;
-			continue;
-		}
+        if (!is_mouse_event && input.event.kind != InputEventKind_None)
+        {
+        	vim_keystroke_text.size = 0;
+        	vim_cursor_blink = 0;
+        }
 
-		// NOTE(allen): Get binding
-		if(implicit_map_function == 0){
-			implicit_map_function = default_implicit_map;
-		}
-		Implicit_Map_Result map_result = implicit_map_function(app, 0, 0, &input.event);
-		if(map_result.command == 0){
-			leave_current_input_unhandled(app);
-			continue;
-		}
+        b32 result = vim_handle_keyboard_input(app, &input.event);
+        if (result) {
+          continue;
+        }
 
-		if(!(event_properties & EventPropertyGroup_AnyMouseEvent) && input.event.kind != InputEventKind_None){
-			vim_keystroke_text.size = 0;
-			vim_cursor_blink = 0;
-		}
+        // NOTE(allen): Get binding
+        Implicit_Map_Result map_result;
+        {
+          ProfileScope(app, "implicit_map_function");
+          if(implicit_map_function == 0){
+            implicit_map_function = default_implicit_map;
+          }
+          map_result = implicit_map_function(app, 0, 0, &input.event);
+          if(map_result.command == 0){
+            leave_current_input_unhandled(app);
+            continue;
+          }
+        }
 
-		// NOTE(allen): Run the command and pre/post command stuff
-		default_pre_command(app, scope);
+        // NOTE(allen): Run the command and pre/post command stuff
+        default_pre_command(app, scope);
 		ProfileCloseNow(view_input_profile);
 
-		map_result.command(app);
+        {
+          ProfileScope(app, "map_result_command_profile");
+          map_result.command(app);
+        }
 
 		ProfileScope(app, "after view input");
 		default_post_command(app, scope);

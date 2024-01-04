@@ -412,6 +412,8 @@ vim_handle_quail(Application_Links *app, u8 character)
 function b32
 vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
 {
+  ProfileScope(app, "vim_handle_keyboard_input");
+
   if (vim_state.mode == VIM_Replace)
   {
     return vim_handle_replace_mode(app, event);
@@ -422,6 +424,7 @@ vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
   }
   else if (event->kind == InputEventKind_TextInsert)
   {
+    ProfileScope(app, "InputEventKind_TextInsert");
     String_Const_u8 in_string = to_writable(event);
     if ((vim_state.mode == VIM_Insert) &&
         (in_string.size == 1))
@@ -435,6 +438,7 @@ vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
   }
   else if (event->kind == InputEventKind_KeyStroke)
   {
+    ProfileScope(app, "InputEventKind_KeyStroke");
     Key_Code code = event->key.code;
     if (code == KeyCode_Control ||
         code == KeyCode_Shift   ||
@@ -464,8 +468,10 @@ vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
     u64 function_data=0;
     if (table_read(vim_maps + vim_state.mode + vim_state.sub_mode*VIM_MODE_COUNT, code, &function_data))
     {
+      ProfileScope(app, "execute vim_func from vim_maps");
       Custom_Command_Function *vim_func = (Custom_Command_Function *)IntAsPtr(function_data);
-      if(vim_func) {
+      if(vim_func)
+      {
         // Pre command stuff
         View_ID view = get_active_view(app, Access_ReadVisible);
         Managed_Scope scope = view_get_managed_scope(app, view);
@@ -487,11 +493,10 @@ vim_handle_keyboard_input(Application_Links *app, Input_Event *event)
     }
     else if (vim_state.mode == VIM_Insert)
     {
-      // passthrough
+      // passthrough to do text insertion
     }
     else 
-    {
-      // todo(kv): don't know what this does?
+    { // global keymap passthrough
       String_ID map_id = vars_save_string_lit("keys_global");
       Command_Binding command_binding = map_get_binding_non_recursive(&framework_mapping, map_id, event);
       if (command_binding.custom) {

@@ -110,3 +110,10 @@ CUSTOM_DOC("Resets face size to default")
 	description.parameters.pt_size = (i32)def_get_config_u64(app, vars_save_string_lit("default_font_size"));
 	try_modify_face(app, face_id, &description);
 }
+
+CUSTOM_COMMAND_SIG(kv_profile_disable_and_inspect)
+CUSTOM_DOC("disable and inspect profile")
+{
+  profile_disable(app);
+  profile_inspect(app);
+}
