@@ -52,7 +52,7 @@ void kv_open_startup_file(Application_Links *app)
   View_ID view = get_this_ctx_view(app, Access_Always);
   char *startup_file = "~/notes/note.skm";
   // char *startup_file = "~/notes/test.skm";
-  // char *startup_file = "~/tmp/sqlite3.c";
+  // char *startup_file = "/tmp/test.cpp";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -176,11 +176,11 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_visual_mode,                    KeyCode_V);
 	BIND(N|V|MAP, vim_visual_mode,                  S|KeyCode_V);
 	BIND(N|V|MAP, vim_visual_mode,                  C|KeyCode_V);
-	BIND(N|MAP,   vim_prev_visual,          SUB_G,    KeyCode_V);
-	BIND(N|MAP,   vim_newline_below,                  KeyCode_O);
-	BIND(N|MAP,   vim_newline_above,                S|KeyCode_O);
-    BIND(N|MAP,   kv_newline_above,                 C|KeyCode_K);
-    BIND(N|MAP,   kv_newline_below,                 C|KeyCode_J);
+	BIND(N|0|MAP, vim_prev_visual,          SUB_G,    KeyCode_V);
+	BIND(N|0|MAP, vim_newline_below,                  KeyCode_O);
+	BIND(N|0|MAP, vim_newline_above,                S|KeyCode_O);
+    BIND(N|0|MAP, kv_newline_above,                 C|KeyCode_K);
+    BIND(N|0|MAP, kv_newline_below,                 C|KeyCode_J);
 
 	/// Sub Mode Binds
 	BIND(N|V|MAP, vim_submode_g,                        KeyCode_G);
@@ -188,21 +188,22 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_submode_leader,                   leader);
 
 	/// Request Binds
-	BIND(N|V|MAP, vim_request_yank,                     KeyCode_Y);
+	BIND(N|V|MAP, copy,                                 KeyCode_Y);  // note(kv): the original "vim_request_copy" didn't register with system clipboard
 	BIND(N|V|MAP, vim_request_delete,                   KeyCode_D);
 	BIND(N|V|MAP, vim_request_change,                   KeyCode_C);
-	BIND(N|V|MAP, vim_delete_end,                  (S|KeyCode_D));
-	BIND(N|V|MAP, vim_change_end,                  (S|KeyCode_C));
-	BIND(N|V|MAP, vim_yank_end,                    (S|KeyCode_Y));
-    BIND(N|V|MAP, auto_indent_line_at_cursor,         KeyCode_Tab);
+	BIND(N|V|MAP, vim_delete_end,                     S|KeyCode_D);
+	BIND(N|V|MAP, vim_change_end,                     S|KeyCode_C);
+	BIND(N|V|MAP, vim_yank_end,                       S|KeyCode_Y);
+    BIND(N|0|MAP, auto_indent_line_at_cursor,           KeyCode_Tab);
+    BIND(0|V|MAP, auto_indent_range,                    KeyCode_Tab);
 	BIND(N|V|MAP, vim_lowercase,            SUB_G,      KeyCode_U);
     BIND(  V|MAP, vim_toggle_case,                      KeyCode_Comma);
-	BIND(N|V|MAP, vim_request_indent,              (S|KeyCode_Period));
-	BIND(N|V|MAP, vim_request_outdent,             (S|KeyCode_Comma));
+	BIND(N|V|MAP, vim_request_indent,                 S|KeyCode_Period);
+	BIND(N|V|MAP, vim_request_outdent,                S|KeyCode_Comma);
 	BIND(V|MAP,   vim_replace_range_next,               KeyCode_R);
 
 	/// Edit Binds
-	BIND(N|MAP,     vim_paste_before,                KeyCode_P);
+	BIND(N|MAP,     paste,                           KeyCode_P);  // note(kv): same with copy, paste doesn't work with system clipboard
 	BIND(N|MAP,     vim_backspace_char,           (S|KeyCode_X));
 	BIND(N|MAP,     vim_delete_char,                 KeyCode_X);
 	BIND(N|MAP,     vim_replace_next_char,           KeyCode_R);
@@ -211,18 +212,10 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP,     vim_last_command,                KeyCode_Period);
 	BIND(N|MAP,     vim_backspace_char,              KeyCode_Backspace);
 	BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
+    BIND(I|MAP,     word_complete,                   KeyCode_Tab)
 
 	/// Digit Binds
-	BIND(N|V|MAP, vim_modal_0,                          KeyCode_0);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_1);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_2);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_3);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_4);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_5);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_6);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_7);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_8);
-	BIND(N|V|MAP, vim_digit,                            KeyCode_9);
+	BIND(N|0|MAP, vim_modal_0,                          KeyCode_0);
 
 	/// Movement Binds
 	BIND(N|V|MAP, vim_left,                             KeyCode_H);
@@ -247,8 +240,8 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_bounce,                      (C|KeyCode_5));
 	BIND(N|V|MAP, vim_set_seek_char,                    KeyCode_F);
 	BIND(N|V|MAP, vim_set_seek_char,               (S|KeyCode_F));
-	BIND(N|V|MAP, vim_paragraph_up,                     KeyCode_LeftBracket);
-	BIND(N|V|MAP, vim_paragraph_down,                   KeyCode_RightBracket);
+	BIND(N|0|MAP, vim_paragraph_up,                     KeyCode_LeftBracket);
+	BIND(N|0|MAP, vim_paragraph_down,                   KeyCode_RightBracket);
 	BIND(N|V|MAP, vim_screen_top,                  (S|KeyCode_H));
 	BIND(N|V|MAP, vim_screen_bot,                  (S|KeyCode_L));
 	BIND(N|V|MAP, vim_screen_mid,                  (S|KeyCode_M));
@@ -283,7 +276,7 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_set_mark,                         KeyCode_M);
 	BIND(N|V|MAP, vim_goto_mark,                        KeyCode_Tick);
 	BIND(N|V|MAP, vim_goto_mark,                        KeyCode_Quote);
-	BIND(N|V|MAP, vim_toggle_macro,                     KeyCode_Q);
+	BIND(N|V|MAP, vim_toggle_macro,                   S|KeyCode_Q);
 	BIND(N|V|MAP, vim_play_macro,                     S|KeyCode_2);
 
 	/// Panel
@@ -416,7 +409,8 @@ void kv_custom_layer_init(Application_Links *app)
   F4_RegisterLanguages();
 }
 
-void default_bindings_custom_layer_init(Application_Links *app){
+void default_bindings_custom_layer_init(Application_Links *app)
+{
     Thread_Context *tctx = get_thread_context(app);
     
     // NOTE(allen): setup for default framework

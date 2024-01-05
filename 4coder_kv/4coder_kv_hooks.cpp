@@ -74,7 +74,7 @@ function void kv_tick(Application_Links *app, Frame_Info frame_info)
       }
     }
     if (saved_at_least_one_buffer) {
-      print_message_cstr(app, "auto-saved all dirty buffers\n");
+      kv_print_message(app, "auto-saved all dirty buffers\n");
     }
   }
 }

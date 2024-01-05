@@ -717,26 +717,6 @@ toCStringTemporary(String string)
   return string.chars;
 }
 
-// inline b32
-// equal(char *s1, char *s2)
-// {
-//   todoTestMe;
-//   b32 out = true;
-//   char *c1 = s1;
-//   char *c2 = s2;
-//   while (*c1++ == *c2++)
-//   {
-//     if (*c1 == 0) {
-//       out = (*c2 == 0);
-//       break;
-//     } else if (*c2 == 0) {
-//       out = (*c1 == 0);
-//       break;
-//     }
-//   }
-//   return out;
-// }
-
 inline String
 printVA(kv_Arena &buffer, char *format, va_list arg_list)
 {

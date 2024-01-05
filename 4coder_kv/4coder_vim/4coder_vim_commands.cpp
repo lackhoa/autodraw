@@ -152,7 +152,8 @@ VIM_COMMAND_SIG(vim_newline_below)
     auto_indent_line_at_cursor(app);
 }
 
-VIM_COMMAND_SIG(vim_newline_above){
+VIM_COMMAND_SIG(vim_newline_above)
+{
 	vim_line_start(app);
 	vim_enter_insert_mode(app);
 	vim_state.insert_index++;

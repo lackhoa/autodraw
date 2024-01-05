@@ -19,7 +19,7 @@ use_jump_highlight                        = true;
 use_scope_highlight                       = false;
 use_paren_helper                          = true;
 use_comment_keywords                      = false;
-lister_whole_word_backspace_when_modified = false;
+lister_whole_word_backspace_when_modified = true;
 show_line_number_margins                  = false;
 enable_output_wrapping                    = false;
 enable_undo_fade_out                      = true;
@@ -57,7 +57,7 @@ automatically_load_project = true;
 // Indentation
 indent_with_tabs = false;
 indent_width = 2;
-default_tab_width = 2;
+default_tab_width = 2;  // todo(kv): tab_width actually controls indentation width, which is a bug
 
 // Theme
 default_theme_name = "theme-kv";
