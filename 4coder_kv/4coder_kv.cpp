@@ -2,6 +2,7 @@
 #include "4coder_kv_commands.cpp"
 #include "4coder_kv_hooks.cpp"
 #include "4coder_kv_draw.cpp"
+#include "4coder_kv_vim_stuff.cpp"
 
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
@@ -98,11 +99,11 @@ kv_essential_mapping(Mapping *mapping)
   ParentMap(file_id);
 }
 
-function void kvInitVimQuailTable(Application_Links *app)
+function void kvInitQuailTable(Application_Links *app)
 {
-  arrsetcap(vim_quail_table, 64);
-#define QUAIL_DEFRULE(KEY, VALUE) vim_quail_defrule(app, (KEY), (VALUE))
-  //
+  arrsetcap(kv_quail_table, 64);
+#define QUAIL_DEFRULE(KEY, VALUE)           kv_quail_defrule(app, KEY, VALUE, strlen(KEY)-1, 0, strlen(VALUE))
+
   QUAIL_DEFRULE(",,", "_");
   QUAIL_DEFRULE(",,.", "=>");
   //
@@ -120,28 +121,28 @@ function void kvInitVimQuailTable(Application_Links *app)
   QUAIL_DEFRULE("55", "%");
   QUAIL_DEFRULE("77", "&");
   QUAIL_DEFRULE("88", "*");
-  QUAIL_DEFRULE("99", "(");
+  //
+  kv_quail_defrule(app, "99", "()", 1,0,1);
   QUAIL_DEFRULE("00", ")");
   //
-  QUAIL_DEFRULE("[[", "{");
-  QUAIL_DEFRULE("[[[", "[[");
+  kv_quail_defrule(app, "[", "[]", 0,0,1);
+  //
+  kv_quail_defrule(app, "[[", "{}", 1,1,1);
   QUAIL_DEFRULE("]]", "}");
-  QUAIL_DEFRULE("]]]", "]]");
   //
   QUAIL_DEFRULE("''", "\"");
   QUAIL_DEFRULE("leq", "<=");
   QUAIL_DEFRULE("geq", ">=");
   QUAIL_DEFRULE("gtt", ">");
-  QUAIL_DEFRULE("lessthan", "<");
+  QUAIL_DEFRULE("ltt", "<");
   QUAIL_DEFRULE("neq", "!=");
-  //
+
 #undef QUAIL_DEFRULE
 }
 
 // NOTE(kv): The VimBind function doesn't let us overwrite bindings.
 // So I hoisted also "vim_default_bindings" out here.
-function void
-kv_vim_bindings(Application_Links *app)
+function void kv_vim_bindings(Application_Links *app)
 {
   u32 N = bit_1;
   u32 I = bit_2;
@@ -154,7 +155,7 @@ kv_vim_bindings(Application_Links *app)
     u32 M = OS_MAC ? KeyMod_Cmd : KeyMod_Alt;
     Key_Code leader = KeyCode_BackwardSlash;
 
-	BIND(MAP, vim_normal_mode,                             KeyCode_Escape);
+	BIND(MAP, kv_vim_normal_mode, KeyCode_Escape);
 
 	/// Rebinds
 	BIND(N|MAP, undo,                                   KeyCode_U);
@@ -322,6 +323,14 @@ kv_vim_bindings(Application_Links *app)
     BIND(N|V|MAP,   kv_sexpr_right,  M|KeyCode_L);
     BIND(N|V|MAP,   kv_sexpr_left,   M|KeyCode_H);
     BIND(N|V|MAP,   kv_sexpr_end,    M|KeyCode_Semicolon);
+    //
+    BIND(V|MAP,   kv_surround_paren,              KeyCode_0);
+    BIND(V|MAP,   kv_surround_paren_spaced,       KeyCode_9);
+    BIND(V|MAP,   kv_surround_bracket,            KeyCode_RightBracket);
+    BIND(V|MAP,   kv_surround_bracket_spaced,     KeyCode_LeftBracket);
+    BIND(V|MAP,   kv_surround_brace,            S|KeyCode_RightBracket);
+    BIND(V|MAP,   kv_surround_brace_spaced,     S|KeyCode_LeftBracket);
+    BIND(N|MAP,   kv_void_command,                KeyCode_Q);  // todo: select region
 
 #undef BIND
 }
@@ -360,7 +369,7 @@ byp_default_bindings(Mapping *mapping)
   ParentMap(file_id);
 }
 
-void byp_custom_layer_init(Application_Links *app)
+void kv_custom_layer_init(Application_Links *app)
 {
   default_framework_init(app);
   set_all_default_hooks(app);
@@ -375,7 +384,7 @@ void byp_custom_layer_init(Application_Links *app)
   vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_param1] = {';', (Vim_Text_Object_Func *)byp_object_param};
   vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_camel0] = {'_', (Vim_Text_Object_Func *)byp_object_camel};
   vim_text_object_vtable[VIM_TEXT_OBJECT_COUNT + BYP_OBJECT_camel1] = {'-', (Vim_Text_Object_Func *)byp_object_camel};
-  vim_init(app);
+  kv_vim_init(app);
 
   set_custom_hook(app, HookID_SaveFile,                kv_file_save);
   // set_custom_hook(app, HookID_BufferRegion,            byp_buffer_region);
@@ -387,7 +396,7 @@ void byp_custom_layer_init(Application_Links *app)
   set_custom_hook(app, HookID_BeginBuffer,      kv_begin_buffer);
   set_custom_hook(app, HookID_BufferEditRange,  kv_buffer_edit_range);
   set_custom_hook(app, HookID_ViewChangeBuffer, vim_view_change_buffer);
-  set_custom_hook(app, HookID_ViewEventHandler, vim_view_input_handler);
+  set_custom_hook(app, HookID_ViewEventHandler, kv_view_input_handler);
   set_custom_hook(app, HookID_DeltaRule,        F4_DeltaRule_lite);
   set_custom_hook_memory_size(app, HookID_DeltaRule, delta_ctx_size(sizeof(Vec2_f32)));
 
@@ -396,20 +405,15 @@ void byp_custom_layer_init(Application_Links *app)
   kv_essential_mapping(&framework_mapping);
   //
   kvInitShiftedTable();
-  kvInitVimQuailTable(app);
+  kvInitQuailTable(app);
   //
   kv_vim_bindings(app);
   byp_default_bindings(&framework_mapping);
 
   // NOTE(rjf): Set up custom code index.
-  {
-    F4_Index_Initialize();
-  }
-    
+  F4_Index_Initialize();
   // NOTE(rjf): Register languages.
-  {
-    F4_RegisterLanguages();
-  }
+  F4_RegisterLanguages();
 }
 
 void default_bindings_custom_layer_init(Application_Links *app){
@@ -434,20 +438,10 @@ void default_bindings_custom_layer_init(Application_Links *app){
 
 void custom_layer_init(Application_Links *app)
 {
-  if (layer_to_use == LayerToUse_kv)
-  {
-    byp_custom_layer_init(app);
-    // note(kv): fleury language experiments
-    F4_Index_Initialize();
-    F4_RegisterLanguages();
-  }
-  else if (layer_to_use == LayerToUse_fleury)
-  {
-    fleury_custom_layer_init(app);
-  }
-  else
-  {
-    default_bindings_custom_layer_init(app);
+  switch (layer_to_use) {
+    case LayerToUse_kv:               kv_custom_layer_init(app);     break;
+    case LayerToUse_fleury:           fleury_custom_layer_init(app); break;
+    case LayerToUse_default_bindings: default_bindings_custom_layer_init(app); break;
   }
 
   {// note(kv): startup code

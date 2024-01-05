@@ -23,4 +23,5 @@ CompileFlags:
     - -Wno-switch
     - -Wno-missing-declarations
     - -Wno-logical-op-parentheses
+    - -Wno-unused-includes
     # - -Wno-undefined-internal

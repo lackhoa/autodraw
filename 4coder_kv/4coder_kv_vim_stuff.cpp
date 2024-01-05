@@ -1,22 +1,5 @@
-#pragma once
-
-#include "4coder_vim/4coder_vim_include.h"
-#include "4coder_byp_colors.cpp"
-#include "kv.h"
-
-#define GET_VIEW_AND_BUFFER \
-  View_ID   view = get_active_view(app, Access_ReadVisible); \
-  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible)
-
-inline void print_message_cstr(Application_Links *app, char *message) {
-  print_message(app, SCu8(message));
-}
-
-function void byp_make_vim_request(Application_Links *app, BYP_Vim_Request request){
-	vim_make_request(app, Vim_Request_Type(VIM_REQUEST_COUNT + request));
-}
-
-VIM_REQUEST_SIG(byp_apply_title) {
+VIM_REQUEST_SIG(byp_apply_title)
+{
 	Scratch_Block scratch(app);
 	String_Const_u8 text = push_buffer_range(app, scratch, buffer, range);
 	u8 prev = buffer_get_char(app, buffer, range.min-1);
@@ -29,7 +12,8 @@ VIM_REQUEST_SIG(byp_apply_title) {
 	buffer_post_fade(app, buffer, 0.667f, range, fcolor_resolve(fcolor_id(defcolor_paste)));
 }
 
-VIM_TEXT_OBJECT_SIG(byp_object_param) {
+VIM_TEXT_OBJECT_SIG(byp_object_param)
+{
 	u8 c = buffer_get_char(app, buffer, cursor_pos);
 	Range_i64 range = Ii64(cursor_pos + (c == ',' || c == ';'));
 
@@ -92,45 +76,4 @@ VIM_TEXT_OBJECT_SIG(byp_object_camel)
 	if(range.min >= range.max){ range = {}; }
 
 	return range;
-}
-
-CUSTOM_COMMAND_SIG(kv_reopen_with_confirmation)
-CUSTOM_DOC("Like reopen, but asks for confirmation")
-{
-    Query_Bar_Group group(app);
-    Query_Bar bar = {};
-    bar.prompt = SCu8("Reload current buffer from disk?");
-    if (start_query_bar(app, & bar, 0))
-    {
-      b32 cancelled = false;
-      for (;!cancelled;){
-        User_Input in = get_next_input(app, EventProperty_AnyKey, 0);
-        if (in.abort){
-          cancelled = true;
-        }
-        else{
-          switch (in.event.key.code){
-            case KeyCode_Y:
-            {
-              View_ID view = get_active_view(app, Access_ReadVisible);
-              Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-              buffer_reopen(app, buffer, 0);
-              cancelled = true;
-            }break;
-                        
-            case KeyCode_Shift:
-            case KeyCode_Control:
-            case KeyCode_Alt:
-            case KeyCode_Command:
-            case KeyCode_CapsLock:
-            {}break;
-                        
-            default:
-            {
-              cancelled = true;
-            }break;
-          }
-        }
-      }
-    }
 }

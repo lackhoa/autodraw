@@ -358,10 +358,10 @@ rotateRight(u32 value, i32 rotateAmount)
 
 #if KV_INTERNAL
 #    define soft_assert      kv_assert
-#    define probably(CLAIM) (kv_assert(CLAIM), true)
+#    define kv_probably(CLAIM) (kv_assert(CLAIM), true)
 #else
 #    define soft_assert(CLAIM)
-#    define probably(CLAIM) (CLAIM)
+#    define kv_probably(CLAIM) (CLAIM)
 #endif
 
 #if KV_SLOW
@@ -520,7 +520,7 @@ inline void
 endTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
-  if (!probably(temp.arena.used >= temp.original_used))
+  if (!kv_probably(temp.arena.used >= temp.original_used))
   {
     printf("Memory leak detected!\n");
   }
@@ -999,8 +999,7 @@ void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
 #define breakable_block for (i32 __kv_breakable_block__=0; __kv_breakable_block__ == 0; __kv_breakable_block__++)
 
 /* todo: Old names */
-#define kvXmalloc     kv_xmalloc
-#define kvAssert      kv_assert
-#define kvProbably    probably
+#define kvXmalloc      kv_xmalloc
+#define kvAssert       kv_assert
 typedef kv_Arena KvArena;
 /* Old names > */

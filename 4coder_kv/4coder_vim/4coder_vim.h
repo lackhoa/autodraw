@@ -52,8 +52,6 @@ function Rect_f32 vim_get_bottom_rect(Application_Links *app){
 	return result;
 }
 
-global char *vim_quail_insert_buffer;
-
 struct Vim_Buffer_Peek_Entry{
 	Buffer_Identifier buffer_id;
 	f32 cur_ratio, nxt_ratio;
@@ -106,7 +104,6 @@ function void vim_reset_state(){
 	vim_state.params = {};
 	vim_state.params.seek = seek;
 	vim_default_register();
-    arrsetlen(vim_quail_insert_buffer, 0);
 }
 
 /// If you _really_ want to change dynamic register allocation, go for it

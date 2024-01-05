@@ -1,6 +1,7 @@
 /* NOTE(kv): This file is for miscellaneous commands */
 
-#include "4coder_kv_core.cpp"
+#include "4coder_kv_utils.cpp"
+#include "4coder_kv_input.cpp"
 
 Table_u64_u64 shifted_version_of_characters;
 
@@ -59,6 +60,10 @@ VIM_REQUEST_SIG(byp_apply_uncomment){
 	history_group_end(history_group);
 }
 
+
+inline void byp_make_vim_request(Application_Links *app, BYP_Vim_Request request){
+	vim_make_request(app, Vim_Request_Type(VIM_REQUEST_COUNT + request));
+}
 
 VIM_COMMAND_SIG(byp_request_title){ byp_make_vim_request(app, BYP_REQUEST_Title); }
 VIM_COMMAND_SIG(byp_request_comment){ byp_make_vim_request(app, BYP_REQUEST_Comment); }
@@ -208,6 +213,7 @@ VIM_COMMAND_SIG(kv_sexpr_up)
 VIM_COMMAND_SIG(kv_sexpr_down)
 {
   GET_VIEW_AND_BUFFER;
+  vim_push_jump(app, view);
   Token_Iterator_Array token_it = kv_token_it_at_cursor(app);
   do
   {
@@ -273,3 +279,79 @@ VIM_COMMAND_SIG(kv_sexpr_end)
   move_left(app);
 }
 
+void kv_surround_with(Application_Links *app, char *opener, char *closer)
+{
+  GET_VIEW_AND_BUFFER;
+
+  i64 min = view_get_cursor_pos(app, view);
+  i64 max = view_get_mark_pos(app, view);
+  if (max < min) SWAP(min, max);
+  max += 1;
+
+  buffer_replace_range(app, buffer, Ii64(max), SCu8(closer));
+  buffer_replace_range(app, buffer, Ii64(min), SCu8(opener));
+
+  vim_normal_mode(app);
+}
+
+CUSTOM_COMMAND_SIG(kv_reopen_with_confirmation)
+CUSTOM_DOC("Like reopen, but asks for confirmation")
+{
+    Query_Bar_Group group(app);
+    Query_Bar bar = {};
+    bar.prompt = SCu8("Reload current buffer from disk?");
+    if (start_query_bar(app, & bar, 0))
+    {
+      b32 cancelled = false;
+      for (;!cancelled;){
+        User_Input in = get_next_input(app, EventProperty_AnyKey, 0);
+        if (in.abort){
+          cancelled = true;
+        }
+        else{
+          switch (in.event.key.code){
+            case KeyCode_Y:
+            {
+              View_ID view = get_active_view(app, Access_ReadVisible);
+              Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+              buffer_reopen(app, buffer, 0);
+              cancelled = true;
+            }break;
+                        
+            case KeyCode_Shift:
+            case KeyCode_Control:
+            case KeyCode_Alt:
+            case KeyCode_Command:
+            case KeyCode_CapsLock:
+            {}break;
+                        
+            default:
+            {
+              cancelled = true;
+            }break;
+          }
+        }
+      }
+    }
+}
+
+VIM_COMMAND_SIG(kv_surround_paren)          {kv_surround_with(app, "(", ")");}
+VIM_COMMAND_SIG(kv_surround_paren_spaced)   {kv_surround_with(app, "( ", " )");}
+VIM_COMMAND_SIG(kv_surround_bracket)        {kv_surround_with(app, "[", "]");}
+VIM_COMMAND_SIG(kv_surround_bracket_spaced) {kv_surround_with(app, "[ ", " ]");}
+VIM_COMMAND_SIG(kv_surround_brace)          {kv_surround_with(app, "{", "}");}
+VIM_COMMAND_SIG(kv_surround_brace_spaced)   {kv_surround_with(app, "{ ", " }");}
+
+VIM_COMMAND_SIG(kv_void_command) { return; }
+
+VIM_COMMAND_SIG(kv_vim_normal_mode)
+{
+  vim_normal_mode(app);
+  arrsetlen(kv_quail_keystroke_buffer, 0);
+}
+
+inline void
+kv_vim_init(Application_Links *app)
+{
+  vim_init(app);
+}
