@@ -14,11 +14,16 @@ VIM_COMMAND_SIG(kv_shift_character)
   buffer_read_range(app, buffer, Ii64(pos, pos+1), &current_character);
 
   u64 replacement_char = 0;
-  if (character_is_upper(current_character)) {
+  if (character_is_upper(current_character))
+  {
     replacement_char = character_to_lower(current_character);
-  } else if (character_is_lower(current_character)) {
+  }
+  else if (character_is_lower(current_character))
+  {
     replacement_char = character_to_upper(current_character);
-  } else {
+  }
+  else
+  {
     table_read(&shifted_version_of_characters, (u64)current_character, &replacement_char);
   }
   //
@@ -341,6 +346,7 @@ VIM_COMMAND_SIG(kv_surround_bracket)        {kv_surround_with(app, "[", "]");}
 VIM_COMMAND_SIG(kv_surround_bracket_spaced) {kv_surround_with(app, "[ ", " ]");}
 VIM_COMMAND_SIG(kv_surround_brace)          {kv_surround_with(app, "{", "}");}
 VIM_COMMAND_SIG(kv_surround_brace_spaced)   {kv_surround_with(app, "{ ", " }");}
+VIM_COMMAND_SIG(kv_surround_double_quote)   {kv_surround_with(app, "\"", "\"");}
 
 VIM_COMMAND_SIG(kv_void_command) { return; }
 
@@ -377,5 +383,61 @@ VIM_COMMAND_SIG(kv_sexpr_select_whole)
     view_set_mark(app, view, seek_pos(nest.max));
     vim_state.mode = VIM_Visual;
     vim_state.params.edit_type = EDIT_CharWise;
+  }
+}
+
+inline b32
+character_is_path(char character)
+{
+  switch (character)
+  {
+    case '/': case '~': case '.': case '\\':  case '-':
+      return true;
+    default:
+      return character_is_alpha_numeric(character);
+  }
+}
+
+// todo: support relative path maybe
+CUSTOM_COMMAND_SIG(kv_open_file_ultimate)
+CUSTOM_DOC("The one-stop-shop for all your file-opening need")
+{
+  GET_VIEW_AND_BUFFER;
+
+  Scratch_Block scratch(app);
+
+  i64 curpos = view_get_cursor_pos(app, view);
+
+  i64 buffer_size = buffer_get_size(app, buffer);
+  i64 min = curpos;
+  i64 max = curpos;
+  //
+  for (; max < buffer_size; max++)
+  {
+    u8 character = 0;
+    buffer_read_range(app, buffer, Ii64(max, max+1), &character);
+    if (!character_is_path(character)) { break; }
+  }
+  for (; min >= 0; min--)
+  {
+    u8 character = 0;
+    buffer_read_range(app, buffer, Ii64(min, min+1), &character);
+    if (!character_is_path(character)) { min++; break; }
+  }
+
+  b32 looking_at_path = false;
+  if (max > min)
+  {
+    String_Const_u8 path = push_buffer_range(app, scratch, buffer, Range_i64{min, max});
+    printf_message(app, scratch, "the path is: %.*s\n", string_expand(path));
+    if (view_open_file(app, view, path, true))
+    {
+      looking_at_path = true;
+    }
+  }
+
+  if (!looking_at_path)
+  {
+    vim_interactive_open_or_new(app);
   }
 }

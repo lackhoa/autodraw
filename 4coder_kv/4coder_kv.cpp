@@ -162,7 +162,7 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP, undo,                              (C|KeyCode_Z));
 	BIND(N|MAP, redo,                              (C|KeyCode_R));
 	BIND(N|MAP, vim_interactive_open_or_new,    SUB_G,  KeyCode_F);
-    BIND(N|MAP, vim_interactive_open_or_new,       M|KeyCode_F);
+    BIND(N|MAP, kv_open_file_ultimate,             M|KeyCode_F);
 	BIND(N|MAP, vim_next_4coder_jump,              M|KeyCode_N);
 	BIND(N|MAP, vim_prev_4coder_jump,              M|KeyCode_P);
 	BIND(N|MAP, view_buffer_other_panel,           M|KeyCode_D);
@@ -212,7 +212,8 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP,     vim_last_command,                KeyCode_Period);
 	BIND(N|MAP,     vim_backspace_char,              KeyCode_Backspace);
 	BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
-    BIND(I|MAP,     word_complete,                   KeyCode_Tab)
+    BIND(I|MAP,     word_complete,                   KeyCode_Tab);
+    BIND(I|MAP,     paste,                         M|KeyCode_V);
 
 	/// Digit Binds
 	BIND(N|0|MAP, vim_modal_0,                          KeyCode_0);
@@ -318,12 +319,13 @@ function void kv_vim_bindings(Application_Links *app)
     BIND(N|V|MAP,   kv_sexpr_end,    M|KeyCode_Semicolon);
     BIND(N|MAP,     kv_sexpr_select_whole, KeyCode_Q);
     //
-    BIND(V|MAP,   kv_surround_paren,              KeyCode_0);
-    BIND(V|MAP,   kv_surround_paren_spaced,       KeyCode_9);
-    BIND(V|MAP,   kv_surround_bracket,            KeyCode_RightBracket);
-    BIND(V|MAP,   kv_surround_bracket_spaced,     KeyCode_LeftBracket);
-    BIND(V|MAP,   kv_surround_brace,            S|KeyCode_RightBracket);
-    BIND(V|MAP,   kv_surround_brace_spaced,     S|KeyCode_LeftBracket);
+    BIND(V|MAP,   kv_surround_paren,                 KeyCode_0);
+    BIND(V|MAP,   kv_surround_paren_spaced,          KeyCode_9);
+    BIND(V|MAP,   kv_surround_bracket,               KeyCode_RightBracket);
+    BIND(V|MAP,   kv_surround_bracket_spaced,        KeyCode_LeftBracket);
+    BIND(V|MAP,   kv_surround_brace,               S|KeyCode_RightBracket);
+    BIND(V|MAP,   kv_surround_brace_spaced,        S|KeyCode_LeftBracket);
+    BIND(V|MAP,   kv_surround_double_quote,          KeyCode_Quote);
 
 #undef BIND
 }
