@@ -53,14 +53,24 @@ function void kv_tick(Application_Links *app, Frame_Info frame_info)
            buffer != 0;
            buffer = get_buffer_next(app, buffer, Access_ReadWriteVisible))
       {
-        if (buffer_get_dirty_state(app, buffer) == DirtyState_UnsavedChanges)
+        switch(buffer_get_dirty_state(app, buffer))
         {
-          saved_at_least_one_buffer = true;
-          Temp_Memory temp = begin_temp(scratch);
-          String_Const_u8 file_name = push_buffer_file_name(app, scratch, buffer);
-          buffer_save(app, buffer, file_name, 0);
-          end_temp(temp);
+          case DirtyState_UnsavedChanges:
+          {
+            saved_at_least_one_buffer = true;
+            String_Const_u8 file_name = push_buffer_file_name(app, scratch, buffer);
+            buffer_save(app, buffer, file_name, 0);
+          }
+          break;
+
+          case DirtyState_UnloadedChanges:
+          {
+            buffer_reopen(app, buffer, 0);
+            String_Const_u8 file_name = push_buffer_file_name(app, scratch, buffer);
+            printf_message(app, scratch, "automatically reloaded file %.*s\n", string_expand(file_name));
+          }break;
         }
+        
       }
     }
     if (saved_at_least_one_buffer) {

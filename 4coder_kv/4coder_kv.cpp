@@ -323,6 +323,7 @@ function void kv_vim_bindings(Application_Links *app)
     BIND(N|V|MAP,   kv_sexpr_right,  M|KeyCode_L);
     BIND(N|V|MAP,   kv_sexpr_left,   M|KeyCode_H);
     BIND(N|V|MAP,   kv_sexpr_end,    M|KeyCode_Semicolon);
+    BIND(N|MAP,     kv_sexpr_select_whole, KeyCode_Q);
     //
     BIND(V|MAP,   kv_surround_paren,              KeyCode_0);
     BIND(V|MAP,   kv_surround_paren_spaced,       KeyCode_9);
@@ -330,7 +331,6 @@ function void kv_vim_bindings(Application_Links *app)
     BIND(V|MAP,   kv_surround_bracket_spaced,     KeyCode_LeftBracket);
     BIND(V|MAP,   kv_surround_brace,            S|KeyCode_RightBracket);
     BIND(V|MAP,   kv_surround_brace_spaced,     S|KeyCode_LeftBracket);
-    BIND(N|MAP,   kv_void_command,                KeyCode_Q);  // todo: select region
 
 #undef BIND
 }

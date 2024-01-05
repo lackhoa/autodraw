@@ -1,3 +1,5 @@
+#include "4coder_kv_utils.cpp"
+
 VIM_REQUEST_SIG(byp_apply_title)
 {
 	Scratch_Block scratch(app);
@@ -77,3 +79,10 @@ VIM_TEXT_OBJECT_SIG(byp_object_camel)
 
 	return range;
 }
+
+inline void
+kv_vim_init(Application_Links *app)
+{
+  vim_init(app);
+}
+

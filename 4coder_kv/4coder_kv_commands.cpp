@@ -350,8 +350,32 @@ VIM_COMMAND_SIG(kv_vim_normal_mode)
   arrsetlen(kv_quail_keystroke_buffer, 0);
 }
 
-inline void
-kv_vim_init(Application_Links *app)
+VIM_COMMAND_SIG(kv_sexpr_select_whole)
 {
-  vim_init(app);
+  GET_VIEW_AND_BUFFER;
+
+  Range_i64 nest = {};
+  b32 result = false;
+
+  i64 pos = view_get_cursor_pos(app, view);
+  u8 current_char = buffer_get_char(app, buffer, pos);
+  if (kv_is_group_opener(current_char))
+  {
+    nest.min = pos;
+    nest.max = vim_scan_bounce(app, buffer, pos, Scan_Forward);
+    result = true;
+  }
+  else
+  {
+    result = find_surrounding_nest(app, buffer, pos, FindNest_Scope|FindNest_Paren, &nest);
+    nest.max--;
+  }
+
+  if (result)
+  {
+    view_set_cursor_and_preferred_x(app, view, seek_pos(nest.min));
+    view_set_mark(app, view, seek_pos(nest.max));
+    vim_state.mode = VIM_Visual;
+    vim_state.params.edit_type = EDIT_CharWise;
+  }
 }

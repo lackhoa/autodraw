@@ -6,6 +6,8 @@
 #define in_range(bot,mid,top) ((bot) <= (mid) && (mid) < (top))
 #define ArrayInc(a,i) ((i+1) % ArrayCount(a))
 #define ArrayDec(a,i) ((i + ArrayCount(a)-1) % ArrayCount(a))
+
+// TODO(kv): please, allow printf with va arg
 #define printf_message(app, arena, str, ...) print_message(app, push_stringf(arena, str, __VA_ARGS__))
 
 // NOTE(BYP): Used in vim_request_vtable
