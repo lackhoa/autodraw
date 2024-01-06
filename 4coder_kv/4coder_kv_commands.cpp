@@ -525,3 +525,36 @@ function void kv_do_t_internal(Application_Links *app, b32 shiftp)
 
 VIM_COMMAND_SIG(kv_do_t) {kv_do_t_internal(app, false);}
 VIM_COMMAND_SIG(kv_do_T) {kv_do_t_internal(app, true);}
+
+VIM_COMMAND_SIG(kv_move_left_alpha_numeric_or_camel_boundary)
+{
+  Vim_Motion_Block vim_motion_block(app);
+  Scratch_Block scratch(app);
+  current_view_scan_move(app, Scan_Backward, push_boundary_list(scratch, boundary_alpha_numeric_camel));
+}
+
+VIM_COMMAND_SIG(kv_move_right_alpha_numeric_or_camel_boundary)
+{
+  GET_VIEW_AND_BUFFER;
+  Vim_Motion_Block vim_motion_block(app);
+  Scratch_Block scratch(app);
+
+  current_view_scan_move(app, Scan_Forward, push_boundary_list(scratch, boundary_alpha_numeric_camel));
+
+  u8 current_char = buffer_get_char(app, buffer, view_get_cursor_pos(app, view));
+  if (current_char == ' ')
+  {
+    move_right(app);
+  }
+}
+
+CUSTOM_COMMAND_SIG(kv_run)
+CUSTOM_DOC("run the current script")
+{
+  GET_VIEW_AND_BUFFER;
+  Scratch_Block temp(app);
+
+  String_Const_u8 dir = push_hot_directory(app, temp);
+  String_Const_u8 cmd = push_buffer_file_name(app, temp, buffer);
+  standard_build_exec_command(app, view, dir, cmd);
+}

@@ -225,14 +225,15 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_right,                            KeyCode_L);
 	BIND(N|V|MAP, vim_end_line,                    (S|KeyCode_4));
 	BIND(N|V|MAP, vim_begin_line,                  M|KeyCode_I);
-	BIND(N|V|MAP, move_right_alpha_numeric_or_camel_boundary, KeyCode_W);
 	BIND(N|V|MAP, vim_forward_WORD,                (S|KeyCode_W));
-	BIND(N|V|MAP, move_left_alpha_numeric_or_camel_boundary, KeyCode_B);
 	BIND(N|V|MAP, vim_backward_WORD,               (S|KeyCode_B));
 	BIND(N|V|MAP, vim_forward_end,                      KeyCode_E);
 	BIND(N|V|MAP, vim_forward_END,                 (S|KeyCode_E));
 	BIND(N|V|MAP, vim_backward_end,         SUB_G,      KeyCode_E);
 	BIND(N|V|MAP, vim_backward_END,         SUB_G, (S|KeyCode_E));
+
+	BIND(N|V|MAP, kv_move_right_alpha_numeric_or_camel_boundary, KeyCode_W);
+	BIND(N|V|MAP, kv_move_left_alpha_numeric_or_camel_boundary,  KeyCode_B);
 
 	BIND(N|V|MAP, vim_file_top,             SUB_G,     KeyCode_G);
 	BIND(N|V|MAP, vim_goto_line,                   (S|KeyCode_G));
@@ -254,9 +255,9 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP, vim_clear_search,          SUB_Leader,  KeyCode_Space);
 	BIND(N|MAP, vim_start_search_forward,               KeyCode_ForwardSlash);
 	BIND(N|MAP, vim_start_search_backward,         (S|KeyCode_ForwardSlash));
-	BIND(N|MAP, vim_to_next_pattern,                    KeyCode_N);
+	BIND(N|MAP, vim_to_next_pattern,                  KeyCode_N);
 	BIND(N|MAP, vim_to_prev_pattern,               (S|KeyCode_N));
-	BIND(N|MAP, vim_in_next_pattern,        SUB_G,      KeyCode_N);
+	BIND(N|MAP, vim_in_next_pattern,        SUB_G,    KeyCode_N);
 	BIND(N|MAP, vim_in_prev_pattern,        SUB_G, (S|KeyCode_N));
 
 	BIND(N|MAP, vim_prev_jump,                     (C|KeyCode_O));
