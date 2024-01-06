@@ -44,7 +44,7 @@ def disable_current_breakpoint(debugger, command, *args):
     target = None
     thread = None
 
-    len(args) == 3:
+    if len(args) == 3:
         # New (2015 & later) lldb invocation style where we're given the execution context
         exe_ctx = args[0]
         result = args[1]

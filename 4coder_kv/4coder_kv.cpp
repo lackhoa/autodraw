@@ -326,6 +326,7 @@ function void kv_vim_bindings(Application_Links *app)
     BIND(V|MAP,   kv_surround_brace,               S|KeyCode_RightBracket);
     BIND(V|MAP,   kv_surround_brace_spaced,        S|KeyCode_LeftBracket);
     BIND(V|MAP,   kv_surround_double_quote,          KeyCode_Quote);
+    BIND(N|MAP,   kv_delete_surrounding_groupers,  M|KeyCode_RightBracket)
 
 #undef BIND
 }

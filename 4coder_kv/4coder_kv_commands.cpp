@@ -138,19 +138,39 @@ inline b32 kv_is_group_closer(Token *token)
           token->kind == TokenBaseKind_ScopeClose);
 }
 
-inline b8 kv_is_group_opener(u8 c)
+inline u8 kv_is_group_opener(u8 c)
 {
   switch (c) {
-    case '(': case '[': case '{': return true;
-    default:                      return false;
+    case '(':
+      return ')';
+    case '[':
+      return ']';
+    case '{':
+      return '}';
+    case '\"':
+      return '\"';
+    case '\'':
+      return '\'';
+    default:   
+      return 0;
   }
 }
 
-inline b8 kv_is_group_closer(u8 c)
+inline u8 kv_is_group_closer(u8 c)
 {
   switch (c) {
-    case ')': case ']': case '}': return true;
-    default:                      return false;
+    case ')':
+      return '(';
+    case ']':
+      return '[';
+    case '}':
+      return '{';
+    case '\"':
+      return '\"';
+    case '\'':
+      return '\'';
+    default:   
+      return 0;
   }
 }
 
@@ -187,6 +207,24 @@ kv_token_it_at_cursor(Application_Links *app, i64 delta=0)
   return token_iterator_pos(0, &tokens, pos);
 }
 
+// todo(kv): support fallback path that works on characters
+function b32
+kv_find_surrounding_nest(Application_Links *app, Buffer_ID buffer, i64 pos, Range_i64 *out)
+{
+    b32 result = false;
+    Range_i64 range = {};
+    Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
+    if (find_nest_side(app, buffer, pos-1, flags,
+                       Scan_Backward, NestDelim_Open, &range.start) &&
+        find_nest_side(app, buffer, pos, flags|FindNest_EndOfToken,
+                       Scan_Forward, NestDelim_Close, &range.end))
+    {
+        *out = range;
+        result = true;
+    }
+    return(result);
+}
+
 VIM_COMMAND_SIG(kv_sexpr_up)
 {
   GET_VIEW_AND_BUFFER;
@@ -195,23 +233,11 @@ VIM_COMMAND_SIG(kv_sexpr_up)
   Token_Array tokens = get_token_array_from_buffer(app, buffer);
 
   i64 pos = view_correct_cursor(app, view);
-  Token_Iterator_Array token_it = token_iterator_pos(0, &tokens, pos);
-  i32 nest_level = 0;
-  while (token_it_dec(&token_it))
+
+  Range_i64 nest = {};
+  if ( kv_find_surrounding_nest(app, buffer, pos, &nest) )
   {
-    Token *token = token_it_read(&token_it);
-    if (kv_is_group_opener(token))
-    {
-      if (nest_level == 0) {
-        kv_move_to_token(app, token);
-        break;
-      }
-      else {
-        soft_assert(nest_level > 0);
-        nest_level--;
-      }
-    }
-    else if (kv_is_group_closer(token))  nest_level++; 
+    view_set_cursor_and_preferred_x(app, view, seek_pos(nest.min));
   }
 }
 
@@ -236,11 +262,15 @@ VIM_COMMAND_SIG(kv_sexpr_right)
 {
   GET_VIEW_AND_BUFFER;
   Token_Iterator_Array token_it = kv_token_it_at_cursor(app);
-  do {
+  Token *token = token_it_read(&token_it);
+  if (!token) return;
+  do
+  {
     Token *token = token_it_read(&token_it);
     if (kv_is_group_opener(token))
     {
       kv_move_to_token(app, token);
+      // todo(kv): we can do "find_nest_side" here
       kv_vim_bounce(app);
       move_right(app);
       break;
@@ -258,6 +288,8 @@ VIM_COMMAND_SIG(kv_sexpr_left)
 {
   GET_VIEW_AND_BUFFER;
   Token_Iterator_Array token_it = kv_token_it_at_cursor(app, -1);
+  Token *token = token_it_read(&token_it);
+  if (!token) return;
   do
   {
     Token *token = token_it_read(&token_it);
@@ -295,6 +327,9 @@ void kv_surround_with(Application_Links *app, char *opener, char *closer)
 
   buffer_replace_range(app, buffer, Ii64(max), SCu8(closer));
   buffer_replace_range(app, buffer, Ii64(min), SCu8(opener));
+  History_Record_Index index = buffer_history_get_current_state_index(app, buffer);
+  buffer_history_merge_record_range(app, buffer, index-1, index,
+                                    RecordMergeFlag_StateInRange_MoveStateForward);
 
   vim_normal_mode(app);
 }
@@ -365,18 +400,11 @@ VIM_COMMAND_SIG(kv_sexpr_select_whole)
 
   i64 pos = view_get_cursor_pos(app, view);
   u8 current_char = buffer_get_char(app, buffer, pos);
-  if (kv_is_group_opener(current_char))
-  {
-    nest.min = pos;
-    nest.max = vim_scan_bounce(app, buffer, pos, Scan_Forward);
-    result = true;
-  }
-  else
-  {
-    result = find_surrounding_nest(app, buffer, pos, FindNest_Scope|FindNest_Paren, &nest);
-    nest.max--;
-  }
+  if ( kv_is_group_opener(current_char) )
+    pos++;
 
+  result = kv_find_surrounding_nest(app, buffer, pos, &nest);
+  nest.max--;
   if (result)
   {
     view_set_cursor_and_preferred_x(app, view, seek_pos(nest.min));
@@ -439,5 +467,21 @@ CUSTOM_DOC("The one-stop-shop for all your file-opening need")
   if (!looking_at_path)
   {
     vim_interactive_open_or_new(app);
+  }
+}
+
+VIM_COMMAND_SIG(kv_delete_surrounding_groupers)
+{
+  GET_VIEW_AND_BUFFER;
+  i64 pos = view_get_cursor_pos(app, view);
+  Range_i64 range = {};
+  if (kv_find_surrounding_nest(app, buffer, pos, &range))
+  {
+    buffer_replace_range(app, buffer, Ii64(range.max-1, range.max), string_u8_empty);
+    buffer_replace_range(app, buffer, Ii64(range.min, range.min+1), string_u8_empty);
+
+    History_Record_Index index = buffer_history_get_current_state_index(app, buffer);
+    buffer_history_merge_record_range(app, buffer, index-1, index,
+                                      RecordMergeFlag_StateInRange_MoveStateForward);
   }
 }

@@ -266,16 +266,8 @@ VIM_COMMAND_SIG(vim_left){
 
 VIM_COMMAND_SIG(vim_right)
 {
-  GET_VIEW_AND_BUFFER;
-  Scratch_Block temp(app);
-  {
-	Vim_Motion_Block vim_motion_block(app);
-	move_horizontal_lines(app, vim_consume_number());
-    i64 curpos = view_get_cursor_pos(app, view);
-    printf_message(app, temp, "curpos: %lld; ", curpos);
-  }
-  i64 curpos = view_get_cursor_pos(app, view);
-  printf_message(app, temp, "%lld\n", curpos);
+  Vim_Motion_Block vim_motion_block(app);
+  move_horizontal_lines(app, vim_consume_number());
 }
 
 function void
