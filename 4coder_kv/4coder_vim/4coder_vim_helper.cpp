@@ -212,9 +212,12 @@ Vim_Motion_Block::~Vim_Motion_Block(){
 	vim_default_register();
 	
 	vim_state.sub_mode = SUB_None;
-	if(vim_state.mode != VIM_Insert && vim_state.mode != VIM_Visual){
-		vim_clamp_newline(app, view, buffer, end_pos);
-	}
+    // NOTE(kv): This is the thing that causes the cursor to not move past the
+    // last character of the line.
+    //
+	// if(vim_state.mode != VIM_Insert && vim_state.mode != VIM_Visual){
+	// 	vim_clamp_newline(app, view, buffer, end_pos);
+	// }
 	if(vim_state.mode == VIM_Visual){ vim_state.params.edit_type = prev_edit; }
 }
 
@@ -261,9 +264,18 @@ VIM_COMMAND_SIG(vim_left){
 	move_horizontal_lines(app, -vim_consume_number());
 }
 
-VIM_COMMAND_SIG(vim_right){
+VIM_COMMAND_SIG(vim_right)
+{
+  GET_VIEW_AND_BUFFER;
+  Scratch_Block temp(app);
+  {
 	Vim_Motion_Block vim_motion_block(app);
 	move_horizontal_lines(app, vim_consume_number());
+    i64 curpos = view_get_cursor_pos(app, view);
+    printf_message(app, temp, "curpos: %lld; ", curpos);
+  }
+  i64 curpos = view_get_cursor_pos(app, view);
+  printf_message(app, temp, "%lld\n", curpos);
 }
 
 function void

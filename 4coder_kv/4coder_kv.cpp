@@ -225,9 +225,9 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_right,                            KeyCode_L);
 	BIND(N|V|MAP, vim_end_line,                    (S|KeyCode_4));
 	BIND(N|V|MAP, vim_begin_line,                  M|KeyCode_I);
-	BIND(N|V|MAP, vim_forward_word,                     KeyCode_W);
+	BIND(N|V|MAP, move_right_alpha_numeric_or_camel_boundary, KeyCode_W);
 	BIND(N|V|MAP, vim_forward_WORD,                (S|KeyCode_W));
-	BIND(N|V|MAP, vim_backward_word,                    KeyCode_B);
+	BIND(N|V|MAP, move_left_alpha_numeric_or_camel_boundary, KeyCode_B);
 	BIND(N|V|MAP, vim_backward_WORD,               (S|KeyCode_B));
 	BIND(N|V|MAP, vim_forward_end,                      KeyCode_E);
 	BIND(N|V|MAP, vim_forward_END,                 (S|KeyCode_E));
