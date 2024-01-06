@@ -1,11 +1,5 @@
 #include "4coder_byp_token.cpp"
 
-global b32 byp_relative_numbers;
-
-CUSTOM_COMMAND_SIG(byp_toggle_relative_numbers)
-CUSTOM_DOC("Toggles value for `relative_numbers`")
-{ byp_relative_numbers ^= 1; }
-
 function b32
 kv_find_nest_side_paren(Application_Links *app, Token_Array *tokens, i64 pos,
                         Scan_Direction scan, Nest_Delimiter_Kind delim,
@@ -146,7 +140,8 @@ kv_draw_paren_highlight(Application_Links *app, Buffer_ID buffer, Text_Layout_ID
 }
 
 function void
-byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buffer_ID buffer, Text_Layout_ID text_layout_id, Rect_f32 rect) {
+byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buffer_ID buffer, Text_Layout_ID text_layout_id, Rect_f32 rect)
+{
 	ProfileScope(app, "render buffer");
 	b32 is_active_view = view_id == get_active_view(app, Access_Always);
 	Rect_f32 prev_clip = draw_set_clip(app, rect);
@@ -174,10 +169,13 @@ byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buff
 	}
 
 	Token_Array token_array = get_token_array_from_buffer(app, buffer);
-	if(token_array.tokens == 0){
-		paint_text_color_fcolor(app, text_layout_id, visible_range, fcolor_id(defcolor_text_default));
-	}else{
-		byp_draw_token_colors(app, view_id, buffer, text_layout_id);
+	if(token_array.tokens)
+    {
+      byp_draw_token_colors(app, view_id, buffer, text_layout_id);
+    }
+    else
+    {
+      paint_text_color_fcolor(app, text_layout_id, visible_range, fcolor_id(defcolor_text_default));
     }
 
 	b32 use_error_highlight = def_get_config_b32(vars_save_string_lit("use_error_highlight"));
@@ -287,9 +285,7 @@ kv_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
 	// NOTE(allen): layout line numbers
 	b32 show_line_number_margins = def_get_config_b32(vars_save_string_lit("show_line_number_margins"));
 	Rect_f32_Pair pair = (show_line_number_margins ?
-						  (byp_relative_numbers ?
-						   vim_line_number_margin(app, buffer, region, digit_advance) :
-						   layout_line_number_margin(app, buffer, region, digit_advance)) :
+						  layout_line_number_margin(app, buffer, region, digit_advance) :
 						  rect_split_left_right(region, 1.5f*digit_advance));
 	Rect_f32 line_number_rect = pair.min;
 	region = pair.max;
@@ -305,10 +301,7 @@ kv_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
 	Text_Layout_ID text_layout_id = text_layout_create(app, buffer, region, buffer_point);
 
 	if(show_line_number_margins){
-		if(byp_relative_numbers)
-			vim_draw_rel_line_number_margin(app, view, buffer, face_id, text_layout_id, line_number_rect);
-		else
-			vim_draw_line_number_margin(app, view, buffer, face_id, text_layout_id, line_number_rect);
+      vim_draw_line_number_margin(app, view, buffer, face_id, text_layout_id, line_number_rect);
 	}else{
 		draw_rectangle_fcolor(app, line_number_rect, 0.f, fcolor_id(defcolor_back));
 	}

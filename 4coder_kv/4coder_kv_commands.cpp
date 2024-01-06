@@ -319,6 +319,7 @@ VIM_COMMAND_SIG(kv_sexpr_end)
 void kv_surround_with(Application_Links *app, char *opener, char *closer)
 {
   GET_VIEW_AND_BUFFER;
+  HISTORY_MERGE_SCOPE;
 
   i64 min = view_get_cursor_pos(app, view);
   i64 max = view_get_mark_pos(app, view);
@@ -327,9 +328,6 @@ void kv_surround_with(Application_Links *app, char *opener, char *closer)
 
   buffer_replace_range(app, buffer, Ii64(max), SCu8(closer));
   buffer_replace_range(app, buffer, Ii64(min), SCu8(opener));
-  History_Record_Index index = buffer_history_get_current_state_index(app, buffer);
-  buffer_history_merge_record_range(app, buffer, index-1, index,
-                                    RecordMergeFlag_StateInRange_MoveStateForward);
 
   vim_normal_mode(app);
 }
@@ -473,15 +471,57 @@ CUSTOM_DOC("The one-stop-shop for all your file-opening need")
 VIM_COMMAND_SIG(kv_delete_surrounding_groupers)
 {
   GET_VIEW_AND_BUFFER;
+  HISTORY_MERGE_SCOPE;
+
   i64 pos = view_get_cursor_pos(app, view);
   Range_i64 range = {};
   if (kv_find_surrounding_nest(app, buffer, pos, &range))
   {
-    buffer_replace_range(app, buffer, Ii64(range.max-1, range.max), string_u8_empty);
-    buffer_replace_range(app, buffer, Ii64(range.min, range.min+1), string_u8_empty);
-
-    History_Record_Index index = buffer_history_get_current_state_index(app, buffer);
-    buffer_history_merge_record_range(app, buffer, index-1, index,
-                                      RecordMergeFlag_StateInRange_MoveStateForward);
+    kv_buffer_delete_pos(app, buffer, range.max-1);
+    kv_buffer_delete_pos(app, buffer, range.max-1);
   }
 }
+
+function void kv_do_t_internal(Application_Links *app, b32 shiftp)
+{
+  GET_VIEW_AND_BUFFER;
+  HISTORY_MERGE_SCOPE;
+
+  i64 pos = view_get_cursor_pos(app, view);
+  u8 current_char = buffer_get_char(app, buffer, pos);
+  // 1. optionally delete space
+  if (current_char == ' ')
+  {
+    kv_buffer_delete_pos(app, buffer, pos);
+    current_char = buffer_get_char(app, buffer, pos);
+  }
+  else if (current_char == '_')
+  {
+    pos++;
+    current_char = buffer_get_char(app, buffer, pos);
+  }
+
+  // 2. upcase character/word
+  if (shiftp)
+  {
+    Scratch_Block temp(app);
+
+    i64 max = scan_any_boundary(app, boundary_alpha_numeric, buffer, Scan_Forward, pos);
+    String_Const_u8 string = push_buffer_range(app, temp, buffer, Range_i64{pos, max});
+    string_mod_upper(string);
+
+    kv_buffer_replace_range(app, buffer, pos, max, string);
+  }
+  else
+  {
+    u8 next_char = buffer_get_char(app, buffer, pos);
+    u8 upper = character_to_upper(current_char);  // todo(kv): I hope the string is copied
+    kv_buffer_replace_range(app, buffer, pos, pos+1, SCu8(&upper, 1));
+  }
+
+  // 3. move
+  move_right_alpha_numeric_boundary(app);
+}
+
+VIM_COMMAND_SIG(kv_do_t) {kv_do_t_internal(app, false);}
+VIM_COMMAND_SIG(kv_do_T) {kv_do_t_internal(app, true);}

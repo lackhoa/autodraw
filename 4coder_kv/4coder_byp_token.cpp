@@ -152,11 +152,12 @@ function void byp_draw_token_colors(Application_Links *app, View_ID view, Buffer
 	}
 
 	// NOTE(allen): Scan for TODOs and NOTEs
-	b32 use_comment_keyword = def_get_config_b32(vars_save_string_lit("use_comment_keyword"));
-	if(use_comment_keyword){
+	{
 		Comment_Highlight_Pair pairs[] = {
 			{string_u8_litexpr("NOTE"), finalize_color(defcolor_comment_pop, 0)},
+			{string_u8_litexpr("note"), finalize_color(defcolor_comment_pop, 0)},
 			{string_u8_litexpr("TODO"), finalize_color(defcolor_comment_pop, 1)},
+			{string_u8_litexpr("todo"), finalize_color(defcolor_comment_pop, 1)},
 		};
 		draw_comment_highlights(app, buffer, text_layout_id, &token_array, pairs, ArrayCount(pairs));
 	}
@@ -189,5 +190,4 @@ function void byp_draw_token_colors(Application_Links *app, View_ID view, Buffer
 
 	}
 	if(do_cursor_tok_highlight){ draw_rectangle(app, cursor_tok_rect, 5.f, cursor_tok_color); }
-
 }

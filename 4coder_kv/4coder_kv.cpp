@@ -301,24 +301,26 @@ function void kv_vim_bindings(Application_Links *app)
     BIND(N|V|MAP,  vim_command_mode,           KeyCode_Semicolon);
     BIND(N|  MAP,  kv_reopen_with_confirmation,                     S|KeyCode_U);
     BIND(N|  MAP,  quick_swap_buffer,        M|KeyCode_Comma);
+    BIND(N|0|MAP,  kv_do_t,                    KeyCode_T);
+    BIND(N|0|MAP,  kv_do_T,                  S|KeyCode_T);
     // Project keys
     BIND(N|MAP,  kv_build_search,             M|KeyCode_M);
     BIND(N|MAP,  kv_run_search,             C|M|KeyCode_M);
     // Language support
     BIND(N|MAP,  vim_goto_definition,                 KeyCode_F1);
     BIND(N|MAP,  vim_goto_definition_other_panel,   M|KeyCode_F1);
-    BIND(N|MAP,  list_all_locations_of_identifier,             KeyCode_F2);
+    BIND(N|MAP,  list_all_locations_of_identifier,    KeyCode_F2);
     //
 	BIND(N|MAP,   byp_request_comment,   SUB_G,         KeyCode_ForwardSlash);
 	BIND(N|MAP,   byp_request_uncomment, SUB_G,   S|KeyCode_ForwardSlash);
-    //
+    // sexpr movement
     BIND(N|V|MAP,   kv_sexpr_up,     M|KeyCode_K);
     BIND(N|V|MAP,   kv_sexpr_down,   M|KeyCode_J);
     BIND(N|V|MAP,   kv_sexpr_right,  M|KeyCode_L);
     BIND(N|V|MAP,   kv_sexpr_left,   M|KeyCode_H);
     BIND(N|V|MAP,   kv_sexpr_end,    M|KeyCode_Semicolon);
     BIND(N|MAP,     kv_sexpr_select_whole, KeyCode_Q);
-    //
+    // surround paren
     BIND(V|MAP,   kv_surround_paren,                 KeyCode_0);
     BIND(V|MAP,   kv_surround_paren_spaced,          KeyCode_9);
     BIND(V|MAP,   kv_surround_bracket,               KeyCode_RightBracket);
