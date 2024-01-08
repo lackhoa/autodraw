@@ -499,7 +499,8 @@ VIM_COMMAND_SIG(vim_modal_percent){
 	else{ vim_bounce(app); }
 }
 
-VIM_COMMAND_SIG(vim_paste_after){
+// NOTE(kv): don't use this
+VIM_COMMAND_SIG(vim_paste_after_){
 	if(vim_state.params.selected_reg){
 		View_ID view = get_active_view(app, Access_ReadVisible);
 		Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
@@ -514,7 +515,7 @@ VIM_COMMAND_SIG(vim_paste_after){
 		}
 
 		Vim_Register *reg = vim_state.prev_params.selected_reg;
-		vim_state.params.command = vim_paste_after;
+		vim_state.params.command = vim_paste_after_;
 		vim_state.prev_params = vim_state.params;
 		vim_state.prev_params.selected_reg = reg;
 	}
@@ -572,7 +573,7 @@ VIM_COMMAND_SIG(vim_last_command){
 			vim_state.number = vim_state.params.number;
 			b32 do_insert = vim_state.params.do_insert;
 
-			if((command == vim_paste_before || command == vim_paste_after) &&
+			if((command == vim_paste_before || command == vim_paste_after_) &&
 			   in_range(0, (vim_state.params.selected_reg - vim_registers.cycle), 8))
 			{
 				vim_state.params.selected_reg++;
@@ -864,7 +865,7 @@ VIM_COMMAND_SIG(vim_play_macro){
 	}
 }
 
-VIM_COMMAND_SIG(vim_insert_command);
+// VIM_COMMAND_SIG(vim_insert_command);
 
 
 

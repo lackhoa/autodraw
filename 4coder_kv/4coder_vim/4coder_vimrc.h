@@ -31,7 +31,7 @@ enum BYP_Vim_Objects{
 
 #define VIM_ADDITIONAL_PEEK            2
 
-#define VIM_DEFAULT_REGISTER           unnamed
+#define VIM_DEFAULT_REGISTER           system
 
 #define VIM_USE_BOTTOM_LISTER          1
 #define VIM_LISTER_RANGE               3,5

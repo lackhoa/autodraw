@@ -30,8 +30,8 @@ function b32 VimBind(u32 mode, Custom_Command_Function *custom, u64 key){
 	return vim_map_set_binding(mode, SUB_None, (void *)custom, key);
 }
 
-/*
-function void vim_default_bindings(Application_Links *app, Key_Code leader){
+#if 0  // note(kv): I don't use this
+function void vim_default_bindings_(Application_Links *app, Key_Code leader){
 
 	// Normal, Insert, Visual
 	// These could be local variables but I like the highlighting
@@ -84,7 +84,6 @@ function void vim_default_bindings(Application_Links *app, Key_Code leader){
 	VimBind(N|MAP,   vim_newline_above,               (Sft|KeyCode_O));
 	VimBind(V|MAP,   vim_visual_insert,               (Sft|KeyCode_A));
 	VimBind(V|MAP,   vim_visual_insert,               (Sft|KeyCode_I));
-	VimBind(I|MAP,   vim_insert_command,          (Ctl|Sft|KeyCode_O));
 
 	/// Sub Mode Binds
 	VimBind(N|V|MAP, vim_submode_g,                        KeyCode_G);
@@ -224,4 +223,4 @@ function void vim_default_bindings(Application_Links *app, Key_Code leader){
 #undef V
 #undef MAP
 }
-*/
+#endif
