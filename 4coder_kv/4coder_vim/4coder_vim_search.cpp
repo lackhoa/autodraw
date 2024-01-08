@@ -55,7 +55,7 @@ kv_seek_string_wildcard_insensitive_forward(Application_Links *app, Buffer_ID bu
         }
         else
         {
-          pos = get_line_start_pos_from_pos(app, buffer, match.range.start);
+          pos = get_line_start_pos_from_pos(app, buffer, match.range.start) - 1;
           matched = false;
           break;
         }
