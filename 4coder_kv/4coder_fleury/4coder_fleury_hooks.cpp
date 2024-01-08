@@ -12,7 +12,6 @@
 #include "4coder_fleury_pos_context_tooltips.cpp"
 #include "4coder_fleury_code_peek.cpp"
 #include "4coder_fleury_recent_files.cpp"
-#include "4coder_fleury_lite.cpp"
 
 function void
 F4_RenderBuffer(Application_Links *app, View_ID view_id, Face_ID face_id,

@@ -54,18 +54,18 @@ CUSTOM_DOC("Enter Command Mode")
 {
 	View_ID view = get_this_ctx_view(app, Access_Always);
 	if(view == 0){ return; }
-	Command_Lister_Status_Rule rule = {};
+
 	Buffer_ID buffer = view_get_buffer(app, view, Access_Visible);
 	Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-	Command_Map_ID *map_id_ptr = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
-	if(map_id_ptr){
-		rule = command_lister_status_bindings(&framework_mapping, *map_id_ptr);
-	}else{
-		rule = command_lister_status_descriptions();
-	}
+	Command_Map_ID *map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
+	Command_Lister_Status_Rule rule =
+      (map ?
+       command_lister_status_bindings(&framework_mapping, *map) :
+       command_lister_status_descriptions());
 
 	Custom_Command_Function *func = vim_get_command_from_user(app, 0, 0, &rule);
-	if(func != 0){
+	if(func)
+    {
 		view_enqueue_command_function(app, view, func);
 	}
 }

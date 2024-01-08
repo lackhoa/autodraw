@@ -330,7 +330,7 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
 
 
 
-void fleury_custom_layer_init(Application_Links *app)
+void fleury_lite_custom_layer_init(Application_Links *app)
 {
     default_framework_init(app);
     global_frame_arena = make_arena(get_base_allocator_system());

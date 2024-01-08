@@ -3,6 +3,7 @@
 #include "4coder_kv_hooks.cpp"
 #include "4coder_kv_draw.cpp"
 #include "4coder_kv_vim_stuff.cpp"
+#include "4coder_fleury/4coder_fleury.cpp"
 
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
@@ -12,6 +13,7 @@
 enum LayerToUse
 {
   LayerToUse_kv,
+  LayerToUse_fleury_lite,
   LayerToUse_fleury,
   LayerToUse_default_bindings,
 };
@@ -250,10 +252,10 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(V|MAP,   cursor_mark_swap,                   KeyCode_O);
   BIND(V|MAP,   vim_block_swap,                  (S|KeyCode_O));
 
-  BIND(N|MAP, vim_search_identifier,         (C|S|KeyCode_8));
+  BIND(N|MAP, vim_search_identifier,           (C|S|KeyCode_8));
   BIND(N|MAP, vim_search_identifier,             (S|KeyCode_8));
-  BIND(N|MAP, vim_clear_search,          SUB_Leader,  KeyCode_Space);
-  BIND(N|MAP, vim_start_search_forward,               KeyCode_ForwardSlash);
+  BIND(N|MAP, vim_clear_search,          SUB_Leader,KeyCode_Space);
+  BIND(N|MAP, vim_start_search_forward,             KeyCode_ForwardSlash);
   BIND(N|MAP, vim_start_search_backward,         (S|KeyCode_ForwardSlash));
   BIND(N|MAP, vim_to_next_pattern,                  KeyCode_N);
   BIND(N|MAP, vim_to_prev_pattern,               (S|KeyCode_N));
@@ -439,9 +441,10 @@ void default_bindings_custom_layer_init(Application_Links *app)
 void custom_layer_init(Application_Links *app)
 {
   switch (layer_to_use) {
-    case LayerToUse_kv:               kv_custom_layer_init(app);     break;
-    case LayerToUse_fleury:           fleury_custom_layer_init(app); break;
-    case LayerToUse_default_bindings: default_bindings_custom_layer_init(app); break;
+    case LayerToUse_kv:                    kv_custom_layer_init(app);     break;
+    case LayerToUse_fleury:                fleury_custom_layer_init(app); break;
+    case LayerToUse_fleury_lite:           fleury_lite_custom_layer_init(app); break;
+    case LayerToUse_default_bindings:      default_bindings_custom_layer_init(app); break;
   }
 
   {// note(kv): startup code
