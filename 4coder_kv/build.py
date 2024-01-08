@@ -12,6 +12,7 @@ def run(command, update_env={}):
     env = os.environ.copy()
     env.update(update_env)
     process = subprocess.run(command, shell=True, capture_output=True, env=env)
+
     end = time.time()
     print(f'Time taken: {end - begin:.3f} seconds')
     if len(process.stdout):
@@ -44,14 +45,15 @@ try:
     run_only       = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
 
-    DEBUG_MODE = False
+    DEBUG_MODE = True
     ADDRESS_SANITIZER_ON = False
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CUSTOM} -I{AUTODRAW}/libs'
-    OPTIMIZATION='-O0'
-    opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
-    arch="-m64"
-    debug="-g"
+    OPTIMIZATION='-O0' if DEBUG_MODE else '-O2'
+    opts = f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
+    arch = "-m64"
+    debug="-g" if DEBUG_MODE else ""
+    COPY_TO_STABLE = False
 
     if run_only:
         dyld_insert_libraries="DYLD_INSERT_LIBRARIES=/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib" if ADDRESS_SANITIZER_ON else ""
@@ -90,11 +92,15 @@ try:
         #
         FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
         run(f'clang++ "custom_4coder.o" "{AUTODRAW}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
+        if COPY_TO_STABLE:
+            print(f'copy to stable')
+            run(f'cp custom_4coder.so ~/4coder_stable/')
 
-        run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')
         print("NOTE: Setup 4coder config files")
         run(f'ln -sf "{HERE}/config.4coder" "{FCODER_ROOT}/config.4coder"')
         run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_ROOT}/themes/theme-kv.4coder"')
+
+        run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')
 
         print('Build complete!')
 

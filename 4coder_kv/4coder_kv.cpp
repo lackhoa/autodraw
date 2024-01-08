@@ -162,14 +162,14 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP, undo,                              (C|KeyCode_Z));
 	BIND(N|MAP, redo,                              (C|KeyCode_R));
 	BIND(N|MAP, vim_interactive_open_or_new,    SUB_G,  KeyCode_F);
-    BIND(N|MAP, kv_open_file_ultimate,             M|KeyCode_F);
+  BIND(N|MAP, kv_open_file_ultimate,             M|KeyCode_F);
 	BIND(N|MAP, vim_next_4coder_jump,              M|KeyCode_N);
 	BIND(N|MAP, vim_prev_4coder_jump,              M|KeyCode_P);
 	BIND(N|MAP, view_buffer_other_panel,           M|KeyCode_D);
-    BIND(N|MAP, interactive_switch_buffer,         M|KeyCode_B);
+  BIND(N|MAP, interactive_switch_buffer,         M|KeyCode_B);
 
 	/// Mode Binds
-	BIND(N|V|MAP, vim_modal_i,                        KeyCode_I);
+  BIND(N|V|MAP, vim_modal_i,                        KeyCode_I);
 	BIND(N|V|MAP, vim_command_mode,                (S|KeyCode_Semicolon));
 	BIND(N|MAP,   vim_insert_begin,                (S|KeyCode_I));
 	BIND(N|MAP,   vim_replace_mode,                (S|KeyCode_R));
@@ -179,8 +179,8 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|0|MAP, vim_prev_visual,          SUB_G,    KeyCode_V);
 	BIND(N|0|MAP, vim_newline_below,                  KeyCode_O);
 	BIND(N|0|MAP, vim_newline_above,                S|KeyCode_O);
-    BIND(N|0|MAP, kv_newline_above,                 C|KeyCode_K);
-    BIND(N|0|MAP, kv_newline_below,                 C|KeyCode_J);
+  BIND(N|0|MAP, kv_newline_above,                 C|KeyCode_K);
+  BIND(N|0|MAP, kv_newline_below,                 C|KeyCode_J);
 
 	/// Sub Mode Binds
 	BIND(N|V|MAP, vim_submode_g,                        KeyCode_G);
@@ -212,19 +212,19 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|MAP,     vim_last_command,                KeyCode_Period);
 	BIND(N|MAP,     vim_backspace_char,              KeyCode_Backspace);
 	BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
-    BIND(I|MAP,     word_complete,                   KeyCode_Tab);
-    BIND(I|MAP,     paste,                         M|KeyCode_V);
+  BIND(I|MAP,     word_complete,                   KeyCode_Tab);
+  BIND(I|MAP,     paste,                         M|KeyCode_V);  // "paste" is causing me grief!
 
 	/// Digit Binds
 	BIND(N|0|MAP, vim_modal_0,                          KeyCode_0);
 
 	/// Movement Binds
-	BIND(N|V|MAP, vim_left,                             KeyCode_H);
-	BIND(N|V|MAP, vim_down,                             KeyCode_J);
-	BIND(N|V|MAP, vim_up,                               KeyCode_K);
-	BIND(N|V|MAP, vim_right,                            KeyCode_L);
+	BIND(N|V|MAP, vim_left,                           KeyCode_H);
+	BIND(N|V|MAP, vim_down,                           KeyCode_J);
+	BIND(N|V|MAP, vim_up,                             KeyCode_K);
+	BIND(N|V|MAP, vim_right,                          KeyCode_L);
 	BIND(N|V|MAP, vim_end_line,                    (S|KeyCode_4));
-	BIND(N|V|MAP, vim_begin_line,                  M|KeyCode_I);
+	BIND(N|V|MAP, vim_begin_line,                   M|KeyCode_I);
 	BIND(N|V|MAP, vim_forward_WORD,                (S|KeyCode_W));
 	BIND(N|V|MAP, vim_backward_WORD,               (S|KeyCode_B));
 	BIND(N|V|MAP, vim_forward_end,                      KeyCode_E);
@@ -232,8 +232,8 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_backward_end,         SUB_G,      KeyCode_E);
 	BIND(N|V|MAP, vim_backward_END,         SUB_G, (S|KeyCode_E));
 
-	BIND(N|V|MAP, kv_move_right_alpha_numeric_or_camel_boundary, KeyCode_W);
-	BIND(N|V|MAP, kv_move_left_alpha_numeric_or_camel_boundary,  KeyCode_B);
+	BIND(N|V|MAP, vim_forward_word,  KeyCode_W);
+	BIND(N|V|MAP, vim_backward_word, KeyCode_B);
 
 	BIND(N|V|MAP, vim_file_top,             SUB_G,     KeyCode_G);
 	BIND(N|V|MAP, vim_goto_line,                   (S|KeyCode_G));
@@ -292,9 +292,9 @@ function void kv_vim_bindings(Application_Links *app)
 	BIND(N|V|MAP, vim_leader_C, SUB_Leader,  (S|KeyCode_C));
 
     // NOTE(kv) KV miscellaneous binds
-	BIND(N|  MAP,  save_all_dirty_buffers,     KeyCode_Return);
-	BIND(N|  MAP,  write_space,                KeyCode_Space);
-	BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
+    BIND(N|  MAP,  save_all_dirty_buffers,     KeyCode_Return);
+    BIND(N|  MAP,  write_space,                KeyCode_Space);
+    BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
     BIND(  V|MAP,  vim_end_line,               KeyCode_A);
     BIND(N  |MAP,  vim_end_line,             S|KeyCode_A);
     BIND(N|  MAP,  kv_shift_character,         KeyCode_Comma);

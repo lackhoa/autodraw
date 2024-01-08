@@ -52,6 +52,7 @@ try:
         SANITIZE_ADDRESS_ON = False
         #
         optimization_flag = '-O0' if DEBUG_MODE else '-O2'
+        debug_flags = ['-g'] if DEBUG_MODE else []
         constants = ['-DAUTO_MAC', '-DAUTO_INTERNAL=1', '-DAUTO_DIAGNOSTICS=1']
         includes = ['-I../libs']
         sanitize_address = ['-fsanitize=address'] if SANITIZE_ADDRESS_ON else []
@@ -64,7 +65,7 @@ try:
                     '-Wno-macro-redefined', '-Wno-deprecated-declarations', '-Wno-unknown-attributes']
 
         # todo leave out "-g" in release mode
-        common_compile_flags = ['-g', '-std=gnu++20', '-fno-exceptions', '-fvisibility=hidden', optimization_flag] + includes + constants + warnings
+        common_compile_flags = ['-g', '-std=gnu++20', '-fno-exceptions', '-fvisibility=hidden', optimization_flag] + includes + constants + warnings + debug_flags
 
         todo_llvm_path = "/usr/local/Cellar/llvm/17.0.6" # llvm-config --libdir
         print("codegen: compile & link")

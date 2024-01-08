@@ -135,31 +135,22 @@ boundary_whitespace(Application_Links *app, Buffer_ID buffer, Side side, Scan_Di
 }
 
 
-// NOTE(BYP): To this day, I still don't know _exactly_ what's going on here, but it works so *shrug*
-function i64 vim_word_boundary(Application_Links *app, Buffer_ID buffer, Scan_Direction direction, i64 pos){
-	Scratch_Block scratch(app);
-	u8 c = buffer_get_char(app, buffer, pos);
-	if(direction == Scan_Forward){
-		if(character_is_whitespace(c)){
-			pos = buffer_seek_character_class_change_1_0(app, buffer, &character_predicate_whitespace, direction, pos);
-		}else{
-			pos = scan(app, push_boundary_list(scratch, vim_boundary_word, vim_boundary_non_word, boundary_whitespace), buffer, direction, pos);
-			if(character_is_whitespace(buffer_get_char(app, buffer, pos))){
-				pos = buffer_seek_character_class_change_1_0(app, buffer, &character_predicate_whitespace, direction, pos);
-			}
-		}
-	}else{
-		if(character_is_whitespace(c)){
-			pos = scan(app, push_boundary_list(scratch, boundary_whitespace),   buffer, direction, pos+1);
-		}
-		i64 p1  = scan(app, push_boundary_list(scratch, vim_boundary_word),     buffer, direction, pos);
-		i64 p2  = scan(app, push_boundary_list(scratch, vim_boundary_non_word), buffer, direction, pos);
-		pos = Max(p1, p2);
-		if(character_is_whitespace(buffer_get_char(app, buffer, pos))){
-			pos = buffer_seek_character_class_change_1_0(app, buffer, &character_predicate_whitespace, direction, pos);
-		}
-	}
-	return pos;
+function i64 vim_word_boundary(Application_Links *app, Buffer_ID buffer, Scan_Direction direction, i64 pos)
+{
+  Scratch_Block scratch(app);
+  u8 c = buffer_get_char(app, buffer, pos);
+  if( !character_is_whitespace(c) )
+  {
+    Boundary_Function_List boundary_list = push_boundary_list(scratch, boundary_alpha_numeric_camel, boundary_whitespace);
+    pos = scan(app, boundary_list, buffer, direction, pos);
+  }
+  c = buffer_get_char(app, buffer, pos);
+  if( character_is_whitespace(c) )
+  {
+    String_Match match = buffer_seek_character_class(app, buffer, &character_predicate_non_whitespace, direction, pos);
+    pos = match.range.min;
+  }
+  return pos;
 }
 
 function i64 vim_WORD_boundary(Application_Links *app, Buffer_ID buffer, Scan_Direction direction, i64 pos){
