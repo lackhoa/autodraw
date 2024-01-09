@@ -1,10 +1,5 @@
 /* 4coder_build_commands.cpp */
-#include "4coder_default_include.cpp"
-#include "kv.h"
-
-#define GET_VIEW_AND_BUFFER \
-  View_ID   view = get_active_view(app, Access_ReadVisible); \
-  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible)
+#include "4coder_kv_utils.cpp"
 
 #if OS_WINDOWS
 
@@ -84,12 +79,15 @@ kv_search_and_build(Application_Links *app, char *command_args)
   Scratch_Block scratch(app);
   b32 did_build = false;
   String_Const_u8 build_dir = push_build_directory_at_file(app, scratch, buffer);
-  if (build_dir.size > 0){
+  if (build_dir.size > 0)
+  {
     did_build = kv_search_and_build_from_dir(app, view, build_dir, command_args);
   }
-  if (!did_build){
+  if (!did_build)
+  {
     build_dir = push_hot_directory(app, scratch);
-    if (build_dir.size > 0){
+    if (build_dir.size > 0)
+    {
       did_build = kv_search_and_build_from_dir(app, view, build_dir, command_args);
     }
   }
@@ -101,7 +99,8 @@ kv_search_and_build_other_panel(Application_Links *app, char *command_args)
   view_buffer_other_panel(app);
   block_zero_struct(&prev_location);
   lock_jump_buffer(app, string_u8_litexpr("*compilation*"));
-  kv_search_and_build(app, command_args);
+  kv_search_and_build(app, command_args);  // this one
+  return;
 }
 
 CUSTOM_COMMAND_SIG(kv_build_search)

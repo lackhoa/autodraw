@@ -75,18 +75,18 @@ try:
         sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
         preproc_file="4coder_command_metadata.i"
         meta_macros="-DMETA_PASS"
-        #
-        print('preproc_file: Generate')
-        run(f'clang++ -I{CUSTOM} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
-        #
-        print('Meta-generator: Compile & Link')
-        run(f'ccache clang++ -c "{CUSTOM}/4coder_metadata_generator.cpp" -I"{CUSTOM}" {opts} -O2 -std=c++11 -o "{CUSTOM}/metadata_generator.o"')
-        #
-        run(f'clang++ -I"{CUSTOM}" "{CUSTOM}/metadata_generator.o" -o "{CUSTOM}/metadata_generator"')
-        #
-        print('Meta-generator: Run')
-        run(f'"{CUSTOM}/metadata_generator" -R "{CUSTOM}" "{os.getcwd()}/{preproc_file}"')
-        #
+        if full_rebuild:
+            print('preproc_file: Generate')
+            run(f'clang++ -I{CUSTOM} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
+            #
+            print('Meta-generator: Compile & Link')
+            run(f'ccache clang++ -c "{CUSTOM}/4coder_metadata_generator.cpp" -I"{CUSTOM}" {opts} -O2 -std=c++11 -o "{CUSTOM}/metadata_generator.o"')
+            #
+            run(f'clang++ -I"{CUSTOM}" "{CUSTOM}/metadata_generator.o" -o "{CUSTOM}/metadata_generator"')
+            #
+            print('Meta-generator: Run')
+            run(f'"{CUSTOM}/metadata_generator" -R "{CUSTOM}" "{os.getcwd()}/{preproc_file}"')
+
         print('custom_4coder.so: Compile & Link')
         run(f'ccache clang++ -c "{SOURCE}" -I"{CUSTOM}" {arch} {opts} {debug} -std=c++11 -fPIC -o custom_4coder.o {sanitize_address}')
         #

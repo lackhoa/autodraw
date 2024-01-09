@@ -30,4 +30,4 @@ inline void kv_buffer_delete_pos(Application_Links *app, Buffer_ID buffer, i64 m
 
 #define HISTORY_MERGE_SCOPE \
   History_Record_Index HISTORY_MERGE_INDEX = buffer_history_get_current_state_index(app, buffer); \
-  defer(buffer_history_merge_record_range(app, buffer, HISTORY_MERGE_INDEX, buffer_history_get_current_state_index(app, buffer), RecordMergeFlag_StateInRange_MoveStateForward));
+  defer(auto current_index = buffer_history_get_current_state_index(app, buffer); buffer_history_merge_record_range(app, buffer, HISTORY_MERGE_INDEX+1, current_index, RecordMergeFlag_StateInRange_MoveStateForward); );

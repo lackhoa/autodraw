@@ -52,9 +52,9 @@ void kv_open_startup_file(Application_Links *app)
 {
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
   View_ID view = get_this_ctx_view(app, Access_Always);
-  char *startup_file = "~/notes/note.skm";
+  // char *startup_file = "~/notes/note.skm";
   // char *startup_file = "~/notes/test.skm";
-  // char *startup_file = "/tmp/test.cpp";
+  char *startup_file = "/tmp/test.cpp";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -454,6 +454,16 @@ void custom_layer_init(Application_Links *app)
     String_ID global_id = vars_save_string_lit("keys_global");
     SelectMap(global_id);
     BindCore(kv_startup, CoreCode_Startup);
+  }
+
+  if (0)
+  {
+    Scratch_Block temp(app);
+    String_Const_u8 dir = push_hot_directory(app, temp);
+    Child_Process_ID proc = create_child_process(app, dir, SCu8("clangd"));
+    printf_message(app, temp, "process id: %u\n", proc);
+    Buffer_ID combuf = get_buffer_by_name(app, SCu8("*compilation*"), AccessFlag_Exec);
+    child_process_set_target_buffer(app, proc, combuf, 0);
   }
 
   if (false)

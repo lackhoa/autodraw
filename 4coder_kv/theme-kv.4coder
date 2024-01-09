@@ -1,31 +1,34 @@
+defcolor_orange = 0xFFDD9900;
+defcolor_yellow = 0xFFB99468;
+
 defcolor_bar                   = 0xFF000000;
 defcolor_base                  = 0xFFfcaa05;
-defcolor_pop1                  = 0xffde8150;
+defcolor_pop1                  = 0xFFDE8150;
 defcolor_pop2                  = 0xFFFF0000;
 defcolor_back                  = 0xFF020202;
 defcolor_margin                = 0xFF222425;
 defcolor_margin_hover          = 0xff63523d;
 defcolor_margin_active         = 0xff63523d;
 defcolor_list_item             = { 0xFF222425, defcolor_back};
-defcolor_list_item_hover       = { 0xff362e25, defcolor_margin};
-defcolor_list_item_active      = { 0xff63523d, defcolor_margin};
+defcolor_list_item_hover       = { 0xFF362e25, defcolor_margin};
+defcolor_list_item_active      = { 0xFF63523d, defcolor_margin};
 defcolor_cursor                = { 0xFF00EE00, 0xffe0741b, 0xff1be094, 0xffba60c4 };
 defcolor_at_cursor             = 0xFF0C0C0C;
 defcolor_highlight_cursor_line = 0xFF1E1E1E;
 defcolor_highlight             = 0xFF303040;
 defcolor_at_highlight          = 0xFFFF44DD;
 defcolor_mark                  = 0xFF494949;
-defcolor_text_default          = 0xffb99468;
-defcolor_comment               = 0xff666666;
-defcolor_comment_pop           = { 0xff2ab34f, 0xFFdb2828 };
-defcolor_keyword               = 0xfff0c674;
-defcolor_str_constant          = 0xffffa900;
-defcolor_char_constant         = 0xffffa900;
-defcolor_int_constant          = 0xffffa900;
-defcolor_float_constant        = 0xffffa900;
-defcolor_bool_constant         = 0xffffa900;
-defcolor_preproc               = 0xFFdc7575;
-defcolor_include               = 0xffffa900;
+defcolor_text_default          = defcolor_yellow;
+defcolor_comment               = 0xFF666666;
+defcolor_comment_pop           = { 0xFF2AB34F, 0xFFDB2828 };
+defcolor_keyword               = 0xFFF0C674;
+defcolor_str_constant          = defcolor_orange;
+defcolor_char_constant         = defcolor_orange;
+defcolor_int_constant          = defcolor_orange;
+defcolor_float_constant        = defcolor_orange;
+defcolor_bool_constant         = defcolor_orange;
+defcolor_preproc               = 0xFFDC7500;
+defcolor_include               = 0xFFFFA900;
 defcolor_special_character     = 0xFFFF0000;
 defcolor_ghost_character       = 0xFF4E5E46;
 defcolor_highlight_junk        = 0xFF3A0000;
@@ -36,6 +39,21 @@ defcolor_back_cycle            = { 0xFF020202, 0xFF020202, 0xFF020202, 0xFF02020
 defcolor_text_cycle            = { 0xFFA00000, 0xFF00A000, 0xFF0030B0, 0xFFA0A000 };
 defcolor_line_numbers_back     = 0xFF101010;
 defcolor_line_numbers_text     = 0xFF404040;
+
+/// BYP Colors
+defcolor_function                   =  0xFF557700;
+defcolor_type                       =  defcolor_orange;
+defcolor_primitive                  =  defcolor_orange;
+defcolor_macro                      =  0xFF579EA8;
+defcolor_control                    =  defcolor_preproc;
+defcolor_struct                     =  defcolor_keyword;
+defcolor_non_text                   =  defcolor_yellow;  // parens
+
+/// Vim Colors
+defcolor_vim_filebar_pop            =  0xFF8A4CDB;
+defcolor_vim_chord_text             =  defcolor_text_default;
+defcolor_vim_chord_unresolved       =  defcolor_mark;
+defcolor_vim_chord_error            =  defcolor_special_character;
 
 fleury_color_syntax_crap           = 0xff5c4d3c;
 fleury_color_operators             = 0xFFbd2d2d;
