@@ -22,7 +22,7 @@ kv_string_split_wildcards(Arena *arena, String_Const_u8 string)
 }
 
 function i64
-kv_seek_string_wildcard_insensitive_forward(Application_Links *app, Buffer_ID buffer, i64 pos, String_Const_u8 needle)
+kv_fuzzy_search_forward(Application_Links *app, Buffer_ID buffer, i64 pos, String_Const_u8 needle)
 {
   i64 buffer_size = buffer_get_size(app, buffer);
   i64 result = buffer_size;
@@ -78,7 +78,7 @@ kv_seek_string_wildcard_insensitive_forward(Application_Links *app, Buffer_ID bu
 }
 
 function i64
-kv_seek_string_wildcard_insensitive_backward(Application_Links *app, Buffer_ID buffer, i64 pos, String_Const_u8 needle)
+kv_fuzzy_search_backward(Application_Links *app, Buffer_ID buffer, i64 pos, String_Const_u8 needle)
 {
   i64 buffer_size = buffer_get_size(app, buffer);
   i64 result = -1;
@@ -144,11 +144,11 @@ function i64 vim_pattern_inner_v(Application_Links *app, Buffer_Seek_String_Flag
 	i64 pos = view_get_cursor_pos(app, view);
     if (seek_flags & BufferSeekString_Backward)
     {
-      return kv_seek_string_wildcard_insensitive_backward(app, buffer, pos, pattern->string);
+      return kv_fuzzy_search_backward(app, buffer, pos, pattern->string);
     }
     else
     {
-      return kv_seek_string_wildcard_insensitive_forward(app, buffer, pos, pattern->string);
+      return kv_fuzzy_search_forward(app, buffer, pos, pattern->string);
     }
 }
 
@@ -263,7 +263,7 @@ vim_start_search_inner(Application_Links *app, Scan_Direction start_direction){
           if (direction == Scan_Forward)
           {
             // seek_string_insensitive_forward(app, buffer, pos - 1, 0, query->string, &new_pos);
-            new_pos = kv_seek_string_wildcard_insensitive_forward(app, buffer, pos - 1, query->string);
+            new_pos = kv_fuzzy_search_forward(app, buffer, pos - 1, query->string);
             if(new_pos < buffer_size){
               pos = new_pos;
               match_size = query->string.size;
@@ -272,7 +272,7 @@ vim_start_search_inner(Application_Links *app, Scan_Direction start_direction){
           else
           {
             // seek_string_insensitive_backward(app, buffer, pos + 1, 0, query->string, &new_pos);
-            new_pos = kv_seek_string_wildcard_insensitive_backward(app, buffer, pos+1, query->string);
+            new_pos = kv_fuzzy_search_backward(app, buffer, pos+1, query->string);
             if(new_pos >= 0){
               pos = new_pos;
               match_size = query->string.size;

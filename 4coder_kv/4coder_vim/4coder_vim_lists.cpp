@@ -65,7 +65,7 @@ CUSTOM_DOC("Enter Command Mode")
 
 	Custom_Command_Function *func = vim_get_command_from_user(app, 0, 0, &rule);
 	if(func)
-    {
+  {
 		view_enqueue_command_function(app, view, func);
 	}
 }
@@ -198,7 +198,8 @@ vim_query_create_folder(Application_Links *app, String_Const_u8 folder_name){
 CUSTOM_UI_COMMAND_SIG(vim_interactive_open_or_new)
 CUSTOM_DOC("Interactively open a file out of the file system.")
 {
-	for(;;){
+	for(;;)
+  {
 		Scratch_Block scratch(app);
 		View_ID view = get_this_ctx_view(app, Access_Always);
 		File_Name_Result result = vim_get_file_name_from_user(app, scratch, SCu8("Open/New:"), view);

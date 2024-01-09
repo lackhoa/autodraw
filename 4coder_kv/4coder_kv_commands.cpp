@@ -319,7 +319,8 @@ VIM_COMMAND_SIG(kv_sexpr_end)
 void kv_surround_with(Application_Links *app, char *opener, char *closer)
 {
   GET_VIEW_AND_BUFFER;
-  HISTORY_MERGE_SCOPE;
+  History_Group group = history_group_begin(app, buffer);
+  defer(history_group_end(group));
 
   i64 min = view_get_cursor_pos(app, view);
   i64 max = view_get_mark_pos(app, view);
@@ -429,8 +430,7 @@ CUSTOM_COMMAND_SIG(kv_open_file_ultimate)
 CUSTOM_DOC("The one-stop-shop for all your file-opening need")
 {
   GET_VIEW_AND_BUFFER;
-
-  Scratch_Block scratch(app);
+  Scratch_Block temp(app);
 
   i64 curpos = view_get_cursor_pos(app, view);
 
@@ -451,19 +451,28 @@ CUSTOM_DOC("The one-stop-shop for all your file-opening need")
     if (!character_is_path(character)) { min++; break; }
   }
 
-  b32 looking_at_path = false;
+  b32 looking_at_file = false;
   if (max > min)
   {
-    String_Const_u8 path = push_buffer_range(app, scratch, buffer, Range_i64{min, max});
-    printf_message(app, scratch, "the path is: %.*s\n", string_expand(path));
-    if (view_open_file(app, view, path, true))
+    String_Const_u8 path = push_buffer_range(app, temp, buffer, Range_i64{min, max});
+    if ( view_open_file(app, view, path, true) )
     {
-      looking_at_path = true;
+      looking_at_file = true;
+    }
+    else
+    { // todo debug this path
+      File_Attributes attributes = system_quick_file_attributes(temp, path);
+      if(attributes.flags & FileAttribute_IsDirectory)
+      {
+        set_hot_directory(app, path);  // note: influences vim_interactive_open_or_new
+      }
     }
   }
 
-  if (!looking_at_path)
+  if ( !looking_at_file )
   {
+    String_Const_u8 dirname = push_buffer_dir_name(app, temp, buffer);
+    set_hot_directory(app, dirname);
     vim_interactive_open_or_new(app);
   }
 }
@@ -471,7 +480,8 @@ CUSTOM_DOC("The one-stop-shop for all your file-opening need")
 VIM_COMMAND_SIG(kv_delete_surrounding_groupers)
 {
   GET_VIEW_AND_BUFFER;
-  HISTORY_MERGE_SCOPE;
+  History_Group group = history_group_begin(app, buffer);
+  defer(history_group_end(group));
 
   i64 pos = view_get_cursor_pos(app, view);
   Range_i64 range = {};
@@ -485,7 +495,8 @@ VIM_COMMAND_SIG(kv_delete_surrounding_groupers)
 function void kv_do_t_internal(Application_Links *app, b32 shiftp)
 {
   GET_VIEW_AND_BUFFER;
-  HISTORY_MERGE_SCOPE;
+  History_Group group = history_group_begin(app, buffer);
+  defer(history_group_end(group));
 
   i64 pos = view_get_cursor_pos(app, view);
   u8 current_char = buffer_get_char(app, buffer, pos);
@@ -543,4 +554,101 @@ CUSTOM_DOC("run the current script")
   View_ID   view = get_active_view(app, Access_ReadVisible);
   Buffer_ID buffer = create_buffer(app, SCu8("~/notes/note.skm"), 0);
   view_set_buffer(app, view, buffer, 0);
+}
+
+CUSTOM_COMMAND_SIG(file)
+CUSTOM_DOC("kv copy file name")
+{
+  GET_VIEW_AND_BUFFER;
+  Scratch_Block temp(app);
+  String_Const_u8 filename = push_buffer_file_name(app, temp, buffer);
+  clipboard_post(0, filename);
+}
+
+CUSTOM_COMMAND_SIG(dir)
+CUSTOM_DOC("kv copy dir name")
+{
+  GET_VIEW_AND_BUFFER;
+  Scratch_Block temp(app);
+  String_Const_u8 dirname = push_buffer_dir_name(app, temp, buffer);
+  clipboard_post(0, dirname);
+}
+
+VIM_COMMAND_SIG(kv_split_line)
+{
+  write_text(app, SCu8("\n"));
+}
+
+VIM_COMMAND_SIG(kv_vim_visual_line_mode)
+{
+	if(vim_state.mode != VIM_Visual)
+  {
+		set_mark(app);
+		vim_state.mode = VIM_Visual;
+	}
+	vim_state.params.edit_type = EDIT_LineWise;
+}
+
+CUSTOM_COMMAND_SIG(build)
+CUSTOM_DOC("kv goto build file (todo rename me)")
+{
+  GET_VIEW_AND_BUFFER;
+  Scratch_Block temp(app);
+  String_Const_u8 dirname = push_buffer_dir_name(app, temp, buffer);
+  String_Const_u8 build_file = kv_search_build_file_from_dir(app, temp, dirname);
+  if (build_file.size)
+  {
+    view_open_file(app, view, build_file, true);
+  }
+}
+
+function void
+kv_list_all_locations_from_string(Application_Links *app, String_Const_u8 needle_str)
+{
+  Scratch_Block temp(app);
+  
+  View_ID default_target_view = get_next_view_after_active(app, Access_Always);
+  Buffer_ID search_buffer = create_or_switch_to_buffer_and_clear_by_name(app, search_name, default_target_view);
+  
+  String_Match_List all_matches = {};
+  for (Buffer_ID buffer = get_buffer_next(app, 0, Access_Always);
+       buffer != 0;
+       buffer = get_buffer_next(app, buffer, Access_Always))
+  {
+    String_Match_List buffer_matches = {};
+    Range_i64 range = buffer_range(app, buffer);
+    {
+      // String_Match_List needle_matches = buffer_find_all_matches(app, temp, buffer, i, range, needle.vals[i], &character_predicate_alpha_numeric_underscore_utf8, Scan_Forward);
+      for (i64 pos = 0; 
+           pos < range.end;)
+      {
+        i64 original_pos = pos;
+        pos = kv_fuzzy_search_forward(app, buffer, pos, needle_str);
+        if (pos < range.end)
+        {
+          // todo(kv): get a real range back in here
+          Range_i64 range = {pos, pos+1};
+          string_match_list_push(temp, &buffer_matches, buffer, 0, 0, range);
+        }
+        
+        kv_assert_defend(pos > original_pos, break;);
+      }
+    }
+    all_matches = string_match_list_join(&all_matches, &buffer_matches);
+  }
+
+  string_match_list_filter_remove_buffer(&all_matches, search_buffer);
+  string_match_list_filter_remove_buffer_predicate(app, &all_matches, buffer_has_name_with_star);
+
+  print_string_match_list_to_buffer(app, search_buffer, all_matches);
+}
+
+CUSTOM_COMMAND_SIG(kv_list_all_locations)
+CUSTOM_DOC("adapted from list_all_locations for fuzzy search")
+{
+  Scratch_Block temp(app);
+  u8 *space = push_array(temp, u8, KB(1));
+  String_Const_u8 needle_str = get_query_string(app, "List Locations For: ", space, KB(1));
+  if (!needle_str.size) return;
+  kv_list_all_locations_from_string(app, needle_str); 
 }

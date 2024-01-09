@@ -50,7 +50,8 @@ function void kvInitShiftedTable()
 
 void kv_open_startup_file(Application_Links *app)
 {
-  set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
+  set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/4coder_kv/"));
+  load_project(app);
   View_ID view = get_this_ctx_view(app, Access_Always);
   char *startup_file = "~/notes/note.skm";
   // char *startup_file = "~/notes/test.skm";
@@ -67,9 +68,8 @@ CUSTOM_DOC("KV startup routine (modified from default_startup)")
 {
   default_startup(app);
   kv_open_startup_file(app);
-  {
-    // profile_enable(app);
-  }
+  // nono
+  // kv_list_all_locations_from_string(app, SCu8("list all locations"));
 }
 
 function void
@@ -160,7 +160,7 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(MAP, kv_vim_normal_mode, KeyCode_Escape);
 
   /// Rebinds
-  BIND(N|MAP, undo,                                   KeyCode_U);
+  BIND(N|MAP, undo,                                 KeyCode_U);
   BIND(N|MAP, undo,                              (C|KeyCode_Z));
   BIND(N|MAP, redo,                              (C|KeyCode_R));
   BIND(N|MAP, vim_interactive_open_or_new,    SUB_G,  KeyCode_F);
@@ -172,10 +172,11 @@ function void kv_vim_bindings(Application_Links *app)
 
   /// Mode Binds
   BIND(N|V|MAP, vim_modal_i,                        KeyCode_I);
-  BIND(N|V|MAP, vim_command_mode,                (S|KeyCode_Semicolon));
+  BIND(N|0|MAP, goto_line,                       (S|KeyCode_Semicolon));
   BIND(N|MAP,   vim_insert_begin,                (S|KeyCode_I));
   BIND(N|MAP,   vim_replace_mode,                (S|KeyCode_R));
-  BIND(N|V|MAP, vim_visual_mode,                    KeyCode_V);
+  BIND(N|0|MAP, vim_visual_mode,                    KeyCode_V);
+  BIND(0|V|MAP, kv_vim_visual_line_mode,            KeyCode_V);
   BIND(N|V|MAP, vim_visual_mode,                  S|KeyCode_V);
   BIND(N|V|MAP, vim_visual_mode,                  C|KeyCode_V);
   BIND(N|0|MAP, vim_prev_visual,          SUB_G,    KeyCode_V);
@@ -229,10 +230,8 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|V|MAP, vim_begin_line,                   M|KeyCode_I);
   BIND(N|V|MAP, vim_forward_WORD,                (S|KeyCode_W));
   BIND(N|V|MAP, vim_backward_WORD,               (S|KeyCode_B));
-  BIND(N|V|MAP, vim_forward_end,                      KeyCode_E);
+  BIND(N|V|MAP, vim_forward_end,                    KeyCode_E);
   BIND(N|V|MAP, vim_forward_END,                 (S|KeyCode_E));
-  BIND(N|V|MAP, vim_backward_end,         SUB_G,      KeyCode_E);
-  BIND(N|V|MAP, vim_backward_END,         SUB_G, (S|KeyCode_E));
 
   BIND(N|V|MAP, vim_forward_word,  KeyCode_W);
   BIND(N|V|MAP, vim_backward_word, KeyCode_B);
@@ -243,7 +242,6 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|V|MAP, vim_modal_percent,               (S|KeyCode_5));
   BIND(N|V|MAP, vim_bounce,                      (C|KeyCode_5));
   BIND(N|V|MAP, vim_set_seek_char,                    KeyCode_F);
-  BIND(N|V|MAP, vim_set_seek_char,               (S|KeyCode_F));
   BIND(N|0|MAP, vim_paragraph_up,                     KeyCode_LeftBracket);
   BIND(N|0|MAP, vim_paragraph_down,                   KeyCode_RightBracket);
   BIND(N|V|MAP, vim_screen_top,                  (S|KeyCode_H));
@@ -293,26 +291,15 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|V|MAP, vim_leader_D, SUB_Leader,  (S|KeyCode_D));
   BIND(N|V|MAP, vim_leader_C, SUB_Leader,  (S|KeyCode_C));
 
-  // NOTE(kv) KV miscellaneous binds
-  BIND(N|  MAP,  save_all_dirty_buffers,     KeyCode_Return);
-  BIND(N|  MAP,  write_space,                KeyCode_Space);
-  BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
-  BIND(  V|MAP,  vim_end_line,               KeyCode_A);
-  BIND(N  |MAP,  vim_end_line,             S|KeyCode_A);
-  BIND(N|  MAP,  kv_shift_character,         KeyCode_Comma);
-  BIND(N|  MAP,  exit_4coder,              M|KeyCode_Q);
-  BIND(N|V|MAP,  vim_command_mode,           KeyCode_Semicolon);
-  BIND(N|  MAP,  kv_reopen_with_confirmation,                     S|KeyCode_U);
-  BIND(N|  MAP,  quick_swap_buffer,        M|KeyCode_Comma);
-  BIND(N|0|MAP,  kv_do_t,                    KeyCode_T);
-  BIND(N|0|MAP,  kv_do_T,                  S|KeyCode_T);
   // Project keys
-  BIND(N|MAP,  kv_build_search,             M|KeyCode_M);
-  BIND(N|MAP,  kv_run_search,             C|M|KeyCode_M);
+  BIND(N|MAP,  kv_build_normal,               M|KeyCode_M);
+  BIND(N|MAP,  kv_build_run_only,           C|M|KeyCode_M);
+  BIND(N|MAP,  kv_build_full_rebuild,       S|M|KeyCode_M);
   // Language support
   BIND(N|MAP,  vim_goto_definition,                 KeyCode_F1);
   BIND(N|MAP,  vim_goto_definition_other_panel,   M|KeyCode_F1);
   BIND(N|MAP,  list_all_locations_of_identifier,    KeyCode_F2);
+  BIND(N|MAP,  kv_list_all_locations,             S|KeyCode_F);
   //
   BIND(N|MAP,   byp_request_comment,   SUB_G,         KeyCode_ForwardSlash);
   BIND(N|MAP,   byp_request_uncomment, SUB_G,   S|KeyCode_ForwardSlash);
@@ -331,7 +318,23 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(V|MAP,   kv_surround_brace,               S|KeyCode_RightBracket);
   BIND(V|MAP,   kv_surround_brace_spaced,        S|KeyCode_LeftBracket);
   BIND(V|MAP,   kv_surround_double_quote,          KeyCode_Quote);
-  BIND(N|MAP,   kv_delete_surrounding_groupers,  M|KeyCode_RightBracket)
+  BIND(N|MAP,   kv_delete_surrounding_groupers,  M|KeyCode_RightBracket);
+
+  // NOTE(kv) KV miscellaneous binds
+  BIND(N|  MAP,  save_all_dirty_buffers,     KeyCode_Return);
+  BIND(N|  MAP,  write_space,                KeyCode_Space);
+  BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
+  BIND(  V|MAP,  vim_end_line,               KeyCode_A);
+  BIND(N  |MAP,  vim_end_line,             S|KeyCode_A);
+  BIND(N|  MAP,  kv_shift_character,         KeyCode_Comma);
+  BIND(N|  MAP,  exit_4coder,              M|KeyCode_Q);
+  BIND(N|V|MAP,  vim_command_mode,           KeyCode_Semicolon);
+  BIND(N|  MAP,  kv_reopen_with_confirmation,                     S|KeyCode_U);
+  BIND(N|  MAP,  quick_swap_buffer,        M|KeyCode_Comma);
+  BIND(N|0|MAP,  kv_do_t,                    KeyCode_T);
+  BIND(N|0|MAP,  kv_do_T,                  S|KeyCode_T);
+  BIND(N|0|MAP,  kv_split_line,            S|KeyCode_K);
+  BIND(N|0|MAP,  open_panel_vsplit,        M|KeyCode_V);
 
 #undef BIND
     }
@@ -454,16 +457,6 @@ void custom_layer_init(Application_Links *app)
     String_ID global_id = vars_save_string_lit("keys_global");
     SelectMap(global_id);
     BindCore(kv_startup, CoreCode_Startup);
-  }
-
-  if (0)
-  {
-    Scratch_Block temp(app);
-    String_Const_u8 dir = push_hot_directory(app, temp);
-    Child_Process_ID proc = create_child_process(app, dir, SCu8("clangd"));
-    printf_message(app, temp, "process id: %u\n", proc);
-    Buffer_ID combuf = get_buffer_by_name(app, SCu8("*compilation*"), AccessFlag_Exec);
-    child_process_set_target_buffer(app, proc, combuf, 0);
   }
 
   if (false)

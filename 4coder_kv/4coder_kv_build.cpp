@@ -33,6 +33,23 @@ global String_Const_u8 kv_build_cmd_string_array[] =
 #    error OS needs standard search and build rules
 #endif
 
+function String_Const_u8 
+kv_search_build_file_from_dir(Application_Links *app, Arena *arena, String_Const_u8 start_dir)
+{
+  String_Const_u8 full_file_path = {};
+  for (i32 i = 0; 
+         i < ArrayCount(kv_build_file_name_array); 
+         i += 1)
+  {
+    full_file_path = push_file_search_up_path(app, arena, start_dir, kv_build_file_name_array[i]);
+    if (full_file_path.size > 0)
+    {
+      break;
+    }
+  }
+  return full_file_path;
+}
+
 function b32
 kv_search_and_build_from_dir(Application_Links *app, View_ID view, String_Const_u8 start_dir, char *command_args)
 {

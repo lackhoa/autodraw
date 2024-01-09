@@ -14,6 +14,7 @@ patterns = {
 };
 blacklist_patterns = {
  ".*",
+ "*generated/command_metadata.h",
 };
 
 load_path_here = { .path = ".", .recursive = true, .relative = true, };
@@ -21,5 +22,5 @@ load_path_here = { .path = ".", .recursive = true, .relative = true, };
 load_paths = {
   .win   = { load_path_here },
   .linux = { load_path_here },
-  .mac   = { load_path_here, { .path = "~/4ed/code", .recursive = true, } },
+  .mac   = { load_path_here, { .path = "/Users/khoa/4ed/code", .recursive = true, } },
 };

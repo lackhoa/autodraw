@@ -75,7 +75,7 @@ try:
         sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
         preproc_file="4coder_command_metadata.i"
         meta_macros="-DMETA_PASS"
-        if full_rebuild:
+        if True:
             print('preproc_file: Generate')
             run(f'clang++ -I{CUSTOM} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
             #
