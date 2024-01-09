@@ -103,14 +103,21 @@ kv_search_and_build_other_panel(Application_Links *app, char *command_args)
   return;
 }
 
-CUSTOM_COMMAND_SIG(kv_build_search)
+CUSTOM_COMMAND_SIG(kv_build_normal)
 CUSTOM_DOC("Like build_search, but using my standard script names.")
 {
   kv_search_and_build_other_panel(app, "");
 }
 
-CUSTOM_COMMAND_SIG(kv_run_search)
+CUSTOM_COMMAND_SIG(kv_build_run_only)
 CUSTOM_DOC("Same as kv_build_search, only run")
 {
   kv_search_and_build_other_panel(app, "run");
 }
+
+CUSTOM_COMMAND_SIG(kv_build_full_rebuild)
+CUSTOM_DOC("Same as kv_build_search, only run")
+{
+  kv_search_and_build_other_panel(app, "full");
+}
+

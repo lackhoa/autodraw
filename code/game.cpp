@@ -126,7 +126,7 @@ pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
 void
 pushRectOutline(RenderGroup &rgroup, rect2 outline, f32 thickness, v4 color)
 {
-  kvSoftAssert1(thickness >= 2);
+  soft_assert(thickness >= 2);
   // our outlines are divided in half
   v2 min = outline.min;
   v2 max = outline.max;
@@ -147,7 +147,7 @@ void
 pushLine(RenderGroup &rgroup, v2 p0, v2 p1, f32 thickness, v4 color)
 {
   RenderEntryQuad &entry = *pushRenderEntry(rgroup, Quad);
-  kvSoftAssert1(thickness >= 2);
+  soft_assert(thickness >= 2);
   v2 d = noz(p1 - p0);
   v2 perp = 0.5f * thickness * v2{-d.y, d.x};
   // NOTE: gotta draw a "z" here for triangle strip
@@ -172,7 +172,7 @@ global_variable f32 todo_text_scale = 0.2f;  // this should make the text tiny, 
 inline f32
 pushLetter(RenderGroup &rgroup, v2 min, char character, v4 color)
 {
-  if (kvProbably(33 <= character && character <= 126))
+  if (kv_probably(33 <= character && character <= 126))
   {
     auto codepoint = rgroup.codepoints[(u8)character];
     auto dim = todo_text_scale * v2{(f32)codepoint.width, (f32)codepoint.height};
@@ -333,7 +333,7 @@ inline void
 moveTree(GameState &state, i32 dx, i32 dy)
 {
   auto hi = state.hot_item;
-  kvSoftAssert1(dx == 0 || dy == 0);
+  soft_assert(dx == 0 || dy == 0);
   i32 iterations = maximum(absoslute(dx), absoslute(dy));
 
   for (i32 i=0; i < iterations; i++) {

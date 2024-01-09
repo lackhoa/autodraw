@@ -53,7 +53,7 @@ automatically_indent_text_on_save = false;
 automatically_save_changes_on_build = true;
 
 // Load project on startup
-automatically_load_project = true;
+automatically_load_project = false;  // this will load the 4coder project, which is dumb
 
 // Indentation
 indent_with_tabs = false;

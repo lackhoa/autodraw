@@ -69,7 +69,7 @@ try:
 
         todo_llvm_path = "/usr/local/Cellar/llvm/17.0.6" # llvm-config --libdir
         print("codegen: compile & link")
-        run(['ccache', 'clang++', '-c', '../code/ad_codegen.cpp', '-o', 'generator.o', '-O2', f'-I{todo_llvm_path}/include'] +
+        run(['ccache', 'clang++', '-c', f'{project_root}/code/ad_codegen.cpp', '-o', 'generator.o', '-O2', f'-I{todo_llvm_path}/include'] +
             common_compile_flags +
             sanitize_address)
         #
@@ -81,13 +81,13 @@ try:
         run(["./generator"])
 
         print('libgame.dylib: Compile + Link')
-        run(['clang++', '-dynamiclib', '../code/game.cpp', '-olibgame.dylib'] +
+        run(['clang++', '-dynamiclib', f'{project_root}/code/game.cpp', '-olibgame.dylib'] +
             common_compile_flags +
             sanitize_address)
 
         print('autodraw: compile & link')
         #
-        run(['ccache', 'clang++', '-c', '../code/osx-main.mm', '-o', 'autodraw.o'] +
+        run(['ccache', 'clang++', '-c', f'{project_root}/code/osx-main.mm', '-o', 'autodraw.o'] +
             includes +
             common_compile_flags +
             sanitize_address)

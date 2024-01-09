@@ -1,5 +1,8 @@
-defcolor_orange = 0xFFDD9900;
-defcolor_yellow = 0xFFB99468;
+defcolor_orange     = 0xFFDD9900;
+defcolor_lime_green = 0xFFAAAA00;
+defcolor_yellow     = 0xFFB99468;
+defcolor_green      = 0xFF557700;
+defcolor_blue       = 0xFF8888AA;
 
 defcolor_bar                   = 0xFF000000;
 defcolor_base                  = 0xFFfcaa05;
@@ -19,14 +22,14 @@ defcolor_highlight             = 0xFF303040;
 defcolor_at_highlight          = 0xFFFF44DD;
 defcolor_mark                  = 0xFF494949;
 defcolor_text_default          = defcolor_yellow;
-defcolor_comment               = 0xFF666666;
+defcolor_comment               = defcolor_green;
 defcolor_comment_pop           = { 0xFF2AB34F, 0xFFDB2828 };
 defcolor_keyword               = 0xFFF0C674;
-defcolor_str_constant          = defcolor_orange;
-defcolor_char_constant         = defcolor_orange;
-defcolor_int_constant          = defcolor_orange;
-defcolor_float_constant        = defcolor_orange;
-defcolor_bool_constant         = defcolor_orange;
+defcolor_str_constant          = defcolor_lime_green;
+defcolor_char_constant         = defcolor_lime_green;
+defcolor_int_constant          = defcolor_lime_green;
+defcolor_float_constant        = defcolor_lime_green;
+defcolor_bool_constant         = defcolor_lime_green;
 defcolor_preproc               = 0xFFDC7500;
 defcolor_include               = 0xFFFFA900;
 defcolor_special_character     = 0xFFFF0000;
@@ -41,10 +44,10 @@ defcolor_line_numbers_back     = 0xFF101010;
 defcolor_line_numbers_text     = 0xFF404040;
 
 /// BYP Colors
-defcolor_function                   =  0xFF557700;
+defcolor_function                   =  defcolor_blue;
 defcolor_type                       =  defcolor_orange;
 defcolor_primitive                  =  defcolor_orange;
-defcolor_macro                      =  0xFF579EA8;
+defcolor_macro                      =  0xFF666666;
 defcolor_control                    =  defcolor_preproc;
 defcolor_struct                     =  defcolor_keyword;
 defcolor_non_text                   =  defcolor_yellow;  // parens

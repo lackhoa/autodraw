@@ -357,11 +357,11 @@ rotateRight(u32 value, i32 rotateAmount)
 #define breakhere       { int x = 5; (void)x; }
 
 #if KV_INTERNAL
-#    define soft_assert        kv_assert
+#    define kv_soft_assert        kv_assert
 #    define kv_probably(CLAIM) (kv_assert(CLAIM), true)
 #    deifne kv_assert_defend(CLAIM, DEFEND)   kv_assert(CLAIM)
 #else
-#    define soft_assert(CLAIM)
+#    define kv_soft_assert(CLAIM)
 #    define kv_probably(CLAIM) (CLAIM)
 #    define kv_assert_defend(CLAIM, DEFEND)   if (!(CLAIM))  { DEFEND; }
 #endif

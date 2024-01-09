@@ -52,9 +52,9 @@ void kv_open_startup_file(Application_Links *app)
 {
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/"));
   View_ID view = get_this_ctx_view(app, Access_Always);
-  // char *startup_file = "~/notes/note.skm";
+  char *startup_file = "~/notes/note.skm";
   // char *startup_file = "~/notes/test.skm";
-  char *startup_file = "/tmp/test.cpp";
+  // char *startup_file = "/tmp/test.cpp";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -279,7 +279,7 @@ function void kv_vim_bindings(Application_Links *app)
   /// Miscellaneous Binds
   BIND(N|V|MAP, vim_set_mark,                         KeyCode_M);
   BIND(N|V|MAP, vim_goto_mark,                        KeyCode_Tick);
-  BIND(N|V|MAP, vim_goto_mark,                        KeyCode_Quote);
+  BIND(N|0|MAP, vim_goto_mark,                        KeyCode_Quote);
   BIND(N|V|MAP, vim_toggle_macro,                   S|KeyCode_Q);
   BIND(N|V|MAP, vim_play_macro,                     S|KeyCode_2);
 

@@ -66,7 +66,7 @@ osxVirtualAlloc(size_t size)
                                   (vm_address_t*) &data,
                                   size,
                                   VM_FLAGS_ANYWHERE);
-  if (kvProbably(err == KERN_SUCCESS))
+  if (kv_probably(err == KERN_SUCCESS))
   {
     return data;
   }
@@ -237,7 +237,7 @@ void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_
     i32 width, height, xoff, yoff;
     u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
                                                &width, &height, &xoff, &yoff);
-    kvSoftAssert1(width != 0 && height != 0);
+    soft_assert(width != 0 && height != 0);
     u8 *bitmap = (u8 *)pushSize(arena, 4 * width * height);
     // Blow it out to rgba bitmap
     u32 *dst = (u32 *)bitmap;
