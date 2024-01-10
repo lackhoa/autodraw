@@ -1,5 +1,6 @@
 #include "4coder_vim_movement.cpp"
 #include "4coder_vim_lists.cpp"
+#include "4coder_kv_utils.cpp"
 
 CUSTOM_COMMAND_SIG(vim_toggle_relative_line_num)
 CUSTOM_DOC("Toggles relative line numbers")
@@ -94,7 +95,7 @@ VIM_COMMAND_SIG(vim_normal_mode){
 		Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
 		const i32 N = Max(0,vim_state.params.number-1);
 		foreach(i, N){
-			vim_paste(app, view, buffer, &vim_registers.insert);
+			vim_paste_from_register(app, view, buffer, &vim_registers.insert);
 		}
 		move_horizontal_lines(app, -1);
 	}
@@ -499,42 +500,33 @@ VIM_COMMAND_SIG(vim_modal_percent){
 	else{ vim_bounce(app); }
 }
 
-// NOTE(kv): don't use this
-VIM_COMMAND_SIG(vim_paste_after_){
-	if(vim_state.params.selected_reg){
-		View_ID view = get_active_view(app, Access_ReadVisible);
-		Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-		if(vim_state.params.selected_reg->edit_type == EDIT_LineWise){
-			seek_end_of_line(app);
-			move_right(app);
-			vim_paste(app, view, buffer, vim_state.params.selected_reg);
-			move_up(app);
-		}else{
-			move_right(app);
-			vim_paste(app, view, buffer, vim_state.params.selected_reg);
-		}
+VIM_COMMAND_SIG(vim_paste_before)
+{
+	if(!vim_state.params.selected_reg) return;
+  
+  View_ID   view   = get_active_view(app, Access_ReadVisible);
+  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+  History_Group group = history_group_begin(app, buffer);
+  defer(history_group_end(group));
+  
+  if( vim_state.params.selected_reg->edit_type == EDIT_LineWise )
+  {
+    seek_beginning_of_line(app);
+  }
+  if( vim_state.mode == VIM_Visual )
+  {
+    Range_i64 selected = get_view_range(app, view);
+    kv_buffer_delete_range(app, buffer, selected.min, selected.max+1);
+    vim_normal_mode(app);  // NOTE(kv): don't know if this should be here
+  }
+  // paste
+  vim_paste_from_register(app, view, buffer, vim_state.params.selected_reg);
+  vim_state.params.command = vim_paste_before;
 
-		Vim_Register *reg = vim_state.prev_params.selected_reg;
-		vim_state.params.command = vim_paste_after_;
-		vim_state.prev_params = vim_state.params;
-		vim_state.prev_params.selected_reg = reg;
-	}
-}
-
-VIM_COMMAND_SIG(vim_paste_before){
-	if(vim_state.params.selected_reg){
-		if(vim_state.params.selected_reg->edit_type == EDIT_LineWise){
-			seek_beginning_of_line(app);
-		}
-		View_ID view = get_active_view(app, Access_ReadVisible);
-		Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-		vim_paste(app, view, buffer, vim_state.params.selected_reg);
-
-		Vim_Register *reg = vim_state.prev_params.selected_reg;
-		vim_state.params.command = vim_paste_before;
-		vim_state.prev_params = vim_state.params;
-		vim_state.prev_params.selected_reg = reg;
-	}
+  // note(kv): I don't understand this part at all
+  Vim_Register *prev_reg = vim_state.prev_params.selected_reg;
+  vim_state.prev_params              = vim_state.params;
+  vim_state.prev_params.selected_reg = prev_reg;
 }
 
 // IMPORTANT(kv): the original function is broken and I'm just hacking it
@@ -574,7 +566,7 @@ VIM_COMMAND_SIG(vim_last_command){
 			vim_state.number = vim_state.params.number;
 			b32 do_insert = vim_state.params.do_insert;
 
-			if((command == vim_paste_before || command == vim_paste_after_) &&
+			if((command == vim_paste_before) &&
 			   in_range(0, (vim_state.params.selected_reg - vim_registers.cycle), 8))
 			{
 				vim_state.params.selected_reg++;
@@ -583,7 +575,7 @@ VIM_COMMAND_SIG(vim_last_command){
 			command(app);
 
 			if(do_insert){
-				vim_paste(app, view, buffer, &vim_registers.insert);
+				vim_paste_from_register(app, view, buffer, &vim_registers.insert);
 				vim_state.mode = VIM_Normal;
 			}
 		}

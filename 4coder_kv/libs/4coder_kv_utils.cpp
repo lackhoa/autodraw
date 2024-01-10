@@ -1,14 +1,14 @@
 #pragma once
 
-#include "4coder_vim/4coder_vim_include.h"
-#include "4coder_byp_colors.cpp"
 #include "kv.h"
+#include "4coder_default_include.cpp"
 
 #define GET_VIEW_AND_BUFFER \
   View_ID   view = get_active_view(app, Access_ReadVisible); \
   Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible)
 
-inline void kv_print_message(Application_Links *app, char *message) {
+inline void kv_print_message(Application_Links *app, char *message) 
+{
   print_message(app, SCu8(message));
 }
 
@@ -34,4 +34,3 @@ push_buffer_dir_name(Application_Links *app, Arena *arena, Buffer_ID buffer)
   String_Const_u8 filename = push_buffer_file_name(app, arena, buffer);
   return string_remove_last_folder(filename);
 }
-

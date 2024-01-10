@@ -109,8 +109,13 @@ vim_copy(Application_Links *app, View_ID view, Buffer_ID buffer, Range_i64 range
 }
 
 function void
-vim_paste(Application_Links *app, View_ID view, Buffer_ID buffer, Vim_Register *reg){
-	if(reg->edit_type == EDIT_Block){ vim_block_paste(app, view, buffer, reg); return; }
+vim_paste_from_register(Application_Links *app, View_ID view, Buffer_ID buffer, Vim_Register *reg)
+{
+	if(reg->edit_type == EDIT_Block)
+  {
+    vim_block_paste(app, view, buffer, reg);
+    return;
+  }
 
 	i64 pos = view_get_cursor_pos(app, view);
 	if(reg == &vim_registers.system){
@@ -176,7 +181,7 @@ VIM_COMMAND_SIG(vim_select_register){
 			View_ID view = get_active_view(app, Access_ReadVisible);
 			Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
 			reg->flags &= (~REGISTER_Append);
-			vim_paste(app, view, buffer, reg);
+			vim_paste_from_register(app, view, buffer, reg);
 		}
 	}else{
 		vim_state.chord_resolved = false;

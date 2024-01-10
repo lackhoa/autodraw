@@ -68,8 +68,6 @@ CUSTOM_DOC("KV startup routine (modified from default_startup)")
 {
   default_startup(app);
   kv_open_startup_file(app);
-  // nono
-  // kv_list_all_locations_from_string(app, SCu8("list all locations"));
 }
 
 function void
@@ -205,7 +203,7 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(V|MAP,   vim_replace_range_next,               KeyCode_R);
 
   /// Edit Binds
-  BIND(N|MAP,     vim_paste_before,                KeyCode_P);
+  BIND(N|V|MAP,   vim_paste_before,                KeyCode_P);
   BIND(N|MAP,     vim_delete_char,                 KeyCode_X);
   BIND(N|MAP,     vim_replace_next_char,           KeyCode_R);
   BIND(N|V|MAP,   vim_combine_line,             (S|KeyCode_J));
