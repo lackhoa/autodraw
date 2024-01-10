@@ -207,14 +207,13 @@ function void kv_vim_bindings(Application_Links *app)
 
   /// Edit Binds
   BIND(N|MAP,     vim_paste_before,                KeyCode_P);
-  BIND(N|MAP,     vim_backspace_char,           (S|KeyCode_X));
   BIND(N|MAP,     vim_delete_char,                 KeyCode_X);
   BIND(N|MAP,     vim_replace_next_char,           KeyCode_R);
   BIND(N|V|MAP,   vim_combine_line,             (S|KeyCode_J));
   BIND(N|V|MAP,   vim_combine_line,      SUB_G, (S|KeyCode_J));
   BIND(N|MAP,     vim_last_command,                KeyCode_Period);
-  BIND(N|MAP,     vim_backspace_char,              KeyCode_Backspace);
-  BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
+  // BIND(N|MAP,     vim_backspace_char,              KeyCode_Backspace);
+  // BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
   BIND(I|MAP,     word_complete,                   KeyCode_Tab);
   BIND(I|MAP,     vim_paste_before,              M|KeyCode_V);
 
