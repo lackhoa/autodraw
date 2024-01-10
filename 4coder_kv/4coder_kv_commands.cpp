@@ -238,11 +238,16 @@ VIM_COMMAND_SIG(kv_sexpr_up)
   Token_Array tokens = get_token_array_from_buffer(app, buffer);
 
   i64 pos = view_correct_cursor(app, view);
-
-  Range_i64 nest = {};
-  if ( kv_find_surrounding_nest(app, buffer, pos, &nest) )
+  if ( kv_is_group_opener(buffer_get_char(app, buffer, pos)) ) 
   {
-    view_set_cursor_and_preferred_x(app, view, seek_pos(nest.min));
+    pos--;
+  }
+
+  i64 newpos = pos;
+  Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
+  if ( find_nest_side(app, buffer, pos, flags, Scan_Backward, NestDelim_Open, &newpos) )
+  {
+    view_set_cursor_and_preferred_x( app, view, seek_pos(newpos) );
   }
 }
 
@@ -691,6 +696,7 @@ CUSTOM_COMMAND_SIG(kv_handle_return)
     buffer = view_get_buffer(app, view, Access_ReadVisible);
     if (buffer)
     {
+      vim_push_jump(app, get_active_view(app, Access_ReadVisible));
       goto_jump_at_cursor(app);
       lock_jump_buffer(app, buffer);
     }

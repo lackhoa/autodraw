@@ -43,7 +43,8 @@ function u8 vim_query_user_key(Application_Links *app, String_Const_u8 message){
 }
 
 
-function void vim_enter_insert_mode(Application_Links *app){
+function void vim_enter_insert_mode(Application_Links *app)
+{
 	View_ID view = get_active_view(app, Access_ReadVisible);
 	Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
 	vim_state.params.number = vim_consume_number();

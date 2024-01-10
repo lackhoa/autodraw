@@ -328,7 +328,7 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|  MAP,  quick_swap_buffer,        M|KeyCode_Comma);
   BIND(N|0|MAP,  kv_do_t,                    KeyCode_T);
   BIND(N|0|MAP,  kv_do_T,                  S|KeyCode_T);
-  BIND(N|0|MAP,  kv_split_line,            S|KeyCode_K);
+  BIND(N|0|MAP,  kv_split_line,            S|KeyCode_K); 
   BIND(N|0|MAP,  open_panel_vsplit,        M|KeyCode_V);
 
 #undef BIND

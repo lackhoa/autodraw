@@ -149,11 +149,11 @@ VIM_COMMAND_SIG(vim_insert_mode_after){
 	}
 	vim_enter_insert_mode(app);
 }
-VIM_COMMAND_SIG(vim_insert_mode){ vim_enter_insert_mode(app); }
 VIM_COMMAND_SIG(vim_insert_begin){ vim_begin_line(app); vim_enter_insert_mode(app); }
 VIM_COMMAND_SIG(vim_insert_end){ vim_end_line(app); vim_insert_mode_after(app); }
 
-VIM_COMMAND_SIG(vim_modal_i){
+VIM_COMMAND_SIG(vim_modal_i)
+{
 	if(vim_state.mode == VIM_Visual || vim_state.params.request != REQUEST_None){
 		vim_state.params.clusivity = VIM_Exclusive;
 		u8 key = vim_query_user_key(app, string_u8_litexpr("-- TEXT OBJECT --"));
@@ -163,7 +163,10 @@ VIM_COMMAND_SIG(vim_modal_i){
 			vim_text_object(app);
 		}
 	}
-	else{ vim_insert_mode(app); }
+	else
+  {
+    vim_enter_insert_mode(app);
+  }
 }
 
 VIM_COMMAND_SIG(vim_modal_a){
