@@ -143,8 +143,9 @@ vim_paste_from_register(Application_Links *app, View_ID view, Buffer_ID buffer, 
 	vim_default_register();
 }
 
-
-VIM_COMMAND_SIG(vim_select_register){
+/* note(kv): nouse
+VIM_COMMAND_SIG(vim_select_register)
+{
 	vim_is_selecting_register = true;
 	u8 c = vim_query_user_key(app, string_u8_litexpr("-- SELECT REGISTER --"));
 	vim_is_selecting_register = false;
@@ -186,52 +187,23 @@ VIM_COMMAND_SIG(vim_select_register){
 		vim_state.chord_resolved = false;
 	}
 }
+*/
 
 // TODO(BYP): Be more rigorous in debugging/validating correctness on this
 function void
-vim_process_insert_record(Application_Links *app, Record_Info record, i64 *prev_pos){
-	Scratch_Block scratch(app);
+vim_process_insert_record(Record_Info record, i64 *prev_pos)
+{
 	String_u8 *text = &vim_registers.insert.data;
-	if(*prev_pos != record.pos_before_edit){
+	if( *prev_pos != record.pos_before_edit )
+  {
 		*prev_pos = record.pos_before_edit;
 		text->size = 0;
 	}
-	*prev_pos = *prev_pos  - record.single_string_backward.size + record.single_string_forward.size;
-	text->size = Max(0, i64(text->size) - i64(record.single_string_backward.size));
-	u64 next_size = u64(text->size + record.single_string_forward.size);
+	*prev_pos -= record.single_string_backward.size;
+  *prev_pos += record.single_string_forward.size;
+  if (text->size >= record.single_string_backward.size)
+      text->size -= record.single_string_backward.size;
+	u64 next_size = text->size + record.single_string_forward.size;
 	if(next_size >= text->cap){ vim_realloc_string(text, next_size); }
 	string_append(text, record.single_string_forward);
-}
-
-function void
-vim_set_insert_register(Application_Links *app){
-	View_ID view = get_active_view(app, Access_ReadVisible);
-	Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
-	vim_registers.insert.data.size = 0;
-
-	Scratch_Block scratch(app);
-
-	History_Record_Index index = vim_state.insert_index;
-	History_Record_Index max_index = buffer_history_get_current_state_index(app, buffer);
-	i64 prev_pos = vim_state.insert_cursor.pos;
-	for(; index <= max_index; index++){
-		Record_Info record = buffer_history_get_record_info(app, buffer, index);
-		if(record.error != RecordError_NoError){ continue; }
-		if(record.kind == RecordKind_Single){
-			vim_process_insert_record(app, record, &prev_pos);
-		}
-		else if(record.kind == RecordKind_Group){
-			foreach(i, record.group_count){
-				Record_Info sub_record = buffer_history_get_group_sub_record(app, buffer, index, i);
-				if(sub_record.error != RecordError_NoError){ continue; }
-				vim_process_insert_record(app, sub_record, &prev_pos);
-			}
-		}
-	}
-	vim_state.prev_params.do_insert = true;
-	vim_registers.insert.flags &= (~REGISTER_Append);
-	vim_registers.insert.flags |= (REGISTER_Set|REGISTER_Updated);
-	vim_update_registers(app);
-
-	history_group_end(vim_history_group);
 }

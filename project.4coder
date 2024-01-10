@@ -14,7 +14,8 @@ patterns = {
 };
 blacklist_patterns = {
  ".*",
- "*generated/command_metadata.h",
+ "command_metadata.h",
+ "note.skm",
 };
 
 load_path_here = { .path = ".", .recursive = true, .relative = true, };

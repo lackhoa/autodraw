@@ -197,12 +197,14 @@ Vim_Motion_Block::~Vim_Motion_Block(){
 		vim_nxt_cursor_pos += 2.f*(v1 - v0);
 		view_set_cursor_and_preferred_x(app, view, seek_pos(end_pos = begin_pos));
 	}
-	
-	if(params->request != REQUEST_None && vim_state.mode != VIM_Visual){
+
+	// NOTE(kv): save the params
+	if(params->request != REQUEST_None && vim_state.mode != VIM_Visual)
+  {
 		vim_state.params.command = vim_state.active_command;
 		vim_state.prev_params = vim_state.params;
 	}
-	
+
 	Vim_Seek_Params seek = vim_state.params.seek;
 	vim_state.params = {};
 	vim_state.params.seek = seek;
@@ -212,9 +214,9 @@ Vim_Motion_Block::~Vim_Motion_Block(){
 	vim_default_register();
 	
 	vim_state.sub_mode = SUB_None;
-    // NOTE(kv): This is the thing that causes the cursor to not move past the
-    // last character of the line.
-    //
+  // NOTE(kv): This causes the cursor to not move past the last character 
+  // of the line.
+  //
 	// if(vim_state.mode != VIM_Insert && vim_state.mode != VIM_Visual){
 	// 	vim_clamp_newline(app, view, buffer, end_pos);
 	// }

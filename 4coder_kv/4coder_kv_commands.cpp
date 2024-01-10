@@ -435,17 +435,21 @@ CUSTOM_DOC("The one-stop-shop for all your file-opening need")
   i64 min = curpos;
   i64 max = curpos;
   //
-  for (; max < buffer_size; max++)
+  for (i64 pos=curpos; pos < buffer_size; pos++)
   {
-    u8 character = 0;
-    buffer_read_range(app, buffer, Ii64(max, max+1), &character);
-    if (!character_is_path(character)) { break; }
+    u8 character = buffer_get_char(app, buffer, pos);
+    if (character_is_path(character))
+      max = pos+1;
+    else
+      break;
   }
-  for (; min >= 0; min--)
+  for (i64 pos=curpos; pos >= 0; pos--)
   {
-    u8 character = 0;
-    buffer_read_range(app, buffer, Ii64(min, min+1), &character);
-    if (!character_is_path(character)) { min++; break; }
+    u8 character = buffer_get_char(app, buffer, pos);
+    if (character_is_path(character))
+      min = pos;
+    else
+      break;
   }
 
   b32 looking_at_file = false;
@@ -457,7 +461,7 @@ CUSTOM_DOC("The one-stop-shop for all your file-opening need")
       looking_at_file = true;
     }
     else
-    { // todo debug this path
+    { // todo debug this codepath
       File_Attributes attributes = system_quick_file_attributes(temp, path);
       if(attributes.flags & FileAttribute_IsDirectory)
       {
@@ -613,7 +617,7 @@ function void
 kv_list_all_locations_from_string(Application_Links *app, String_Const_u8 needle_str)
 {
   Scratch_Block temp(app);
-  
+ 
   View_ID default_target_view = get_next_view_after_active(app, Access_Always);
   Buffer_ID search_buffer = create_or_switch_to_buffer_and_clear_by_name(app, search_name, default_target_view);
   
@@ -625,7 +629,6 @@ kv_list_all_locations_from_string(Application_Links *app, String_Const_u8 needle
     String_Match_List buffer_matches = {};
     Range_i64 range = buffer_range(app, buffer);
     {
-      // String_Match_List needle_matches = buffer_find_all_matches(app, temp, buffer, i, range, needle.vals[i], &character_predicate_alpha_numeric_underscore_utf8, Scan_Forward);
       for (i64 pos = 0; 
            pos < range.end;)
       {
@@ -633,11 +636,10 @@ kv_list_all_locations_from_string(Application_Links *app, String_Const_u8 needle
         pos = kv_fuzzy_search_forward(app, buffer, pos, needle_str);
         if (pos < range.end)
         {
-          // todo(kv): get a real range back in here
+          // note(kv): just a dummy range, not sure if it's even used
           Range_i64 range = {pos, pos+1};
           string_match_list_push(temp, &buffer_matches, buffer, 0, 0, range);
         }
-        
         kv_assert_defend(pos > original_pos, break;);
       }
     }
@@ -650,12 +652,47 @@ kv_list_all_locations_from_string(Application_Links *app, String_Const_u8 needle
   print_string_match_list_to_buffer(app, search_buffer, all_matches);
 }
 
-CUSTOM_COMMAND_SIG(kv_list_all_locations)
-CUSTOM_DOC("adapted from list_all_locations for fuzzy search")
+u8 kv_get_current_char(Application_Links *app)
 {
-  Scratch_Block temp(app);
-  u8 *space = push_array(temp, u8, KB(1));
-  String_Const_u8 needle_str = get_query_string(app, "List Locations For: ", space, KB(1));
-  if (!needle_str.size) return;
-  kv_list_all_locations_from_string(app, needle_str); 
+  GET_VIEW_AND_BUFFER;
+  i64 pos = view_get_cursor_pos(app, view);
+  return buffer_get_char(app, buffer, pos);
+}
+
+CUSTOM_COMMAND_SIG(kv_list_all_locations)
+CUSTOM_DOC("adapted from list_all_locations for fuzzy search, if cursor at identifier then search for that instead")
+{
+  GET_VIEW_AND_BUFFER;
+  if ( character_is_alpha(kv_get_current_char(app)) )
+  {
+    list_all_locations_of_identifier(app);
+  }
+  else
+  {
+    Scratch_Block temp(app);
+    u8 *space = push_array(temp, u8, KB(1));
+    String_Const_u8 needle_str = get_query_string(app, "List Locations For: ", space, KB(1));
+    if (!needle_str.size) return;
+    kv_list_all_locations_from_string(app, needle_str); 
+  }
+}
+
+CUSTOM_COMMAND_SIG(kv_handle_return)
+{
+  // note(kv): The behavior mimicks "if_read_only_goto_position", doesn't make too much sense for us.
+  View_ID view = get_active_view(app, Access_ReadVisible);
+  Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
+  if (buffer)
+  {
+    save_all_dirty_buffers(app);
+  }
+  else
+  {
+    buffer = view_get_buffer(app, view, Access_ReadVisible);
+    if (buffer)
+    {
+      goto_jump_at_cursor(app);
+      lock_jump_buffer(app, buffer);
+    }
+  }
 }

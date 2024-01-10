@@ -17,7 +17,7 @@ enum LayerToUse
   LayerToUse_fleury,
   LayerToUse_default_bindings,
 };
-global b32 layer_to_use = LayerToUse_kv;
+global LayerToUse layer_to_use = LayerToUse_kv;
 
 extern "C" b32 adMainFcoder(char *autodraw_path_chars);
   
@@ -53,8 +53,8 @@ void kv_open_startup_file(Application_Links *app)
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/4coder_kv/"));
   load_project(app);
   View_ID view = get_this_ctx_view(app, Access_Always);
-  char *startup_file = "~/notes/note.skm";
-  // char *startup_file = "~/notes/test.skm";
+  // char *startup_file = "~/notes/note.skm";
+  char *startup_file = "~/notes/test.skm";
   // char *startup_file = "/tmp/test.cpp";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
@@ -165,12 +165,12 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|MAP, vim_next_4coder_jump,              M|KeyCode_N);
   BIND(N|MAP, vim_prev_4coder_jump,              M|KeyCode_P);
   BIND(N|MAP, view_buffer_other_panel,           M|KeyCode_D);
-  BIND(N|MAP, interactive_switch_buffer,         M|KeyCode_B);
+  BIND(N|MAP, vim_switch_lister,                 M|KeyCode_B);
 
   /// Mode Binds
   BIND(N|V|MAP, vim_modal_i,                        KeyCode_I);
   BIND(N|0|MAP, goto_line,                       (S|KeyCode_Semicolon));
-  BIND(N|MAP,   vim_insert_begin,                (S|KeyCode_I));
+  // BIND(N|MAP,   vim_insert_begin,                (S|KeyCode_I));
   BIND(N|MAP,   vim_replace_mode,                (S|KeyCode_R));
   BIND(N|0|MAP, vim_visual_mode,                    KeyCode_V);
   BIND(0|V|MAP, kv_vim_visual_line_mode,            KeyCode_V);
@@ -294,10 +294,9 @@ function void kv_vim_bindings(Application_Links *app)
   // Language support
   BIND(N|MAP,  vim_goto_definition,                 KeyCode_F1);
   BIND(N|MAP,  vim_goto_definition_other_panel,   M|KeyCode_F1);
-  BIND(N|MAP,  list_all_locations_of_identifier,    KeyCode_F2);
-  BIND(N|MAP,  kv_list_all_locations,             S|KeyCode_F);
+  BIND(N|MAP,  kv_list_all_locations,               KeyCode_F2);
   //
-  BIND(N|MAP,   byp_request_comment,   SUB_G,         KeyCode_ForwardSlash);
+  BIND(N|MAP,   byp_request_comment,   SUB_G,     KeyCode_ForwardSlash);
   BIND(N|MAP,   byp_request_uncomment, SUB_G,   S|KeyCode_ForwardSlash);
   // sexpr movement
   BIND(N|V|MAP,   kv_sexpr_up,     M|KeyCode_K);
@@ -317,7 +316,7 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|MAP,   kv_delete_surrounding_groupers,  M|KeyCode_RightBracket);
 
   // NOTE(kv) KV miscellaneous binds
-  BIND(N|  MAP,  save_all_dirty_buffers,     KeyCode_Return);
+  BIND(N|  MAP,  kv_handle_return,           KeyCode_Return);
   BIND(N|  MAP,  write_space,                KeyCode_Space);
   BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
   BIND(  V|MAP,  vim_end_line,               KeyCode_A);
