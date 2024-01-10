@@ -211,18 +211,23 @@ kv_token_it_at_cursor(Application_Links *app, i64 delta=0)
 function b32
 kv_find_surrounding_nest(Application_Links *app, Buffer_ID buffer, i64 pos, Range_i64 *out)
 {
-    b32 result = false;
-    Range_i64 range = {};
-    Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
-    if (find_nest_side(app, buffer, pos-1, flags,
-                       Scan_Backward, NestDelim_Open, &range.start) &&
-        find_nest_side(app, buffer, pos, flags|FindNest_EndOfToken,
-                       Scan_Forward, NestDelim_Close, &range.end))
-    {
-        *out = range;
-        result = true;
-    }
-    return(result);
+  b32 result = false;
+  
+  u8 current_char = buffer_get_char(app, buffer, pos);
+  if ( kv_is_group_opener(current_char) )
+    pos++;
+  
+  Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
+  Range_i64 range = {};
+  if (find_nest_side(app, buffer, pos-1, flags,
+                     Scan_Backward, NestDelim_Open, &range.start) &&
+      find_nest_side(app, buffer, pos, flags|FindNest_EndOfToken,
+                     Scan_Forward, NestDelim_Close, &range.end))
+  {
+    *out = range;
+    result = true;
+  }
+  return(result);
 }
 
 VIM_COMMAND_SIG(kv_sexpr_up)
@@ -394,20 +399,12 @@ VIM_COMMAND_SIG(kv_sexpr_select_whole)
 {
   GET_VIEW_AND_BUFFER;
 
-  Range_i64 nest = {};
-  b32 result = false;
-
   i64 pos = view_get_cursor_pos(app, view);
-  u8 current_char = buffer_get_char(app, buffer, pos);
-  if ( kv_is_group_opener(current_char) )
-    pos++;
-
-  result = kv_find_surrounding_nest(app, buffer, pos, &nest);
-  nest.max--;
-  if (result)
+  Range_i64 nest = {};
+  if ( kv_find_surrounding_nest(app, buffer, pos, &nest) )
   {
     view_set_cursor_and_preferred_x(app, view, seek_pos(nest.min));
-    view_set_mark(app, view, seek_pos(nest.max));
+    view_set_mark(app, view, seek_pos(nest.max-1));
     vim_state.mode = VIM_Visual;
     vim_state.params.edit_type = EDIT_CharWise;
   }
@@ -485,10 +482,10 @@ VIM_COMMAND_SIG(kv_delete_surrounding_groupers)
 
   i64 pos = view_get_cursor_pos(app, view);
   Range_i64 range = {};
-  if (kv_find_surrounding_nest(app, buffer, pos, &range))
+  if ( kv_find_surrounding_nest(app, buffer, pos, &range) )
   {
     kv_buffer_delete_pos(app, buffer, range.max-1);
-    kv_buffer_delete_pos(app, buffer, range.max-1);
+    kv_buffer_delete_pos(app, buffer, range.min);
   }
 }
 

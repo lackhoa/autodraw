@@ -142,8 +142,7 @@ function void kvInitQuailTable(Application_Links *app)
 #undef QUAIL_DEFRULE
 }
 
-// NOTE(kv): The VimBind function doesn't let us overwrite bindings.
-// So I hoisted also "vim_default_bindings" out here.
+// ;binding
 function void kv_vim_bindings(Application_Links *app)
 {
   u32 N = bit_1;

@@ -289,10 +289,12 @@ CREDITS
 #define stb_max(a,b)   ((a) > (b) ? (a) : (b))
 
 #ifndef STB_ONLY
+/* NOTE(kv): remove because omg
    #if !defined(__cplusplus) && !defined(min) && !defined(max)
      #define min(x,y) stb_min(x,y)
      #define max(x,y) stb_max(x,y)
    #endif
+*/
 
    #ifndef M_PI
      #define M_PI  3.14159265358979323846f
