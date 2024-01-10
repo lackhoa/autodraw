@@ -75,7 +75,7 @@ function void vim_push_reg_cycle(Application_Links *app){
 }
 
 function void
-vim_copy(Application_Links *app, View_ID view, Buffer_ID buffer, Range_i64 range, Vim_Register *reg){
+vim_copy(Application_Links *app, Buffer_ID buffer, Range_i64 range, Vim_Register *reg){
 	if(reg->flags & REGISTER_ReadOnly){
 		vim_state.chord_resolved = bitmask_2;
 		Scratch_Block scratch(app);
@@ -119,7 +119,6 @@ vim_paste_from_register(Application_Links *app, View_ID view, Buffer_ID buffer, 
 
 	i64 pos = view_get_cursor_pos(app, view);
 	if(reg == &vim_registers.system){
-		clipboard_update_history_from_system(app, 0);
 		clipboard_update_history_from_system(app, 0);
 		i32 count = clipboard_count(0);
 		if(count > 0){

@@ -10,7 +10,7 @@ VIM_REQUEST_SIG(vim_apply_none){}
 VIM_REQUEST_SIG(vim_apply_yank){
 	if(vim_state.params.selected_reg){
 		vim_state.params.selected_reg->edit_type = vim_state.params.edit_type;
-		vim_copy(app, view, buffer, range, vim_state.params.selected_reg);
+		vim_copy(app, buffer, range, vim_state.params.selected_reg);
 	}
 }
 

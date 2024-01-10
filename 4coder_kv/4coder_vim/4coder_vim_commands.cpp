@@ -532,18 +532,25 @@ VIM_COMMAND_SIG(vim_paste_before)
 // IMPORTANT(kv): the original function is broken and I'm just hacking it
 function void vim_backspace_char_inner(Application_Links *app, i32 offset){
 	View_ID view = get_active_view(app, Access_ReadWriteVisible);
-	if(!if_view_has_highlighted_range_delete_range(app, view)){
+  Vim_Register *reg = vim_state.params.selected_reg;
+  if (!reg) return;
+  
+	if(!if_view_has_highlighted_range_delete_range(app, view))
+  {
 		Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
 		i64 pos = view_get_cursor_pos(app, view);
 		i64 buffer_size = buffer_get_size(app, buffer);
-		if(in_range(0, pos, buffer_size)){
+		if(in_range(0, pos, buffer_size))
+    {
 			Buffer_Cursor cursor = view_compute_cursor(app, view, seek_pos(pos));
 			i64 character = view_relative_character_from_pos(app, view, cursor.line, cursor.pos);
 			i64 start = view_pos_from_relative_character(app, view, cursor.line, character + offset);
 			u8 c = buffer_get_char(app, buffer, start);
-      // NOTE(kv): originally used the "small_delete" register
-			vim_register_copy(&vim_registers.system, SCu8(&c, 1));
-			vim_registers.system.edit_type = EDIT_CharWise;
+      
+			vim_register_copy(reg, SCu8(&c, 1));
+			reg->edit_type = EDIT_CharWise;
+      if (reg == &vim_registers.system) { clipboard_post(0, reg->data.string); }
+      
 			vim_update_registers(app);
 			buffer_replace_range(app, buffer, Ii64(start, start+1), string_u8_empty);
 		}

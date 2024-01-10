@@ -509,26 +509,36 @@ function void kv_do_t_internal(Application_Links *app, b32 shiftp)
     current_char = buffer_get_char(app, buffer, pos);
   }
 
-  // 2. upcase character/word
-  if (shiftp)
+  if ( character_is_alpha(current_char) )
   {
+    // 2. upcase character/word
     Scratch_Block temp(app);
+    i64 max = 0;
+    String_Const_u8 replacement = {};
+    i64 alpha_max = scan_any_boundary(app, boundary_alpha_numeric, buffer, Scan_Forward, pos);
+    if (shiftp)
+    {
+      max = alpha_max;
+      Range_i64 range = {pos, alpha_max};
+      replacement = push_buffer_range(app, temp, buffer, range);
+      string_mod_upper(replacement);
+    }
+    else
+    {
+      max = pos+1;
+      u8 upper = character_to_upper(current_char);
+      replacement = push_string_const_u8(temp, 1);
+      replacement.str[0] = upper;
+    }
+    kv_buffer_replace_range(app, buffer, pos, max, replacement);
 
-    i64 max = scan_any_boundary(app, boundary_alpha_numeric, buffer, Scan_Forward, pos);
-    String_Const_u8 string = push_buffer_range(app, temp, buffer, Range_i64{pos, max});
-    string_mod_upper(string);
-
-    kv_buffer_replace_range(app, buffer, pos, max, string);
+    // 3. move
+    view_set_cursor_and_preferred_x(app, view, seek_pos(alpha_max));
   }
   else
   {
-    u8 next_char = buffer_get_char(app, buffer, pos);
-    u8 upper = character_to_upper(current_char);  // todo(kv): I hope the string is copied
-    kv_buffer_replace_range(app, buffer, pos, pos+1, SCu8(&upper, 1));
+    move_right(app);
   }
-
-  // 3. move
-  move_right_alpha_numeric_boundary(app);
 }
 
 VIM_COMMAND_SIG(kv_do_t) {kv_do_t_internal(app, false);}
