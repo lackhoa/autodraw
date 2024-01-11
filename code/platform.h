@@ -30,7 +30,8 @@ typedef PLATFORM_WRITE_ENTIRE_FILE(PlatformWriteEntireFile);
 #define PLATFORM_READ_ENTIRE_FILE(NAME) ReadFileResult NAME(KvArena &arena, char *filename)
 typedef PLATFORM_READ_ENTIRE_FILE(PlatformReadEntireFile);
 
-struct PlatformCode {
+struct PlatformCode 
+{
   PlatformWriteEntireFile *writeEntireFile;
   PlatformReadEntireFile  *readEntireFile;
 };
@@ -97,6 +98,8 @@ struct GameInput {
   f32      last_frame_time_sec;
   b32      hot_reloaded;
   v2       screen_dim;
+  
+  b32 test_boolean;
 };
 
 #include "generated_ad_platform.h"

@@ -15,7 +15,6 @@
 #include "shader-interface.h"
 #include "kv-bitmap.h"
 #include "ray.h"
-// #include "ad_typer.cpp"
 
 // global_variable Tokenizer init_tokenizer;
 
@@ -126,7 +125,7 @@ pushRect(RenderGroup &rgroup, rect2 rect, TextureId texture)
 void
 pushRectOutline(RenderGroup &rgroup, rect2 outline, f32 thickness, v4 color)
 {
-  soft_assert(thickness >= 2);
+  kv_soft_assert(thickness >= 2);
   // our outlines are divided in half
   v2 min = outline.min;
   v2 max = outline.max;
@@ -147,7 +146,7 @@ void
 pushLine(RenderGroup &rgroup, v2 p0, v2 p1, f32 thickness, v4 color)
 {
   RenderEntryQuad &entry = *pushRenderEntry(rgroup, Quad);
-  soft_assert(thickness >= 2);
+  kv_soft_assert(thickness >= 2);
   v2 d = noz(p1 - p0);
   v2 perp = 0.5f * thickness * v2{-d.y, d.x};
   // NOTE: gotta draw a "z" here for triangle strip
@@ -255,10 +254,13 @@ struct Scene {
   b32 eye_inited;
 } __attribute__((packed));
 
-struct GameState {
+struct GameState 
+{
   KvArena arena;
   KvArena frame_arena;
   Codepoint *codepoints;
+
+  PlatformCode platform;
 
   String data_path;
   String scene_filename;  // todo: rename to "scene_path"
@@ -275,7 +277,6 @@ struct GameState {
   Scene scene;
   b32   successfully_read_scene_file;
 
-  PlatformCode platform;
   f32 revolution;
 };
 
@@ -333,7 +334,7 @@ inline void
 moveTree(GameState &state, i32 dx, i32 dy)
 {
   auto hi = state.hot_item;
-  soft_assert(dx == 0 || dy == 0);
+  kv_soft_assert(dx == 0 || dy == 0);
   i32 iterations = maximum(absoslute(dx), absoslute(dy));
 
   for (i32 i=0; i < iterations; i++) {
@@ -784,7 +785,8 @@ DLL_EXPORT GameOutput gameUpdateAndRender(GameInput &input)
 
   {// push backdrop
     rgroup.current_z_level = ZLevelBackdrop;
-    pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, v4{0,0,0,1});
+    v4 bg_color = input.test_boolean ?  v4{1,1,1,1} : v4{0,0,0,1};
+    pushRect(rgroup, rect2{-screen_half_dim, screen_half_dim}, bg_color);
     rgroup.current_z_level = ZLevelGeneral;
   }
 

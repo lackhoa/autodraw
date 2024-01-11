@@ -31,6 +31,8 @@
 #import "shader-interface.h"
 #import "platform.h"
 #import "kv-bitmap.h"
+#import "ad_editor.h"
+#import "ad_editor.cpp"
 
 // Application / Window Delegate (just to relay events right back to the main loop, haizz)
 //
@@ -55,7 +57,7 @@
 
 ///////////////////////////////////////////////////////////////////////
 
-u8 *
+internal u8 *
 osxVirtualAlloc(size_t size)
 {
   u8 *data = 0;
@@ -76,7 +78,7 @@ osxVirtualAlloc(size_t size)
   }
 }
 
-f32
+internal f32
 osxGetSecondsElapsed(u64 then, u64 now)
 {
   local_persist mach_timebase_info_data_t timebase;
@@ -95,7 +97,7 @@ osxGetSecondsElapsed(u64 then)
   return osxGetSecondsElapsed(then, mach_absolute_time());
 }
 
-void osxFreeFileMemory(u8 *memory) {
+internal void osxFreeFileMemory(u8 *memory) {
   if (memory) {
     todoIncomplete;  // #test
     vm_deallocate((vm_map_t) mach_task_self(), (vm_address_t) memory, 0);
@@ -191,7 +193,7 @@ PLATFORM_WRITE_ENTIRE_FILE(osxWriteEntireFile)
   return 1;
 }
 
-id<MTLTexture>
+internal id<MTLTexture>
 metal_sRGBATexture(id<MTLDevice> mtl_device, void *bitmap, i32 dimx, i32 dimy)
 {
   id<MTLTexture> texture;
@@ -215,11 +217,12 @@ makeColorTexture(id<MTLDevice> mtl_device, v4 color)
   return metal_sRGBATexture(mtl_device, &packed, 1, 1);
 }
 
-id<MTLTexture> metal_textures[TextureIdCount];
-Codepoint codepoints[128];
+global_variable id<MTLTexture> metal_textures[TextureIdCount];
+global_variable Codepoint codepoints[128];
 
 // todo: #startup #speed Maybe store the bitmaps in the asset system, but idk if it's even faster.
-void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_file_path) {
+internal void 
+makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_file_path) {
   auto temp = beginTemporaryMemory(arena);
   defer(endTemporaryMemory(temp));
 
@@ -237,7 +240,7 @@ void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_
     i32 width, height, xoff, yoff;
     u8 *mono_bitmap = stbtt_GetCodepointBitmap(&font, 0,pixel_height, ascii_char,
                                                &width, &height, &xoff, &yoff);
-    soft_assert(width != 0 && height != 0);
+    kv_soft_assert(width != 0 && height != 0);
     u8 *bitmap = (u8 *)pushSize(arena, 4 * width * height);
     // Blow it out to rgba bitmap
     u32 *dst = (u32 *)bitmap;
@@ -263,20 +266,6 @@ void makeCodepointTextures(KvArena &arena, id<MTLDevice> mtl_device, char *font_
   }
 }
 
-// #define STB_IMAGE_IMPLEMENTATION
-// #import "stb_image.h"
-// id<MTLTexture>
-// makeTestImageTexture()
-// {
-//   i32 width, height;
-//   int num_channel;
-//   unsigned char* bitmap = stbi_load("../resources/testTexture.png",
-//                                     &width, &height, &num_channel, 4);
-//   kvSoftAssert(bitmap && num_channel == 4);
-//   //
-//   return metalsRGBATexture(bitmap, width, height);
-// }
-
 struct GameCode {
   String dylib_path;
   void *dl;
@@ -285,7 +274,7 @@ struct GameCode {
   time_t mtime;
 };
 
-time_t
+internal time_t
 osxGetMtime(char* filename)
 {
 	time_t mtime = 0;
@@ -297,7 +286,7 @@ osxGetMtime(char* filename)
 	return mtime;
 }
 
-b32
+internal b32
 osxLoadOrReloadGameCode(GameCode &game) {
   time_t mtime = osxGetMtime(game.dylib_path.chars);
   if (mtime != game.mtime) {
@@ -331,14 +320,16 @@ osxLoadOrReloadGameCode(GameCode &game) {
   return false;
 }
 
-struct ADMainInput {
+struct ADMainInput 
+{
   String autodraw_path;
   b32 is_fcoder_custom;
   NSWindow *main_window;
 };
 
 // todo: name
-NSWindow *adMainFunctionBodyInMainThread(b32 is_fcoder_custom)
+internal NSWindow *
+adMainFunctionBodyInMainThread(b32 is_fcoder_custom)
 {
   NSArray *screens = [NSScreen screens];
   NSScreen *screen = [screens objectAtIndex:0];
@@ -382,7 +373,8 @@ NSWindow *adMainFunctionBodyInMainThread(b32 is_fcoder_custom)
   return main_window;
 }
 
-b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *main_window)
+internal b32
+adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *main_window)
 {
   size_t game_memory_cap     = gigaBytes(1);
   size_t platform_memory_cap = gigaBytes(1);
@@ -496,8 +488,7 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
 
   GameInput game_input = {};
   game_input.arena = newArena(memory_base, game_memory_cap);
-  PlatformCode platform_code = {.readEntireFile = osxReadEntireFile,
-                                .writeEntireFile = osxWriteEntireFile};
+  PlatformCode platform_code = {.readEntireFile = osxReadEntireFile, .writeEntireFile = osxWriteEntireFile};
   osxLoadOrReloadGameCode(game);
   game.initialize(game_input.arena, platform_code, autodraw_path, codepoints);
 
@@ -575,6 +566,7 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
                                    (f32)frame.size.height};
       }
 
+      game_input.test_boolean = ad_test_boolean;  // TODO: not thread safe!
       GameOutput game_output = game.updateAndRender(game_input);
 
       // sleep
@@ -690,16 +682,16 @@ b32 adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *mai
   return true;
 }
 
-void *adMainFunctionThread(void *ad_main_input)
+internal void *
+adMainFunctionThread(void *ad_main_input)
 {
   ADMainInput input = *(ADMainInput *)ad_main_input;
   b32 success = adMainFunctionBody(input.autodraw_path, input.is_fcoder_custom, input.main_window);
   return (void *)((i64)success);
 }
 
-// todo: We should make "autodraw_path_chars" point to the "AutoDraw" root
-DLL_EXPORT
-b32 adMainFcoder(char *autodraw_path_chars)
+// todo: We should make "autodraw_path" point to the "AutoDraw" root
+b32 adMainFcoder(char *autodraw_path)
 {
   pthread_attr_t  attr;
   pthread_t       posix_thread_id;
@@ -709,7 +701,7 @@ b32 adMainFcoder(char *autodraw_path_chars)
   kvAssert(!result);
   //
   ADMainInput &input = *(ADMainInput *)malloc(sizeof(ADMainInput));
-  input.autodraw_path    = toString(autodraw_path_chars);
+  input.autodraw_path    = toString(autodraw_path);
   input.is_fcoder_custom = true;
   input.main_window = adMainFunctionBodyInMainThread(true);
   //

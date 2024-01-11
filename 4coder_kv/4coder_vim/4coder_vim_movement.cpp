@@ -114,7 +114,9 @@ global Character_Predicate character_predicate_non_word;
 global Character_Predicate character_predicate_word;
 
 function void init_vim_boundaries(){
-	Character_Predicate character_predicate_non_alpha_num = character_predicate_not(&character_predicate_alpha_numeric_underscore_utf8);
+  // note(kv): changed to remove underscore
+	// Character_Predicate character_predicate_non_alpha_num = character_predicate_not(&character_predicate_alpha_numeric_underscore_utf8);
+	Character_Predicate character_predicate_non_alpha_num = character_predicate_not(&character_predicate_alpha_numeric);
 	character_predicate_non_word = character_predicate_and(&character_predicate_non_alpha_num, &character_predicate_non_whitespace);
 	character_predicate_word = character_predicate_not(&character_predicate_non_word);
 }
@@ -134,17 +136,21 @@ boundary_whitespace(Application_Links *app, Buffer_ID buffer, Side side, Scan_Di
 	return(boundary_predicate(app, buffer, side, direction, pos, &character_predicate_whitespace));
 }
 
-
-function i64 vim_word_boundary(Application_Links *app, Buffer_ID buffer, Scan_Direction direction, i64 pos)
+// NOTE(kv): very hacky
+// todo(kv): doesn't work for ALL_UPPERCASE.
+function i64 
+vim_word_boundary(Application_Links *app, Buffer_ID buffer, Scan_Direction direction, i64 pos)
 {
   Scratch_Block scratch(app);
+
   u8 c = buffer_get_char(app, buffer, pos);
-  if( !character_is_whitespace(c) )
+  if ( !character_is_whitespace(c) )
   {
-    Boundary_Function_List boundary_list = push_boundary_list(scratch, boundary_alpha_numeric_camel, boundary_whitespace);
-    pos = scan(app, boundary_list, buffer, direction, pos);
+    Boundary_Function_List boundary = push_boundary_list(scratch, boundary_alpha_numeric_camel, vim_boundary_non_word);
+    pos = scan(app, boundary, buffer, direction, pos);
+    c = buffer_get_char(app, buffer, pos);
   }
-  c = buffer_get_char(app, buffer, pos);
+
   if( character_is_whitespace(c) )
   {
     String_Match match = buffer_seek_character_class(app, buffer, &character_predicate_non_whitespace, direction, pos);

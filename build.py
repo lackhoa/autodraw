@@ -48,7 +48,7 @@ try:
         run(command) # Run in a new process group
     else:
         # Set compiler and linker flags
-        DEBUG_MODE = False
+        DEBUG_MODE = True
         SANITIZE_ADDRESS_ON = False
         #
         optimization_flag = '-O0' if DEBUG_MODE else '-O2'
@@ -100,7 +100,7 @@ try:
         #
         run(['clang++', 'autodraw.o', '-o', 'autodraw'] + framework_flags + sanitize_address)
 
-        print("NOTE: Link library with 4coder")
+        print("NOTE: Trigger 4coder rebuild too")
         # todo: Hard coded build.sh path
         run([f'{project_root}/4coder_kv/build.py'])
 

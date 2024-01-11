@@ -141,36 +141,24 @@ inline b32 kv_is_group_closer(Token *token)
 inline u8 kv_is_group_opener(u8 c)
 {
   switch (c) {
-    case '(':
-      return ')';
-    case '[':
-      return ']';
-    case '{':
-      return '}';
-    case '\"':
-      return '\"';
-    case '\'':
-      return '\'';
-    default:   
-      return 0;
+    case '(':  return ')';
+    case '[':  return ']';
+    case '{':  return '}';
+    case '\"': return '\"';
+    case '\'': return '\'';
+    default:   return 0;
   }
 }
 
 inline u8 kv_is_group_closer(u8 c)
 {
   switch (c) {
-    case ')':
-      return '(';
-    case ']':
-      return '[';
-    case '}':
-      return '{';
-    case '\"':
-      return '\"';
-    case '\'':
-      return '\'';
-    default:   
-      return 0;
+    case ')':  return '(';
+    case ']':  return '[';
+    case '}':  return '{';
+    case '\"': return '\"';
+    case '\'': return '\'';
+    default:   return 0;
   }
 }
 
@@ -682,7 +670,7 @@ CUSTOM_DOC("adapted from list_all_locations for fuzzy search, if cursor at ident
   }
 }
 
-CUSTOM_COMMAND_SIG(kv_handle_return)
+VIM_COMMAND_SIG(kv_handle_return)
 {
   // note(kv): The behavior mimicks "if_read_only_goto_position", doesn't make too much sense for us.
   View_ID view = get_active_view(app, Access_ReadVisible);

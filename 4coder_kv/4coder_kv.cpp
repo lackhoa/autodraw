@@ -4,6 +4,7 @@
 #include "4coder_kv_draw.cpp"
 #include "4coder_kv_vim_stuff.cpp"
 #include "4coder_fleury/4coder_fleury.cpp"
+#include "ad_editor.h"
 
 #if !defined(META_PASS)
 #  include "generated/managed_id_metadata.cpp"
@@ -19,8 +20,6 @@ enum LayerToUse
 };
 global LayerToUse layer_to_use = LayerToUse_kv;
 
-extern "C" b32 adMainFcoder(char *autodraw_path_chars);
-  
 function void kvInitShiftedTable()
 {
   Base_Allocator *base = get_base_allocator_system();
@@ -53,8 +52,8 @@ void kv_open_startup_file(Application_Links *app)
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/4coder_kv/"));
   load_project(app);
   View_ID view = get_this_ctx_view(app, Access_Always);
-  // char *startup_file = "~/notes/note.skm";
-  char *startup_file = "~/notes/test.skm";
+  char *startup_file = "~/notes/note.skm";
+  // char *startup_file = "~/notes/test.skm";
   // char *startup_file = "/tmp/test.cpp";
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
@@ -64,10 +63,10 @@ void kv_open_startup_file(Application_Links *app)
 }
 
 CUSTOM_COMMAND_SIG(kv_startup)
-CUSTOM_DOC("KV startup routine (modified from default_startup)")
 {
   default_startup(app);
   kv_open_startup_file(app);
+	set_window_title(app, string_u8_litexpr("4coder kv"));
 }
 
 function void
@@ -155,6 +154,7 @@ function void kv_vim_bindings(Application_Links *app)
   Key_Code leader = KeyCode_BackwardSlash;
 
   BIND(MAP, kv_vim_normal_mode, KeyCode_Escape);
+  BIND(MAP, kv_void_command,    KeyCode_Menu);  // todo(kv) this key inserts some random crap and I still can't turn it off.
 
   /// Rebinds
   BIND(N|MAP, undo,                                 KeyCode_U);
@@ -332,7 +332,7 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|0|MAP,  open_panel_vsplit,        M|KeyCode_V);
 
 #undef BIND
-    }
+}
 
 function void 
 byp_default_bindings(Mapping *mapping)
@@ -436,13 +436,19 @@ void default_bindings_custom_layer_init(Application_Links *app)
 	setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
 }
 
+CUSTOM_COMMAND_SIG(ad_toggle_test)
+CUSTOM_DOC("test ad integration")
+{
+  ad_test_boolean = !ad_test_boolean;
+}
+
 void custom_layer_init(Application_Links *app)
 {
   switch (layer_to_use) {
-    case LayerToUse_kv:                    kv_custom_layer_init(app);     break;
-    case LayerToUse_fleury:                fleury_custom_layer_init(app); break;
-    case LayerToUse_fleury_lite:           fleury_lite_custom_layer_init(app); break;
-    case LayerToUse_default_bindings:      default_bindings_custom_layer_init(app); break;
+    case LayerToUse_kv:               kv_custom_layer_init(app);               break;
+    case LayerToUse_fleury:           fleury_custom_layer_init(app);           break;
+    case LayerToUse_fleury_lite:      fleury_lite_custom_layer_init(app);      break;
+    case LayerToUse_default_bindings: default_bindings_custom_layer_init(app); break;
   }
 
   {// note(kv): startup code
@@ -454,8 +460,7 @@ void custom_layer_init(Application_Links *app)
     BindCore(kv_startup, CoreCode_Startup);
   }
 
-  if (false)
-  {
+  {// AutoDraw code, which has to be run in a main thread unfortunately because it creates a window
     char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
     adMainFcoder(todo_autodraw_path);
   }
