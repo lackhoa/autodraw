@@ -137,20 +137,35 @@ boundary_whitespace(Application_Links *app, Buffer_ID buffer, Side side, Scan_Di
 }
 
 // NOTE(kv): very hacky
-// todo(kv): doesn't work for ALL_UPPERCASE.
 function i64 
 vim_word_boundary(Application_Links *app, Buffer_ID buffer, Scan_Direction direction, i64 pos)
 {
   Scratch_Block scratch(app);
 
   u8 c = buffer_get_char(app, buffer, pos);
-  if ( !character_is_whitespace(c) )
+  u8 d = buffer_get_char(app, buffer, pos+direction);
+  if( character_is_upper(c) && character_is_upper(d) )
+  {
+    // NOTE(kv): Handle the ALL_UPPERCASE case (not tested thoroughly yet)
+    pos += 2*direction;
+    for (;
+         pos < buffer_get_size(app, buffer);
+         pos += direction)
+    {
+      c = buffer_get_char(app, buffer, pos);
+      if ( !character_is_upper(c) )
+      {
+        break;
+      }
+    }
+  }
+  else if( !character_is_whitespace(c) )
   {
     Boundary_Function_List boundary = push_boundary_list(scratch, boundary_alpha_numeric_camel, vim_boundary_non_word);
     pos = scan(app, boundary, buffer, direction, pos);
     c = buffer_get_char(app, buffer, pos);
   }
-
+  
   if( character_is_whitespace(c) )
   {
     String_Match match = buffer_seek_character_class(app, buffer, &character_predicate_non_whitespace, direction, pos);

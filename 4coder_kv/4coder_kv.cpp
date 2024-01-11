@@ -272,10 +272,10 @@ function void kv_vim_bindings(Application_Links *app)
 
   /// Miscellaneous Binds
   BIND(N|V|MAP, vim_set_mark,                         KeyCode_M);
-  BIND(N|V|MAP, vim_goto_mark,                        KeyCode_Tick);
   BIND(N|0|MAP, vim_goto_mark,                        KeyCode_Quote);
   BIND(N|V|MAP, vim_toggle_macro,                   S|KeyCode_Q);
   BIND(N|V|MAP, vim_play_macro,                     S|KeyCode_2);
+  BIND(N|MAP,   open_matching_file_cpp,               KeyCode_F12);
 
   /// Panel
   BIND(N|MAP, change_active_panel,         C|KeyCode_Tab);

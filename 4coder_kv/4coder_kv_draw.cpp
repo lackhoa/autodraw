@@ -96,7 +96,7 @@ kv_draw_paren_highlight(Application_Links *app, Buffer_ID buffer, Text_Layout_ID
 
   {// draw_enclosures(app, buffer, pos);
     Scratch_Block scratch(app);
-    Range_i64_Array ranges;
+    Range_i64_Array ranges = {};
 
     {// get_enclosure_ranges(app, scratch, buffer, pos);
       i32 max = 16;
@@ -195,8 +195,10 @@ byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buff
     }
   }
 
-  b32 use_paren_helper = def_get_config_b32(vars_save_string_lit("use_paren_helper"));
-  if(use_paren_helper)
+  F4_Language *language = F4_LanguageFromBuffer(app, buffer);
+  F4_Language *skm_lang = F4_LanguageFromString(SCu8("skm"));
+  b32 use_paren_helper = (language == skm_lang);
+  if (use_paren_helper)
   {
     Color_Array colors = finalize_color_array(defcolor_text_cycle);
     kv_draw_paren_highlight(app, buffer, text_layout_id, cursor_pos, colors.vals, colors.count);
