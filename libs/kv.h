@@ -41,28 +41,30 @@
 #include <string.h>
 
 /*
-  SECTION: Other single-header libraries
+  BEGIN: Other single-header libraries
 */
 
 #ifdef KV_IMPLEMENTATION
 #    define STB_DEFINE
 #    define STB_DS_IMPLEMENTATION
+#    define GB_IMPLEMENTATION
 #endif
 
 // NOTE: These header files are supposed to be in the same directory as this file.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 
-#    include "stb.h"
 #    include "stb_ds.h"
+#    include "gb.h"
 
 #pragma clang diagnostic pop
 
 #undef STB_DEFINE
 #undef STB_DS_IMPLEMENTATION
+#undef GB_IMPLEMENTATION
 
 /*
-  Other single-header libraries
+  END: Other single-header libraries
 */
 
 
@@ -302,13 +304,34 @@ rotateRight(u32 value, i32 rotateAmount)
     return result;
 }
 
-#if HANDMADE_WIN32
-#  define readBarrier  _ReadBarrier()
-#  define writeBarrier _WriteBarrier()
-#  define atomicCompareExchange _InterlockedCompareExchange
+#if defined(_WIN32) || defined(_WIN64)
+	#ifndef KV_SYSTEM_WINDOWS
+	#define KV_SYSTEM_WINDOWS 1
+	#endif
+#elif defined(__APPLE__) && defined(__MACH__)
+	#ifndef KV_SYSTEM_OSX
+	#define KV_SYSTEM_OSX 1
+	#endif
+#elif defined(__unix__)
+	#ifndef KV_SYSTEM_UNIX
+	#define KV_SYSTEM_UNIX 1
+	#endif
+
+	#if defined(__linux__)
+		#ifndef KV_SYSTEM_LINUX
+		#define KV_SYSTEM_LINUX 1
+		#endif
+	#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+		#ifndef KV_SYSTEM_FREEBSD
+		#define KV_SYSTEM_FREEBSD 1
+		#endif
+	#else
+		#error This UNIX operating system is not supported
+	#endif
 #else
-// todo: Other platforms
+	#error This operating system is not supported
 #endif
+
 
 /* Intrinsics end */
 
@@ -359,7 +382,7 @@ rotateRight(u32 value, i32 rotateAmount)
 #if KV_INTERNAL
 #    define kv_soft_assert        kv_assert
 #    define kv_probably(CLAIM) (kv_assert(CLAIM), true)
-#    deifne kv_assert_defend(CLAIM, DEFEND)   kv_assert(CLAIM)
+#    define kv_assert_defend(CLAIM, DEFEND)   kv_assert(CLAIM)
 #else
 #    define kv_soft_assert(CLAIM)
 #    define kv_probably(CLAIM) (CLAIM)
@@ -902,6 +925,7 @@ unsetFlag(u32 *flags, u32 flag)
   new_list->tail          = list;               \
   list                    = new_list;
 
+#if 0
 // defer macro from https://www.gingerbill.org/article/2015/08/19/defer-in-cpp/
 template <typename F>
 struct privDefer {
@@ -920,6 +944,7 @@ privDefer<F> defer_func(F f) {
 #define DEFER_3(x)    DEFER_2(x, __COUNTER__)
 #define defer(code)   auto DEFER_3(_defer_) = defer_func([&](){code;})
 // end defer macro //////////////////
+#endif
 
 #define EAT_TYPE(POINTER, TYPE) (TYPE *)(POINTER += sizeof(TYPE), POINTER - sizeof(TYPE))
 
@@ -935,49 +960,6 @@ inline void *kv_xmalloc(size_t size) {
   return ptr;
 }
 
-/* 
-   Stretchy buffer by Sean Barrett
- */
-
-struct BufferHeader {
-  i32 len;
-  i32 cap;
-  char items[0];
-};
-
-#define bufHeader_(buffer) ((BufferHeader *)((char *)(buffer) - offsetof(BufferHeader, items)))
-#define doesBufFit_(buffer, new_len) (new_len <= bufCap(buffer))
-#define bufFit_(buffer, new_len) doesBufFit_(buffer, new_len) ? 0 : (buffer = (mytypeof(buffer))bufGrow_(buffer, new_len, sizeof(*buffer)))
-#define bufLength(buffer) (buffer ? bufHeader_(buffer)->len : 0)
-#define bufCap(buffer) (buffer ? bufHeader_(buffer)->cap : 0)
-#define bufPush(buffer, item) (bufFit_(buffer, bufLength(buffer)+1)), buffer[bufHeader_(buffer)->len++] = item
-#define bufFree(buffer) free(bufHeader_(buffer))
-
-void *bufGrow_(void *buffer, i32 new_len, i32 item_size)
-#ifdef KV_IMPLEMENTATION
-{
-  i32 new_cap = maximum(bufCap(buffer)*2, new_len);
-  i32 new_size = sizeof(BufferHeader)+new_cap*item_size;
-  BufferHeader *new_header = 0;
-  if (buffer) {
-    new_header = (BufferHeader *)realloc(bufHeader_(buffer), new_size);
-  } else {
-    new_header = (BufferHeader *)kv_xmalloc(new_size);
-    new_header->len = 0;
-  }
-  new_header->cap = new_cap;
-  buffer = new_header->items;
-  kv_assert(bufCap(buffer) >= new_len);
-  return buffer;
-}
-#else
-;
-#endif // KV_IMPLEMENTATION
-
-/* End of stretchy buffer */
-
-#define for_increment(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; INDEX < (END); INDEX++)
-#define for_increment_with_condition(INDEX, BEGIN, END) for (i32 INDEX=BEGIN; (INDEX < (END)) && (CONDITION); INDEX++)
 #define breakable_block for (i32 __kv_breakable_block__=0; __kv_breakable_block__ == 0; __kv_breakable_block__++)
 
 /* todo: Old names */

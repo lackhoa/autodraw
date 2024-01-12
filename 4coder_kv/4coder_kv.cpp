@@ -368,6 +368,27 @@ byp_default_bindings(Mapping *mapping)
   ParentMap(file_id);
 }
 
+void default_bindings_custom_layer_init(Application_Links *app)
+{
+    Thread_Context *tctx = get_thread_context(app);
+    
+    // NOTE(allen): setup for default framework
+    default_framework_init(app);
+    
+    // NOTE(allen): default hooks and command maps
+    set_all_default_hooks(app);
+    mapping_init(tctx, &framework_mapping);
+    String_ID global_map_id = vars_save_string_lit("keys_global");
+    String_ID file_map_id = vars_save_string_lit("keys_file");
+    String_ID code_map_id = vars_save_string_lit("keys_code");
+#if OS_MAC
+    setup_mac_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+#else
+    setup_default_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+#endif
+	setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+}
+
 void kv_custom_layer_init(Application_Links *app)
 {
   default_framework_init(app);
@@ -413,33 +434,21 @@ void kv_custom_layer_init(Application_Links *app)
   F4_Index_Initialize();
   // NOTE(rjf): Register languages.
   F4_RegisterLanguages();
-}
+  
+  {// AutoDraw code, which has to be run in a main thread unfortunately because it creates a window
+    char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
+    adMainFcoder(todo_autodraw_path);
+  }
 
-void default_bindings_custom_layer_init(Application_Links *app)
-{
-    Thread_Context *tctx = get_thread_context(app);
-    
-    // NOTE(allen): setup for default framework
-    default_framework_init(app);
-    
-    // NOTE(allen): default hooks and command maps
-    set_all_default_hooks(app);
-    mapping_init(tctx, &framework_mapping);
-    String_ID global_map_id = vars_save_string_lit("keys_global");
-    String_ID file_map_id = vars_save_string_lit("keys_file");
-    String_ID code_map_id = vars_save_string_lit("keys_code");
-#if OS_MAC
-    setup_mac_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
-#else
-    setup_default_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
-#endif
-	setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+  gb_mutex_init(&var_mutex);
 }
 
 CUSTOM_COMMAND_SIG(ad_toggle_test)
 CUSTOM_DOC("test ad integration")
 {
+  gb_mutex_lock(&var_mutex);
   ad_test_boolean = !ad_test_boolean;
+  gb_mutex_unlock(&var_mutex);
 }
 
 void custom_layer_init(Application_Links *app)
@@ -451,17 +460,12 @@ void custom_layer_init(Application_Links *app)
     case LayerToUse_default_bindings: default_bindings_custom_layer_init(app); break;
   }
 
-  {// note(kv): startup code
+  {// note(kv): shared startup code
     MappingScope();
     SelectMapping(&framework_mapping);
   
     String_ID global_id = vars_save_string_lit("keys_global");
     SelectMap(global_id);
     BindCore(kv_startup, CoreCode_Startup);
-  }
-
-  {// AutoDraw code, which has to be run in a main thread unfortunately because it creates a window
-    char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
-    adMainFcoder(todo_autodraw_path);
   }
 }

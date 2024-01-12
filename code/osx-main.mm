@@ -529,11 +529,11 @@ adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *main_wi
               u32 modifier_flags = [event modifierFlags];
               b32 cmd_held       = (modifier_flags & NSCommandKeyMask) > 0;
               b32 ctrl_held      = (modifier_flags & NSControlKeyMask) > 0;
-              unused_var b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
-              unused_var b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
+              b32 alt_held       = (modifier_flags & NSAlternateKeyMask) > 0;
+              b32 shift_held     = (modifier_flags & NSShiftKeyMask) > 0;
             
               // We'd like to handle repeat ourselves
-              unused_var b32 is_repeat = [event isARepeat];
+              b32 is_repeat = [event isARepeat];
 
               bool is_down = (event.type == NSEventTypeKeyDown);
               if ((event.keyCode == kVK_ANSI_Q) && is_down && cmd_held) {
@@ -566,7 +566,11 @@ adMainFunctionBody(String autodraw_path, b32 is_fcoder_custom, NSWindow *main_wi
                                    (f32)frame.size.height};
       }
 
-      game_input.test_boolean = ad_test_boolean;  // TODO: not thread safe!
+      {
+        gb_mutex_lock(&var_mutex);
+        game_input.test_boolean = ad_test_boolean;
+        gb_mutex_unlock(&var_mutex);
+      }
       GameOutput game_output = game.updateAndRender(game_input);
 
       // sleep

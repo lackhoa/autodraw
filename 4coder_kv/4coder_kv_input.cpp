@@ -15,17 +15,18 @@ global char         *kv_quail_keystroke_buffer;
 
 // NOTE(kv): If keys are overlapping, you have to push the shorter key first in
 // order to for the quail rule to work.
-// todo: one more hack, and we'll have to go and formalize how we handle key conflict
 function void
 kv_quail_defrule(Application_Links *app, char *key, char *insert,
                  i32 delete_before, i32 delete_after, i32 cursor_index)
 {
   i32 entry_index = arrlen(kv_quail_table);
   // note: we keep the table sorted by key length, largest first, for overlapping keys.
-  for_increment(table_index, 0, arrlen(kv_quail_table))
+  for (i32 table_index=0;
+       table_index < arrlen(kv_quail_table);
+       table_index++)
   {
     char *existing_key = kv_quail_table[table_index].key;
-    if (stb_suffix(key, existing_key))
+    if (gb_str_has_suffix(key, existing_key))
     {
       entry_index = table_index;  // change insertion index so this rule matches first
       break;
