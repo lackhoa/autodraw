@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -u
 
 import os
 import subprocess
@@ -33,19 +33,19 @@ def mtime(path):
 # cd to script directory
 HOME=os.path.expanduser("~")
 HERE = os.path.dirname(os.path.realpath(__file__))
-FCODER_ROOT=f'{HOME}/4coder'
+FCODER_USER=f'{HOME}/4coder'
 CUSTOM=f'{HOME}/4ed/code/custom'
 AUTODRAW=f'{HOME}/AutoDraw'
 SOURCE=f'{HERE}/4coder_kv.cpp'
 
 try:
-    os.chdir(f'{FCODER_ROOT}')
+    os.chdir(f'{FCODER_USER}')
     print(f'Workdir: {os.getcwd()}')
 
     run_only       = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
 
-    DEBUG_MODE = True
+    DEBUG_MODE = False
     ADDRESS_SANITIZER_ON = False
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CUSTOM} -I{AUTODRAW}/libs -I{AUTODRAW}/4coder_kv/libs -I{AUTODRAW}/code'
@@ -53,11 +53,10 @@ try:
     opts = f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
     arch = "-m64"
     debug="-g" if DEBUG_MODE else ""
-    COPY_TO_STABLE = False
 
     if run_only:
         dyld_insert_libraries="DYLD_INSERT_LIBRARIES=/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib" if ADDRESS_SANITIZER_ON else ""
-        command = f'{dyld_insert_libraries} {FCODER_ROOT}/4ed > /dev/null'
+        command = f'{dyld_insert_libraries} {FCODER_USER}/4ed > /dev/null'
         # Does emacs output pipe slow down 4coder? Very possible!
         os.chdir(f"{AUTODRAW}")
         run(command) # Run in a new process group
@@ -92,13 +91,13 @@ try:
         #
         FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
         run(f'clang++ "custom_4coder.o" "{AUTODRAW}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
-        if COPY_TO_STABLE:
-            print(f'copy to stable')
-            run(f'cp custom_4coder.so ~/4coder_stable/')
+        if not DEBUG_MODE:
+            print(f'Move binary to stable')
+            run(f'mv custom_4coder.so ~/4coder_stable/')
 
         print("NOTE: Setup 4coder config files")
-        run(f'ln -sf "{HERE}/config.4coder" "{FCODER_ROOT}/config.4coder"')
-        run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_ROOT}/themes/theme-kv.4coder"')
+        run(f'ln -sf "{HERE}/config.4coder" "{FCODER_USER}/config.4coder"')
+        run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_USER}/themes/theme-kv.4coder"')
 
         run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')
 

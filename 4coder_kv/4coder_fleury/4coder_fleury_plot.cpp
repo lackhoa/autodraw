@@ -2,7 +2,7 @@
 #include "4coder_fleury_plot.h"
 #include "4coder_fleury_colors.h"
 
- function void
+function void
 Plot2DBegin(Plot2DInfo *plot)
 {
     Scratch_Block scratch(plot->app);

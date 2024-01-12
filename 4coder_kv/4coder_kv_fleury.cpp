@@ -328,8 +328,6 @@ function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange)
     return(0);
 }
 
-
-
 void fleury_lite_custom_layer_init(Application_Links *app)
 {
     default_framework_init(app);

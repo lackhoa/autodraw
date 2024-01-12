@@ -3,22 +3,25 @@
 #include "4coder_kv_hooks.cpp"
 #include "4coder_kv_draw.cpp"
 #include "4coder_kv_vim_stuff.cpp"
-#include "4coder_fleury/4coder_fleury.cpp"
 #include "ad_editor.h"
-
-#if !defined(META_PASS)
-#  include "generated/managed_id_metadata.cpp"
-#endif
 
 // note: Custom layer swapout, for testing and trying out
 enum LayerToUse
 {
   LayerToUse_kv,
-  LayerToUse_fleury_lite,
+  LayerToUse_fleury_lite,  // NOTE(kv) This is for testing out new functionalities integrated from the Fleury layer.
   LayerToUse_fleury,
   LayerToUse_default_bindings,
 };
-global LayerToUse layer_to_use = LayerToUse_kv;
+#define layer_to_use LayerToUse_kv
+
+#if layer_to_use == LayerToUse_fleury
+#    include "4coder_fleury/4coder_fleury.cpp"  // because includes will bring in weird commands I don't need
+#endif
+
+#if !defined(META_PASS)
+#  include "generated/managed_id_metadata.cpp"  // from Mr. Allen 4th
+#endif
 
 function void kvInitShiftedTable()
 {
@@ -386,7 +389,7 @@ void default_bindings_custom_layer_init(Application_Links *app)
 #else
     setup_default_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
 #endif
-	setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
+	  setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
 }
 
 void kv_custom_layer_init(Application_Links *app)

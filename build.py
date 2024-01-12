@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -u
 
 import os
 import subprocess
@@ -43,7 +43,7 @@ try:
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
 
     if run_only:
-        command = './autodraw'
+        command = [f'{project_root}/4coder_kv/build.py', "run"]
         # process = subprocess.Popen(command, close_fds=True, preexec_fn=os.setsid) # Run in a new process group
         run(command) # Run in a new process group
     else:
@@ -97,8 +97,8 @@ try:
         framework_flags=[]
         for framework in frameworks:
             framework_flags += ["-framework", framework]
-        #
-        run(['clang++', 'autodraw.o', '-o', 'autodraw'] + framework_flags + sanitize_address)
+        # NOTE: Unused main app (we're gonna merge with 4coder now)
+        # run(['clang++', 'autodraw.o', '-o', 'autodraw'] + framework_flags + sanitize_address)
 
         print("NOTE: Trigger 4coder rebuild too")
         # todo: Hard coded build.sh path

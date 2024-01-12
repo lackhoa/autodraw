@@ -154,4 +154,3 @@ BUFFER_HOOK_SIG(casey_new_file)
     
     return(0);
 }
-

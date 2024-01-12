@@ -717,7 +717,7 @@ b32 adMainFcoder(char *autodraw_path)
   return true;
 }
 
-int main(int argc, const char *argv[])
+int main_unused(int argc, const char *argv[])
 {
   u8 buffer[2048];
   u32 buffer_size = sizeof(buffer);
