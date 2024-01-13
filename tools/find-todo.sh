@@ -23,7 +23,7 @@ g "TODO" ${PROJECT_ROOT}/code
 g "nono" ${PROJECT_ROOT}/code
 
 g "TODO(kv)" ${PROJECT_ROOT}/4coder_kv/
-g "nono"     ${PROJECT_ROOT}/4coder_kv/
+g "nono"     ${PROJECT_ROOT}/4coder_kv/ | grep -v 'ignore_nono'
 
 g "TODO(kv)" ${FCODER_ROOT}/code
 g "nono"     ${FCODER_ROOT}/code

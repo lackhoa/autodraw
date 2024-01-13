@@ -37,6 +37,7 @@ FCODER_USER=f'{HOME}/4coder'
 CUSTOM=f'{HOME}/4ed/code/custom'
 AUTODRAW=f'{HOME}/AutoDraw'
 SOURCE=f'{HERE}/4coder_kv.cpp'
+DEBUG_MODE = True
 
 try:
     os.chdir(f'{FCODER_USER}')
@@ -45,7 +46,6 @@ try:
     run_only       = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
 
-    DEBUG_MODE = True
     ADDRESS_SANITIZER_ON = False
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CUSTOM} -I{AUTODRAW}/libs -I{AUTODRAW}/4coder_kv/libs -I{AUTODRAW}/code'

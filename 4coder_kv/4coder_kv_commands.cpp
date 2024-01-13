@@ -574,9 +574,10 @@ CUSTOM_DOC("kv copy dir name")
   clipboard_post(0, dirname);
 }
 
-VIM_COMMAND_SIG(kv_split_line)
+VIM_COMMAND_SIG(kv_newline_and_indent)
 {
-  write_text(app, SCu8("\n"));
+  write_text(app, string_u8_litexpr("\n"));
+  auto_indent_line_at_cursor(app);
 }
 
 VIM_COMMAND_SIG(kv_vim_visual_line_mode)

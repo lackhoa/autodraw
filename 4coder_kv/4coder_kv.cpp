@@ -9,9 +9,9 @@
 // note: Custom layer swapping for testing and trying out.
 // note: Please enable only one layer, or else it explodes!
 #if KV_DEBUG_MODE
-#    define USE_LAYER_kv               1
+#    define USE_LAYER_kv               0
 #    define USE_LAYER_fleury_lite      0
-#    define USE_LAYER_fleury           0
+#    define USE_LAYER_fleury           1
 #    define USE_LAYER_default_bindings 0
 #else
 #    define USE_LAYER_kv               1
@@ -74,13 +74,7 @@ void kv_open_startup_files(Application_Links *app)
   }
 }
 
-CUSTOM_COMMAND_SIG(kv_startup)
-{
-  default_startup(app);
-  kv_open_startup_files(app);
-	set_window_title(app, string_u8_litexpr("4coder kv"));
-}
-
+// NOTE(kv): shared between custom layers
 function void
 kv_essential_mapping(Mapping *mapping)
 {
@@ -96,7 +90,7 @@ kv_essential_mapping(Mapping *mapping)
   BindCore(clipboard_record_clip, CoreCode_NewClipboardContents);
   BindMouseWheel(mouse_wheel_scroll);
   BindMouseWheel(mouse_wheel_change_face_size, KeyCode_Control);
-  BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);
+  // BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);  NOTE(kv): cool idea but there are auto-generated files that we don't care about
 
   SelectMap(file_id);
   ParentMap(global_id);
@@ -108,6 +102,51 @@ kv_essential_mapping(Mapping *mapping)
 
   SelectMap(code_id);
   ParentMap(file_id);
+}
+
+// NOTE(kv): shared between custom layers
+function void 
+kv_default_bindings(Mapping *mapping)
+{
+  String_ID global_id = vars_save_string_lit("keys_global");
+  String_ID file_id   = vars_save_string_lit("keys_file");
+  String_ID code_id   = vars_save_string_lit("keys_code");
+
+  MappingScope();
+  SelectMapping(mapping);
+
+  SelectMap(global_id);
+
+  Bind(toggle_fullscreen,   KeyCode_F11);
+  Bind(increase_face_size,  KeyCode_Equal, KeyCode_Control);
+  Bind(decrease_face_size,  KeyCode_Minus, KeyCode_Control);
+  Bind(byp_reset_face_size, KeyCode_0, KeyCode_Control);
+  Bind(exit_4coder,         KeyCode_Q, KeyCode_Control);
+  Bind(exit_4coder,         KeyCode_Q, KeyCode_Command);
+
+  SelectMap(file_id);
+  ParentMap(global_id);
+
+  Bind(delete_char,        KeyCode_Delete);
+  Bind(backspace_char,     KeyCode_Backspace);
+  Bind(move_up,            KeyCode_Up);
+  Bind(move_down,          KeyCode_Down);
+  Bind(move_left,          KeyCode_Left);
+  Bind(move_right,         KeyCode_Right);
+  Bind(seek_end_of_line,   KeyCode_End);
+  Bind(right_adjust_view,  KeyCode_Home);
+
+  SelectMap(code_id);
+  ParentMap(file_id);
+}
+
+CUSTOM_COMMAND_SIG(kv_startup)
+{
+  default_startup(app);  // NOTE(kv): this thing stomps over your binding
+  kv_essential_mapping(&framework_mapping);
+  kv_default_bindings(&framework_mapping);
+  kv_open_startup_files(app);
+	set_window_title(app, string_u8_litexpr("4coder kv"));
 }
 
 function void kvInitQuailTable(Application_Links *app)
@@ -226,9 +265,8 @@ function void kv_vim_bindings(Application_Links *app)
   // BIND(N|MAP,     vim_delete_char,                 KeyCode_Delete);
   BIND(I|MAP,     word_complete,                   KeyCode_Tab);
   BIND(I|MAP,     vim_paste_before,              M|KeyCode_V);
-
-  /// Digit Binds
-  BIND(N|0|MAP, vim_modal_0,                          KeyCode_0);
+  BIND(I|MAP,     kv_newline_and_indent,           KeyCode_Return)
+  BIND(N|MAP,     kv_newline_and_indent,         S|KeyCode_K); 
 
   /// Movement Binds
   BIND(N|V|MAP, vim_left,                           KeyCode_H);
@@ -241,6 +279,7 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|V|MAP, vim_backward_WORD,               (S|KeyCode_B));
   BIND(N|V|MAP, vim_forward_end,                    KeyCode_E);
   BIND(N|V|MAP, vim_forward_END,                 (S|KeyCode_E));
+  BIND(N|V|MAP, vim_modal_0,                        KeyCode_0);
 
   BIND(N|V|MAP, vim_forward_word,  KeyCode_W);
   BIND(N|V|MAP, vim_backward_word, KeyCode_B);
@@ -329,7 +368,9 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|MAP,   kv_delete_surrounding_groupers,  M|KeyCode_RightBracket);
 
   // NOTE(kv) KV miscellaneous binds
-  BIND(N|  MAP,  kv_handle_return,           KeyCode_Return);
+  BIND(N|  MAP,  kv_handle_return,                        KeyCode_Return);
+  BIND(N|  MAP,  if_read_only_goto_position_same_panel, S|KeyCode_Return);
+  //
   BIND(N|  MAP,  write_space,                KeyCode_Space);
   BIND(N|  MAP,  vim_insert_end,             KeyCode_A);
   BIND(  V|MAP,  vim_end_line,               KeyCode_A);
@@ -341,44 +382,9 @@ function void kv_vim_bindings(Application_Links *app)
   BIND(N|  MAP,  quick_swap_buffer,        M|KeyCode_Comma);
   BIND(N|0|MAP,  kv_do_t,                    KeyCode_T);
   BIND(N|0|MAP,  kv_do_T,                  S|KeyCode_T);
-  BIND(N|0|MAP,  kv_split_line,            S|KeyCode_K); 
   BIND(N|0|MAP,  open_panel_vsplit,        M|KeyCode_V);
 
 #undef BIND
-}
-
-function void 
-byp_default_bindings(Mapping *mapping)
-{
-  String_ID global_id = vars_save_string_lit("keys_global");
-  String_ID file_id   = vars_save_string_lit("keys_file");
-  String_ID code_id   = vars_save_string_lit("keys_code");
-
-  MappingScope();
-  SelectMapping(mapping);
-
-  SelectMap(global_id);
-
-  Bind(toggle_fullscreen,   KeyCode_F11);
-  Bind(increase_face_size,  KeyCode_Equal, KeyCode_Control);
-  Bind(decrease_face_size,  KeyCode_Minus, KeyCode_Control);
-  Bind(byp_reset_face_size, KeyCode_0, KeyCode_Control);
-  Bind(exit_4coder,         KeyCode_Control, KeyCode_Q);
-
-  SelectMap(file_id);
-  ParentMap(global_id);
-
-  Bind(delete_char,        KeyCode_Delete);
-  Bind(backspace_char,     KeyCode_Backspace);
-  Bind(move_up,            KeyCode_Up);
-  Bind(move_down,          KeyCode_Down);
-  Bind(move_left,          KeyCode_Left);
-  Bind(move_right,         KeyCode_Right);
-  Bind(seek_end_of_line,   KeyCode_End);
-  Bind(right_adjust_view,  KeyCode_Home);
-
-  SelectMap(code_id);
-  ParentMap(file_id);
 }
 
 void default_bindings_custom_layer_init(Application_Links *app)
@@ -446,7 +452,6 @@ kv_custom_layer_init(Application_Links *app)
   kvInitQuailTable(app);
   //
   kv_vim_bindings(app);
-  byp_default_bindings(&framework_mapping);
 
   // NOTE(rjf): Set up custom code index.
   F4_Index_Initialize();
