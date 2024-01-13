@@ -4,10 +4,9 @@
 #define FCODER_FLEURY_LANG_LIST_H
 
 // NOTE(rjf): Include language files here.
-#include "4coder_fleury/4coder_fleury_lang_jai.cpp"
-#include "4coder_fleury/4coder_fleury_lang_cpp.cpp"
-#include "4coder_fleury/4coder_fleury_lang_metadesk.cpp"
-#include "4coder_kv_lang_skm.cpp"
+#include "4coder_fleury_lang_jai.cpp"
+#include "4coder_fleury_lang_cpp.cpp"
+#include "4coder_fleury_lang_metadesk.cpp"
 
 // NOTE(rjf): @f4_register_languages Register languages.
 function void
@@ -61,16 +60,6 @@ F4_RegisterLanguages(void)
                                 F4_MD_Highlight,
                                 Lex_State_Cpp);
         }
-    }
-
-    {
-        F4_RegisterLanguage(S8Lit("skm"),
-                            F4_Skm_IndexFile,
-                            lex_full_input_skm_init,
-                            lex_full_input_skm_breaks,
-                            F4_Skm_PosContext,
-                            F4_Skm_Highlight,
-                            Lex_State_Skm);
     }
 }
 

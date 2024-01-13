@@ -45,14 +45,15 @@ try:
     run_only       = (len(sys.argv) > 1 and sys.argv[1] == 'run')
     full_rebuild   = (len(sys.argv) > 1 and sys.argv[1] == 'full')  # hopefully never have to be used
 
-    DEBUG_MODE = False
+    DEBUG_MODE = True
     ADDRESS_SANITIZER_ON = False
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CUSTOM} -I{AUTODRAW}/libs -I{AUTODRAW}/4coder_kv/libs -I{AUTODRAW}/code'
     OPTIMIZATION='-O0' if DEBUG_MODE else '-O2'
-    opts = f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses -g -DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 {INCLUDES} {OPTIMIZATION}"
-    arch = "-m64"
+    SYMBOLS=f'-DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 -DKV_DEBUG_MODE={1 if DEBUG_MODE else 0}'
+    arch="-m64"
     debug="-g" if DEBUG_MODE else ""
+    opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses {SYMBOLS} {debug} {INCLUDES} {OPTIMIZATION}"
 
     if run_only:
         dyld_insert_libraries="DYLD_INSERT_LIBRARIES=/usr/local/Cellar/llvm/17.0.6/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib" if ADDRESS_SANITIZER_ON else ""
@@ -102,6 +103,9 @@ try:
         run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')
 
         print('Build complete!')
+
+        print('Run verification script')
+        run(f'{AUTODRAW}/tools/find-todo.sh')
 
 except Exception as e:
     print(f'Error: {e}')

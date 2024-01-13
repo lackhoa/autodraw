@@ -1,4 +1,3 @@
-
 function BUFFER_EDIT_RANGE_SIG(F4_BufferEditRange_skm)
 {
     // buffer_id, new_range, original_size

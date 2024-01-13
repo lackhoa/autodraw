@@ -1,3 +1,4 @@
+#pragma once
 
 #include "4coder_fleury_plot.h"
 #include "4coder_fleury_colors.h"

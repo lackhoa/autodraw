@@ -4,9 +4,7 @@
 #define FCODER_FLEURY_LANG_LIST_H
 
 // NOTE(rjf): Include language files here.
-#include "4coder_fleury/4coder_fleury_lang_jai.cpp"
 #include "4coder_fleury/4coder_fleury_lang_cpp.cpp"
-#include "4coder_fleury/4coder_fleury_lang_metadesk.cpp"
 #include "4coder_kv_lang_skm.cpp"
 
 // NOTE(rjf): @f4_register_languages Register languages.
@@ -32,37 +30,6 @@ F4_RegisterLanguages(void)
         }
     }
     
-    // NOTE(rjf): Jai
-    {
-        F4_RegisterLanguage(S8Lit("jai"),
-                            F4_Jai_IndexFile,
-                            lex_full_input_jai_init,
-                            lex_full_input_jai_breaks,
-                            F4_Jai_PosContext,
-                            F4_Jai_Highlight,
-                            Lex_State_Jai);
-    }
-
-    // NOTE(rjf): Metadesk
-    {
-        String_Const_u8 extensions[] =
-        {
-            // TODO(rjf): Maybe find a config-driven way to specify these? "mc" was sort of
-            // introduced ad-hoc...
-            S8Lit("md"), S8Lit("mc"), S8Lit("metacode"), S8Lit("meta"), S8Lit("metadesk"),
-        };
-        for(int i = 0; i < ArrayCount(extensions); i += 1)
-        {
-            F4_RegisterLanguage(extensions[i],
-                                F4_MD_IndexFile,
-                                lex_full_input_cpp_init,
-                                lex_full_input_cpp_breaks,
-                                F4_MD_PosContext,
-                                F4_MD_Highlight,
-                                Lex_State_Cpp);
-        }
-    }
-
     {
         F4_RegisterLanguage(S8Lit("skm"),
                             F4_Skm_IndexFile,

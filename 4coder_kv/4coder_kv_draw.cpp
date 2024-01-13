@@ -140,8 +140,9 @@ kv_draw_paren_highlight(Application_Links *app, Buffer_ID buffer, Text_Layout_ID
 }
 
 function void
-byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buffer_ID buffer, Text_Layout_ID text_layout_id, Rect_f32 rect)
+kv_render_buffer(Application_Links *app, Frame_Info frame_info, View_ID view_id, Face_ID face_id, Buffer_ID buffer, Text_Layout_ID text_layout_id, Rect_f32 rect)
 {
+  // NOTE: originally from "byp_render_buffer"
   ProfileScope(app, "render buffer");
   b32 is_active_view = view_id == get_active_view(app, Access_Always);
   Rect_f32 prev_clip = draw_set_clip(app, rect);
@@ -231,6 +232,18 @@ byp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id, Buff
   vim_draw_after_text(app, view_id, is_active_view, buffer, text_layout_id, cursor_roundness, mark_thickness);
 
   draw_set_clip(app, prev_clip);
+  
+  // NOTE(rjf): Interpret the calc buffer as calc code.
+  Buffer_ID calc_buffer_id = get_buffer_by_name(app, string_u8_litexpr("*calc*"), AccessFlag_Read);
+  if(calc_buffer_id == buffer)
+  {
+    F4_CLC_RenderBuffer(app, buffer, view_id, text_layout_id, frame_info);
+  }
+  
+  // NOTE(rjf): Draw calc comments.
+  {
+    F4_CLC_RenderComments(app, buffer, view_id, text_layout_id, frame_info);
+  }
 }
 
 function Render_Caller_Function kv_render_caller;
@@ -309,7 +322,7 @@ kv_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
 		draw_rectangle_fcolor(app, line_number_rect, 0.f, fcolor_id(defcolor_back));
 	}
 
-	byp_render_buffer(app, view, face_id, buffer, text_layout_id, region);
+	kv_render_buffer(app, frame_info, view, face_id, buffer, text_layout_id, region);
 
 	text_layout_free(app, text_layout_id);
 	draw_set_clip(app, prev_clip);

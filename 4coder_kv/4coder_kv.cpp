@@ -3,24 +3,28 @@
 #include "4coder_kv_hooks.cpp"
 #include "4coder_kv_draw.cpp"
 #include "4coder_kv_vim_stuff.cpp"
+#include "4coder_kv_lang_list.h"
 #include "ad_editor.h"
 
-// note: Custom layer swapout, for testing and trying out
-enum LayerToUse
-{
-  LayerToUse_kv,
-  LayerToUse_fleury_lite,  // NOTE(kv) This is for testing out new functionalities integrated from the Fleury layer.
-  LayerToUse_fleury,
-  LayerToUse_default_bindings,
-};
-#define layer_to_use LayerToUse_kv
+// note: Custom layer swapping for testing and trying out.
+// note: Please enable only one layer, or else it explodes!
+#if KV_DEBUG_MODE
+#    define USE_LAYER_kv               1
+#    define USE_LAYER_fleury_lite      0
+#    define USE_LAYER_fleury           0
+#    define USE_LAYER_default_bindings 0
+#else
+#    define USE_LAYER_kv               1
+#endif
 
-#if layer_to_use == LayerToUse_fleury
-#    include "4coder_fleury/4coder_fleury.cpp"  // because includes will bring in weird commands I don't need
+#if    USE_LAYER_fleury
+#    include "4coder_fleury/4coder_fleury.cpp"  // because including this will bring in weird commands I don't need / can't use
+#elif  USE_LAYER_fleury_lite
+#    include "4coder_kv_fleury_lite.cpp"
 #endif
 
 #if !defined(META_PASS)
-#  include "generated/managed_id_metadata.cpp"  // from Mr. Allen 4th
+#    include "generated/managed_id_metadata.cpp"  // from Mr. Allen 4th
 #endif
 
 function void kvInitShiftedTable()
@@ -50,14 +54,19 @@ function void kvInitShiftedTable()
 #undef INSERT
 }
 
-void kv_open_startup_file(Application_Links *app)
+void kv_open_startup_files(Application_Links *app)
 {
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/4coder_kv/"));
   load_project(app);
   View_ID view = get_this_ctx_view(app, Access_Always);
-  char *startup_file = "~/notes/note.skm";
-  // char *startup_file = "~/notes/test.skm";
-  // char *startup_file = "/tmp/test.cpp";
+
+#if USE_LAYER_fleury || USE_LAYER_fleury_lite
+  char *startup_file = "~/AutoDraw/4coder_kv/4coder_fleury/4coder_fleury_plots_demo.cpp";
+#else
+  // char *startup_file = "~/notes/note.skm";
+  char *startup_file = "~/AutoDraw/4coder_kv/4coder_fleury/4coder_fleury_plots_demo.cpp";
+#endif
+
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
   if (view && buffer)
   {
@@ -68,7 +77,7 @@ void kv_open_startup_file(Application_Links *app)
 CUSTOM_COMMAND_SIG(kv_startup)
 {
   default_startup(app);
-  kv_open_startup_file(app);
+  kv_open_startup_files(app);
 	set_window_title(app, string_u8_litexpr("4coder kv"));
 }
 
@@ -87,7 +96,7 @@ kv_essential_mapping(Mapping *mapping)
   BindCore(clipboard_record_clip, CoreCode_NewClipboardContents);
   BindMouseWheel(mouse_wheel_scroll);
   BindMouseWheel(mouse_wheel_change_face_size, KeyCode_Control);
-  //BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);
+  BindCore(vim_file_externally_modified, CoreCode_FileExternallyModified);
 
   SelectMap(file_id);
   ParentMap(global_id);
@@ -392,10 +401,15 @@ void default_bindings_custom_layer_init(Application_Links *app)
 	  setup_essential_mapping(&framework_mapping, global_map_id, file_map_id, code_map_id);
 }
 
-void kv_custom_layer_init(Application_Links *app)
+function void 
+kv_custom_layer_init(Application_Links *app)
 {
   default_framework_init(app);
   set_all_default_hooks(app);
+  
+  // fleury
+  global_frame_arena = make_arena(get_base_allocator_system());
+  permanent_arena = make_arena(get_base_allocator_system());
 
   vim_buffer_peek_list[ArrayCount(vim_default_peek_list) + 0] = { buffer_identifier(string_u8_litexpr("*scratch*")), 1.f, 1.f };
   vim_buffer_peek_list[ArrayCount(vim_default_peek_list) + 1] = { buffer_identifier(string_u8_litexpr("todo.txt")),  1.f, 1.f };
@@ -413,7 +427,7 @@ void kv_custom_layer_init(Application_Links *app)
   // set_custom_hook(app, HookID_BufferRegion,            byp_buffer_region);
   set_custom_hook(app, HookID_RenderCaller,            kv_render_caller);
   set_custom_hook(app, HookID_WholeScreenRenderCaller, vim_draw_whole_screen);
-
+  //
   set_custom_hook(app, HookID_Tick,             kv_tick);
   set_custom_hook(app, HookID_NewFile,          kv_new_file);
   set_custom_hook(app, HookID_BeginBuffer,      kv_begin_buffer);
@@ -456,12 +470,15 @@ CUSTOM_DOC("test ad integration")
 
 void custom_layer_init(Application_Links *app)
 {
-  switch (layer_to_use) {
-    case LayerToUse_kv:               kv_custom_layer_init(app);               break;
-    case LayerToUse_fleury:           fleury_custom_layer_init(app);           break;
-    case LayerToUse_fleury_lite:      fleury_lite_custom_layer_init(app);      break;
-    case LayerToUse_default_bindings: default_bindings_custom_layer_init(app); break;
-  }
+#if USE_LAYER_kv
+  kv_custom_layer_init(app);
+#elif USE_LAYER_fleury
+  fleury_custom_layer_init(app);
+#elif USE_LAYER_fleury_lite
+  fleury_lite_custom_layer_init(app);
+#elif USE_LAYER_default_bindings
+  default_bindings_custom_layer_init(app);
+#endif
 
   {// note(kv): shared startup code
     MappingScope();

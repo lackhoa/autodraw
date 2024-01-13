@@ -47,13 +47,13 @@ defcolor_line_numbers_text     = 0xFF404040;
 defcolor_function                   =  defcolor_blue;
 defcolor_type                       =  defcolor_orange;
 defcolor_primitive                  =  defcolor_orange;
-defcolor_macro                      =  defcolor_keyword;
+defcolor_macro                      =  0xFF666666;
 defcolor_control                    =  defcolor_preproc;
 defcolor_struct                     =  defcolor_keyword;
 defcolor_non_text                   =  defcolor_yellow;  // parens
 
 /// Vim Colors
-defcolor_vim_filebar_pop            =  0xFF8A4CDB;
+defcolor_vim_filebar_pop            =  0xFF333333;
 defcolor_vim_chord_text             =  defcolor_text_default;
 defcolor_vim_chord_unresolved       =  defcolor_mark;
 defcolor_vim_chord_error            =  defcolor_special_character;
