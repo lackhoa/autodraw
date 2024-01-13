@@ -34,3 +34,40 @@ push_buffer_dir_name(Application_Links *app, Arena *arena, Buffer_ID buffer)
   String_Const_u8 filename = push_buffer_file_name(app, arena, buffer);
   return string_remove_last_folder(filename);
 }
+
+internal Token *
+kv_token_at_cursor(Application_Links *app, i64 delta=0)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Array tokens = get_token_array_from_buffer(app, buffer);
+  i64 pos = view_correct_cursor(app, view) + delta;
+  return token_from_pos(&tokens, pos);
+}
+
+internal Token_Iterator_Array
+kv_token_it_at_cursor(Application_Links *app, i64 delta=0)
+{
+  GET_VIEW_AND_BUFFER;
+  Token_Array tokens = get_token_array_from_buffer(app, buffer);
+  i64 pos = view_correct_cursor(app, view) + delta;
+  return token_iterator_pos(0, &tokens, pos);
+}
+
+inline void kv_goto_pos(Application_Links *app, View_ID view, i64 pos)
+{
+  view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
+}
+
+inline void kv_goto_token(Application_Links *app, Token *token)
+{
+  View_ID view = get_active_view(app, Access_ReadVisible);
+  view_set_cursor_and_preferred_x(app, view, seek_pos(token->pos));
+}
+
+inline Range_i64 token_range(Token *token)
+{
+  if (token)
+    return Range_i64{token->pos, token->pos + token->size};
+  else
+    return Range_i64{};
+}

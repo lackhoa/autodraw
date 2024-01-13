@@ -70,7 +70,7 @@ VIM_REQUEST_SIG(vim_apply_indent){
 	History_Group history_group = history_group_begin(app, buffer);
 	for(i64 l=line0; l<line1; l++){
 		i64 pos = get_line_start_pos(app, buffer, l);
-		buffer_replace_range(app, buffer, Ii64(pos), string_u8_litexpr("\t"));
+		buffer_replace_range(app, buffer, Ii64(pos), string_u8_litexpr("    "));
 	}
 	history_group_end(history_group);
 }
@@ -82,8 +82,19 @@ VIM_REQUEST_SIG(vim_apply_outdent){
 	History_Group history_group = history_group_begin(app, buffer);
 	for(i64 l=line0; l<line1; l++){
 		i64 pos = get_line_start_pos(app, buffer, l);
-		Range_i64 tab_range = Ii64(pos, pos + (buffer_get_char(app, buffer, pos) == '\t'));
-		buffer_replace_range(app, buffer, tab_range, string_u8_empty);
+    i64 end = pos;
+    // Get the last space out of the 4 from beginning of the line
+    for (i64 test_pos=pos; 
+         test_pos < pos+4;
+         test_pos++)
+    {
+      if (buffer_get_char(app, buffer, test_pos) == ' ')
+        end = test_pos+1;
+      else
+        break;
+    }
+		Range_i64 indent_range = Ii64(pos, end);
+		buffer_replace_range(app, buffer, indent_range, string_u8_empty);
 	}
 	history_group_end(history_group);
 }

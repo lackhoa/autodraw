@@ -171,51 +171,39 @@ void kv_vim_bounce(Application_Links *app)
   view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
 }
 
-inline void kv_move_to_token(Application_Links *app, Token *token)
-{
-  View_ID   view = get_active_view(app, Access_ReadVisible);
-  view_set_cursor_and_preferred_x(app, view, seek_pos(token->pos));
-}
-
-internal Token *
-kv_token_at_cursor(Application_Links *app, i64 delta=0)
-{
-  GET_VIEW_AND_BUFFER;
-  Token_Array tokens = get_token_array_from_buffer(app, buffer);
-  i64 pos = view_correct_cursor(app, view) + delta;
-  return token_from_pos(&tokens, pos);
-}
-
-internal Token_Iterator_Array
-kv_token_it_at_cursor(Application_Links *app, i64 delta=0)
-{
-  GET_VIEW_AND_BUFFER;
-  Token_Array tokens = get_token_array_from_buffer(app, buffer);
-  i64 pos = view_correct_cursor(app, view) + delta;
-  return token_iterator_pos(0, &tokens, pos);
-}
-
-// todo(kv): support fallback path that works on characters
+// todo(kv): support fallback path that works on characters instead of tokens
 function b32
-kv_find_surrounding_nest(Application_Links *app, Buffer_ID buffer, i64 pos, Range_i64 *out)
+kv_find_current_nest(Application_Links *app, Buffer_ID buffer, i64 pos, Range_i64 *out)
 {
-  b32 result = false;
-  
-  u8 current_char = buffer_get_char(app, buffer, pos);
-  if ( kv_is_group_opener(current_char) )
-    pos++;
-  
-  Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
-  Range_i64 range = {};
-  if (find_nest_side(app, buffer, pos-1, flags,
-                     Scan_Backward, NestDelim_Open, &range.start) &&
-      find_nest_side(app, buffer, pos, flags|FindNest_EndOfToken,
-                     Scan_Forward, NestDelim_Close, &range.end))
+  Token *token = kv_token_at_cursor(app);
+  if (token == 0) return false;
+
+  if (token->kind == TokenBaseKind_LiteralString)
   {
-    *out = range;
-    result = true;
+    *out = token_range(token);
+    return true;
   }
-  return(result);
+  else
+  {
+    u8 current_char = buffer_get_char(app, buffer, pos);
+    if ( kv_is_group_opener(current_char) )
+      pos++;
+    
+    Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
+    Range_i64 range = {};
+    if (find_nest_side(app, buffer, pos-1, flags,
+                       Scan_Backward, NestDelim_Open, &range.start) &&
+        find_nest_side(app, buffer, pos, flags|FindNest_EndOfToken,
+                       Scan_Forward, NestDelim_Close, &range.end))
+    {
+      *out = range;
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
 }
 
 VIM_COMMAND_SIG(kv_sexpr_up)
@@ -231,12 +219,10 @@ VIM_COMMAND_SIG(kv_sexpr_up)
     pos--;
   }
 
-  i64 newpos = pos;
   Find_Nest_Flag flags = FindNest_Scope | FindNest_Paren | FindNest_Balanced;
-  if ( find_nest_side(app, buffer, pos, flags, Scan_Backward, NestDelim_Open, &newpos) )
-  {
-    view_set_cursor_and_preferred_x( app, view, seek_pos(newpos) );
-  }
+  Range_i64 range = {pos, pos};
+  kv_find_current_nest(app, buffer, pos, &range);
+  kv_goto_pos(app, view, range.start);
 }
 
 VIM_COMMAND_SIG(kv_sexpr_down)
@@ -249,7 +235,7 @@ VIM_COMMAND_SIG(kv_sexpr_down)
     Token *token = token_it_read(&token_it);
     if (kv_is_group_opener(token))
     {
-      kv_move_to_token(app, token);
+      kv_goto_token(app, token);
       move_right(app);
       break;
     }
@@ -264,22 +250,27 @@ VIM_COMMAND_SIG(kv_sexpr_right)
   if (!token) return;
   do
   {
-    Token *token = token_it_read(&token_it);
-    if (kv_is_group_opener(token))
+    token = token_it_read(&token_it);
+    if (token->kind == TokenBaseKind_LiteralString)
     {
-      kv_move_to_token(app, token);
-      // todo(kv): we can do "find_nest_side" here
+      i64 token_end = token_range(token).end;
+      kv_goto_pos(app, view, token_end);
+      break;
+    }
+    else if (kv_is_group_opener(token))
+    {
+      kv_goto_token(app, token);
       kv_vim_bounce(app);
       move_right(app);
       break;
     }
     else if (kv_is_group_closer(token))
     {
-      kv_move_to_token(app, token);
+      kv_goto_token(app, token);
       move_left(app);
       break;
     }
-  } while (token_it_inc(&token_it));
+  } while ( token_it_inc(&token_it) );
 }
 
 VIM_COMMAND_SIG(kv_sexpr_left)
@@ -291,15 +282,20 @@ VIM_COMMAND_SIG(kv_sexpr_left)
   do
   {
     Token *token = token_it_read(&token_it);
-    if (kv_is_group_opener(token))
+    if (token->kind == TokenBaseKind_LiteralString)
     {
-      kv_move_to_token(app, token);
+      kv_goto_token(app, token);
+      break;
+    }
+    else if (kv_is_group_opener(token))
+    {
+      kv_goto_token(app, token);
       move_right(app);
       break;
     }
     else if (kv_is_group_closer(token))
     {
-      kv_move_to_token(app, token);
+      kv_goto_token(app, token);
       kv_vim_bounce(app);
       break;
     }
@@ -394,7 +390,7 @@ VIM_COMMAND_SIG(kv_sexpr_select_whole)
 
   i64 pos = view_get_cursor_pos(app, view);
   Range_i64 nest = {};
-  if ( kv_find_surrounding_nest(app, buffer, pos, &nest) )
+  if ( kv_find_current_nest(app, buffer, pos, &nest) )
   {
     view_set_cursor_and_preferred_x(app, view, seek_pos(nest.min));
     view_set_mark(app, view, seek_pos(nest.max-1));
@@ -479,7 +475,7 @@ VIM_COMMAND_SIG(kv_delete_surrounding_groupers)
 
   i64 pos = view_get_cursor_pos(app, view);
   Range_i64 range = {};
-  if ( kv_find_surrounding_nest(app, buffer, pos, &range) )
+  if ( kv_find_current_nest(app, buffer, pos, &range) )
   {
     kv_buffer_delete_pos(app, buffer, range.max-1);
     kv_buffer_delete_pos(app, buffer, range.min);

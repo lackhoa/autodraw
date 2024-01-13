@@ -113,7 +113,8 @@ kv_essential_mapping(Mapping *mapping)
 function void kvInitQuailTable(Application_Links *app)
 {
   arrsetcap(kv_quail_table, 64);
-#define QUAIL_DEFRULE(KEY, VALUE)           kv_quail_defrule(app, KEY, VALUE, strlen(KEY)-1, 0, strlen(VALUE))
+  
+#define QUAIL_DEFRULE(KEY, VALUE) kv_quail_defrule(app, KEY, VALUE, strlen(KEY)-1, 0, strlen(VALUE))
 
   QUAIL_DEFRULE(",,", "_");
   QUAIL_DEFRULE(",,.", "=>");
@@ -141,7 +142,7 @@ function void kvInitQuailTable(Application_Links *app)
   kv_quail_defrule(app, "[[", "{}", 1,1,1);
   QUAIL_DEFRULE("]]", "}");
   //
-  QUAIL_DEFRULE("''", "\"");
+  kv_quail_defrule(app, "''", "\"\"", 1,0,1);
   QUAIL_DEFRULE("leq", "<=");
   QUAIL_DEFRULE("geq", ">=");
   QUAIL_DEFRULE("gtt", ">");
