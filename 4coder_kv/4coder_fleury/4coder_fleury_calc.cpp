@@ -2301,146 +2301,140 @@ CalcInterpretContextInit(Application_Links *app, Buffer_ID buffer, Text_Layout_I
 function void
 F4_CLC_RenderCode(Application_Links *app, Buffer_ID buffer,
                   View_ID view, Text_Layout_ID text_layout_id,
-                  Frame_Info frame_info, Arena *arena, char *code_buffer,
+                  Arena *arena, char *code_buffer,
                   i64 start_char_offset)
 {
-    ProfileScope(app, "[Fleury] Render Calc Code");
-    
-    f32 current_time = global_calc_time;
-    CalcSymbolTable symbol_table = CalcSymbolTableInit(arena, 1024);
-    
-    // NOTE(rjf): Add default symbols.
-    {
-        // NOTE(rjf): Pi
-        {
-            CalcValue value = CalcValueF64(3.1415926535897);
-            CalcSymbolTableAdd(&symbol_table, "pi", 2, value);
-        }
-        
-        // NOTE(rjf): e
-        {
-            CalcValue value = CalcValueF64(2.71828);
-            CalcSymbolTableAdd(&symbol_table, "e", 1, value);
-        }
-    }
-    
-    CalcInterpretContext context_ = CalcInterpretContextInit(app, buffer, text_layout_id, arena,
-                                                             &symbol_table, current_time);
-    CalcInterpretContext *context = &context_;
-    
+  ProfileScope(app, "[Fleury] Render Calc Code");
+  
+  f32 current_time = global_calc_time;
+  CalcSymbolTable symbol_table = CalcSymbolTableInit(arena, 1024);
+  {// NOTE(rjf): Add default symbols.
+    CalcValue pi = CalcValueF64(3.1415926535897);
+    CalcValue e  = CalcValueF64(2.71828);
+    CalcSymbolTableAdd(&symbol_table, "pi", 2, pi);
+    CalcSymbolTableAdd(&symbol_table, "e", 1, e);
+  }
+  
+  CalcInterpretContext context_ = CalcInterpretContextInit(app, buffer, text_layout_id, arena,
+                                                           &symbol_table, current_time);
+  CalcInterpretContext *context = &context_;
+  
+  CalcNode *expr;
+  {
     char *at = code_buffer;
-    CalcNode *expr = ParseCalcCode(arena, &at);
+    expr = ParseCalcCode(arena, &at);
+  }
+  
+  Rect_f32 last_graph_rect = {0};
+  
+  for(CalcNode *interpret_expression = expr; 
+      interpret_expression;
+      interpret_expression = interpret_expression->next)
+  {
+    char *at_source = interpret_expression->at_source;
     
-    Rect_f32 last_graph_rect = {0};
-    
-    for(CalcNode *interpret_expression = expr; interpret_expression;
-        interpret_expression = interpret_expression->next)
+    // NOTE(rjf): Find starting result layout position.
+    Vec2_f32 result_layout_position = {0};
+    if(at_source)
     {
-        char *at_source = interpret_expression->at_source;
-        
-        // NOTE(rjf): Find starting result layout position.
-        Vec2_f32 result_layout_position = {0};
-        if(at_source)
-        {
-            i64 offset = (i64)(at_source - code_buffer);
-            for(int i = 0; at_source[i] && at_source[i] != '\n'; ++i)
-            {
-                ++offset;
-            }
-            i64 buffer_offset = start_char_offset + offset;
-            Rect_f32 last_character_rect = text_layout_character_on_screen(app, text_layout_id,
-                                                                           buffer_offset);
-            result_layout_position.x = last_character_rect.x0;
-            result_layout_position.y = last_character_rect.y0;
-            result_layout_position.x += 20;
-        }
-        
-        CalcInterpretResult result = InterpretCalcCode(context, interpret_expression);
-        
-        if(result_layout_position.x > 0 && result_layout_position.y > 0)
-        {
-            
-            // NOTE(rjf): Draw result, if there's one.
-            {
-                String_Const_u8 result_string = {0};
-                
-                switch(result.value.type)
-                {
-                    case CalcType_Error:
-                    {
-                        if(expr == 0 || !result.value.as_error.size)
-                        {
-                            result_string = push_stringf(arena, "(error: Parse failure.)");
-                        }
-                        else
-                        {
-                            result_string = push_stringf(arena, "(error: %.*s)", string_expand(result.value.as_error));
-                        }
-                        break;
-                    }
-                    case CalcType_Number:
-                    {
-                        result_string = push_stringf(arena, "= %f", result.value.as_f64);
-                        break;
-                    }
-                    case CalcType_String:
-                    {
-                        result_string = push_stringf(arena, "= %.*s", string_expand(result.value.as_string));
-                        break;
-                    }
-                    default: break;
-                }
-                
-                Vec2_f32 point = result_layout_position;
-                
-                u32 color = finalize_color(defcolor_comment, 0);
-                color &= 0x00ffffff;
-                color |= 0x80000000;
-                draw_string(app, get_face_id(app, buffer), result_string, point, color);
-            }
-            
-            // NOTE(rjf): Draw graphs.
-            {
-                Rect_f32 view_rect = view_get_screen_rect(app, view);
-                
-                Rect_f32 graph_rect = {0};
-                {
-                    graph_rect.x0 = view_rect.x1 - 30 - 300;
-                    graph_rect.y0 = result_layout_position.y + 30 - 100;
-                    graph_rect.x1 = graph_rect.x0 + 300;
-                    graph_rect.y1 = graph_rect.y0 + 200;
-                }
-                
-                CalcNode *last_parent_call = 0;
-                for(CalcInterpretGraph *graph = result.first_graph; graph;
-                    graph = graph->next)
-                {
-                    if(last_parent_call == 0 || graph->parent_call != last_parent_call)
-                    {
-                        if(last_graph_rect.x0 != 0 && rect_overlap(graph_rect, last_graph_rect))
-                        {
-                            graph_rect.y0 = last_graph_rect.y1 + 50;
-                            graph_rect.y1 = graph_rect.y0 + 200;
-                        }
-                        
-                        last_graph_rect = graph_rect;
-                        
-                        GraphCalcExpression(app, get_face_id(app, buffer), graph_rect, graph, context);
-                        
-                        // NOTE(rjf): Bump graph rect forward.
-                        {
-                            f32 rect_height = graph_rect.y1 - graph_rect.y0;
-                            graph_rect.y0 += rect_height + 50;
-                            graph_rect.y1 += rect_height + 50;
-                            result_layout_position.y += rect_height + 50;
-                        }
-                        
-                        last_parent_call = graph->parent_call;
-                    }
-                }
-            }
-        }
+      i64 offset = (i64)(at_source - code_buffer);
+      for (int i = 0; at_source[i] && at_source[i] != '\n'; ++i)
+      {
+        ++offset;
+      }
+      i64 buffer_offset = start_char_offset + offset;
+      Rect_f32 last_character_rect = text_layout_character_on_screen(app, text_layout_id, buffer_offset);
+      result_layout_position.x = last_character_rect.x0;
+      result_layout_position.y = last_character_rect.y0;
+      result_layout_position.x += 20;
     }
+    
+    CalcInterpretResult result = InterpretCalcCode(context, interpret_expression);
+    
+    if(result_layout_position.x > 0 && result_layout_position.y > 0)
+    {
+      // NOTE(rjf): Draw result, if there's one.
+      {
+        String_Const_u8 result_string = {0};
+        
+        switch(result.value.type)
+        {
+          case CalcType_Error:
+          {
+            if(expr == 0 || !result.value.as_error.size)
+            {
+              result_string = push_stringf(arena, "(error: Parse failure.)");
+            }
+            else
+            {
+              result_string = push_stringf(arena, "(error: %.*s)", string_expand(result.value.as_error));
+            }
+            break;
+          }
+          case CalcType_Number:
+          {
+            result_string = push_stringf(arena, "= %f", result.value.as_f64);
+            break;
+          }
+          case CalcType_String:
+          {
+            result_string = push_stringf(arena, "= %.*s", string_expand(result.value.as_string));
+            break;
+          }
+          default: break;
+        }
+        
+        Vec2_f32 point = result_layout_position;
+        
+        u32 color = finalize_color(defcolor_comment, 0);
+        color &= 0x00ffffff;
+        color |= 0x80000000;
+        draw_string(app, get_face_id(app, buffer), result_string, point, color);
+      }
+      
+      // NOTE(rjf): Draw graphs.
+      {
+        Rect_f32 view_rect = view_get_screen_rect(app, view);
+        
+        Rect_f32 graph_rect = {0};
+        {
+          graph_rect.x0 = view_rect.x1 - 30 - 300;
+          graph_rect.y0 = result_layout_position.y + 30 - 100;
+          graph_rect.x1 = graph_rect.x0 + 300;
+          graph_rect.y1 = graph_rect.y0 + 200;
+        }
+        
+        CalcNode *last_parent_call = 0;
+        for(CalcInterpretGraph *graph = result.first_graph; 
+              graph;
+            graph = graph->next)
+        {
+          if(last_parent_call == 0 || graph->parent_call != last_parent_call)
+          {
+            if(last_graph_rect.x0 != 0 && rect_overlap(graph_rect, last_graph_rect))
+            {
+              graph_rect.y0 = last_graph_rect.y1 + 50;
+              graph_rect.y1 = graph_rect.y0 + 200;
+            }
+            
+            last_graph_rect = graph_rect;
+            
+            GraphCalcExpression(app, get_face_id(app, buffer), graph_rect, graph, context);
+            
+            // NOTE(rjf): Bump graph rect forward.
+            {
+              f32 rect_height = graph_rect.y1 - graph_rect.y0;
+              graph_rect.y0 += rect_height + 50;
+              graph_rect.y1 += rect_height + 50;
+              result_layout_position.y += rect_height + 50;
+            }
+            
+            last_parent_call = graph->parent_call;
+          }
+        }
+      }
+    }
+  }
 }
 
 function void
@@ -2450,7 +2444,7 @@ F4_CLC_RenderBuffer(Application_Links *app, Buffer_ID buffer, View_ID view,
     Scratch_Block scratch(app);
     Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
     String_Const_u8 code_string = push_whole_buffer(app, scratch, buffer);
-    F4_CLC_RenderCode(app, buffer, view, text_layout_id, frame_info, scratch,
+    F4_CLC_RenderCode(app, buffer, view, text_layout_id, scratch,
                       (char *)code_string.str, visible_range.start);
 }
 
@@ -2489,35 +2483,31 @@ F4_CLC_RenderComments(Application_Links *app, Buffer_ID buffer, View_ID view,
                 Range_i64 token_range =
                 {
                     token->pos,
-                    token->pos + (token->size > 1024
-                                  ? 1024
-                                  : token->size),
+                    token->pos + (token->size > 1024 ? 1024 : token->size),
                 };
                 
                 u32 token_buffer_size = (u32)(token_range.end - token_range.start);
-                if(token_buffer_size < 4)
-                {
-                    token_buffer_size = 4;
-                }
+                if(token_buffer_size < 4) token_buffer_size = 4;
+
                 u8 *token_buffer = push_array(scratch, u8, token_buffer_size+1);
                 buffer_read_range(app, buffer, token_range, token_buffer);
                 token_buffer[token_buffer_size] = 0;
-                
-                if((token_buffer[0] == '/' && token_buffer[1] == '/' && token_buffer[2] == 'c' &&
-                    character_is_whitespace(token_buffer[3])) ||
-                   (token_buffer[0] == '/' && token_buffer[1] == '*' && token_buffer[2] == 'c'))
+             
+                u8 *tb = token_buffer;
+                u32 tbsize = token_buffer_size;
+                b32 is_multiline  = (tb[0] == '/' && tb[1] == '*' && tb[2] == 'c');
+                b32 is_singleline = (tb[0] == '/' && tb[1] == '/' && tb[2] == 'c' && character_is_whitespace(tb[3]));
+                if( is_multiline || is_singleline )
                 {
-                    int is_multiline_comment = (token_buffer[1] == '*');
-                    if(is_multiline_comment)
+                    if(is_multiline)
                     {
-                        if(token_buffer[token_buffer_size-1] == '/' &&
-                           token_buffer[token_buffer_size-2] == '*')
+                        if(tb[tbsize-1] == '/' && tb[tbsize-2] == '*')
                         {
-                            token_buffer[token_buffer_size-2] = 0;
+                            tb[tbsize-2] = 0;
                         }
                     }
                     char *at = (char *)token_buffer + 3;
-                    F4_CLC_RenderCode(app, buffer, view, text_layout_id, frame_info, scratch, at, token_range.start + 3);
+                    F4_CLC_RenderCode(app, buffer, view, text_layout_id, scratch, at, token_range.start + 3);
                 }
             }
         }

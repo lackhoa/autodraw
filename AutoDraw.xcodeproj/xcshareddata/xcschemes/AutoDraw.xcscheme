@@ -26,7 +26,7 @@
       viewDebuggingEnabled = "No">
       <PathRunnable
          runnableDebuggingMode = "0"
-         FilePath = "/Users/khoa/AutoDraw/build/autodraw">
+         FilePath = "/Users/khoa/4coder/4ed">
       </PathRunnable>
       <MacroExpansion>
          <BuildableReference

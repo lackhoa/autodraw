@@ -171,17 +171,11 @@ global_variable f32 todo_text_scale = 0.2f;  // this should make the text tiny, 
 inline f32
 pushLetter(RenderGroup &rgroup, v2 min, char character, v4 color)
 {
-  if (kv_probably(33 <= character && character <= 126))
-  {
-    auto codepoint = rgroup.codepoints[(u8)character];
-    auto dim = todo_text_scale * v2{(f32)codepoint.width, (f32)codepoint.height};
-    pushRect(rgroup, rectMinDim(min, dim), codepointTexture(character), color);
-    return dim.y;
-  }
-  else
-  {
-    return 0;
-  }
+  kv_assert_defend(33 <= character && character <= 126, return 0;);
+  auto codepoint = rgroup.codepoints[(u8)character];
+  auto dim = todo_text_scale * v2{(f32)codepoint.width, (f32)codepoint.height};
+  pushRect(rgroup, rectMinDim(min, dim), codepointTexture(character), color);
+  return dim.y;
 }
 
 f32

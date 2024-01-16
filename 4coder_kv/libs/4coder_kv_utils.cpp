@@ -71,3 +71,42 @@ inline Range_i64 token_range(Token *token)
   else
     return Range_i64{};
 }
+
+inline i64 get_pos_column(Application_Links *app, Buffer_ID buffer, i64 pos)
+{
+  i64 line = get_line_number_from_pos(app, buffer, pos);
+  i64 column = pos - get_line_start_pos(app, buffer, line) + 1;
+  return column;
+}
+
+inline i64 get_current_column(Application_Links *app)
+{
+  GET_VIEW_AND_BUFFER;
+  i64 column = get_pos_column(app, buffer, view_get_cursor_pos(app, view));
+  return column;
+}
+
+
+inline i64 get_current_line(Application_Links *app)
+{
+  GET_VIEW_AND_BUFFER;
+  i64 line = get_line_number_from_pos(app, buffer, view_get_cursor_pos(app, view));
+  return line;
+}
+
+inline i64 get_current_char(Application_Links *app)
+{
+  GET_VIEW_AND_BUFFER;
+  i64 pos = view_get_cursor_pos(app, view);
+  u8 character = buffer_get_char(app, buffer, pos);
+  return character;
+}
+
+inline Rect_f32 
+get_cursor_rect(Application_Links *app, Text_Layout_ID text_layout_id)
+{
+  GET_VIEW_AND_BUFFER;
+  i64 cursor_pos = view_get_cursor_pos(app, view);
+  Rect_f32 result = text_layout_character_on_screen(app, text_layout_id, cursor_pos);
+  return result;
+}

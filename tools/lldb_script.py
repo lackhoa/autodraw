@@ -6,6 +6,7 @@
 # todo https://stackoverflow.com/questions/23812021/how-to-define-a-stop-hook-for-lldb-in-lldbinit
 
 import lldb
+import os
 
 def __lldb_init_module(debugger, internal_dict):
     for i in range(debugger.GetNumTargets()):
@@ -22,7 +23,6 @@ def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand(f'command script add --overwrite -f {__name__}.disable_current_breakpoint bd')
     debugger.HandleCommand(f'command script add --overwrite -f {__name__}.goto_line goto')
     debugger.HandleCommand('process kill --force')
-    debugger.HandleCommand('run')
 
 def print_v3(value, internal_dict, options):
    x = value.GetChildMemberWithName('x').GetValue()

@@ -25,6 +25,18 @@ BUFFER_HOOK_SIG(kv_new_file)
 	return 0;
 }
 
+inline void 
+kv_test_cursor(Application_Links *app)
+{
+  if (0)
+  {
+    // NOTE(kv): test cursor
+    GET_VIEW_AND_BUFFER;
+    u64 roundness = (u64)gb_clamp(get_current_column(app), 0, 50);
+    def_set_config_u64(app, vars_save_string_lit("cursor_roundness"), roundness);
+  }
+}
+
 function Tick_Function kv_tick;
 function void kv_tick(Application_Links *app, Frame_Info frame_info)
 {
@@ -79,6 +91,9 @@ function void kv_tick(Application_Links *app, Frame_Info frame_info)
       kv_print_message(app, "auto-saved all dirty buffers\n");
     }
   }
+ 
+  if (KV_INTERNAL)
+    kv_test_cursor(app);
 }
 
 BUFFER_HOOK_SIG(kv_begin_buffer)

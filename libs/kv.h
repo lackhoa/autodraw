@@ -368,7 +368,7 @@ rotateRight(u32 value, i32 rotateAmount)
 #  define debugbreak __builtin_trap()
 #endif
 
-#define kv_assert(claim) if (!(claim)) { debugbreak; }
+#define kv_assert(claim) do{if (!(claim)) { debugbreak; }} while(0)
 
 #define invalidCodePath kv_assert(false)
 #define todoErrorReport kv_assert(false)
@@ -381,11 +381,9 @@ rotateRight(u32 value, i32 rotateAmount)
 
 #if KV_INTERNAL
 #    define kv_soft_assert        kv_assert
-#    define kv_probably(CLAIM) (kv_assert(CLAIM), true)
 #    define kv_assert_defend(CLAIM, DEFEND)   kv_assert(CLAIM)
 #else
 #    define kv_soft_assert(CLAIM)
-#    define kv_probably(CLAIM) (CLAIM)
 #    define kv_assert_defend(CLAIM, DEFEND)   if (!(CLAIM))  { DEFEND; }
 #endif
 
@@ -545,10 +543,8 @@ inline void
 endTemporaryMemory(TempMemoryMarker temp)
 {
   temp.arena.temp_count--;
-  if (!kv_probably(temp.arena.used >= temp.original_used))
-  {
-    printf("Memory leak detected!\n");
-  }
+  kv_assert_defend(temp.arena.used >= temp.original_used, 
+                   printf("Memory leak detected!\n"));
   temp.arena.used = temp.original_used;
 }
 

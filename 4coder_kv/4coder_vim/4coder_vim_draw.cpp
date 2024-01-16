@@ -168,7 +168,7 @@ function void
 vim_draw_cursor(Application_Links *app, View_ID view, b32 is_active_view, Buffer_ID buffer, Text_Layout_ID text_layout_id, f32 roundness, f32 thickness){
 	
 	if(is_active_view && vim_state.mode == VIM_Visual_Insert){
-		animate_in_n_milliseconds(app, 0);
+		animate_in_n_milliseconds(app, 1000);  // #modified(kv)
 		
 		if(ACTIVE_BLINK(vim_cursor_blink)){
 			Range_i64 range = get_view_range(app, view);
@@ -184,7 +184,7 @@ vim_draw_cursor(Application_Links *app, View_ID view, b32 is_active_view, Buffer
 		}
 		return;
 	}
-	
+
 	b32 has_highlight_range = draw_highlight_range(app, view, buffer, text_layout_id, roundness);
 	if(!has_highlight_range){
 		i32 cursor_sub_id = default_cursor_sub_id();
@@ -192,24 +192,18 @@ vim_draw_cursor(Application_Links *app, View_ID view, b32 is_active_view, Buffer
 		i64 cursor_pos = view_get_cursor_pos(app, view);
 		i64 mark_pos = view_get_mark_pos(app, view);
 		if(is_active_view && vim_lister_view_id == 0){
-			animate_in_n_milliseconds(app, 0);
-			
+			animate_in_n_milliseconds(app, 1000);  // #modified(kv)
 			Rect_f32 rect = text_layout_character_on_screen(app, text_layout_id, cursor_pos);
 			
 			if(ACTIVE_BLINK(vim_cursor_blink) && !vim_is_selecting_register){
 				if(vim_state.mode == VIM_Insert){ rect = rect_split_top_bottom_neg(rect, 5.f).b; }
-				//if(vim_state.mode == VIM_Insert){ rect = rect_split_left_right(rect, 2.f).a; }
 				if(rect.p1 != V2f32(0,0)){
 					vim_nxt_cursor_pos = rect.p1;
 				}
 				
 				Rect_f32 cursor_rect = Rf32_xy_wh(vim_cur_cursor_pos - rect_dim(rect), rect_dim(rect));
+        // note(kv): this draws the normal cursor
 				draw_rectangle_fcolor(app, cursor_rect, roundness, fcolor_id(defcolor_cursor, cursor_sub_id));
-				
-				//Rect_f32 larger = rect_inner(rect, -1.f);
-				//FColor fade_color = fcolor_resolve(fcolor_id(defcolor_cursor, cursor_sub_id));
-				//fade_color = fcolor_change_alpha(fade_color, 255.f*(0.5f*sinf(vim_cursor_blink/3.f) + 0.5f));
-				//draw_rectangle_fcolor(app, larger, roundness, fade_color);
 				
 				if(vim_state.mode != VIM_Insert){
 					paint_text_color_pos(app, text_layout_id, cursor_pos, fcolor_id(defcolor_at_cursor));

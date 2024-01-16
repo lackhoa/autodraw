@@ -68,14 +68,8 @@ osxVirtualAlloc(size_t size)
                                   (vm_address_t*) &data,
                                   size,
                                   VM_FLAGS_ANYWHERE);
-  if (kv_probably(err == KERN_SUCCESS))
-  {
-    return data;
-  }
-  else
-  {
-    return 0;
-  }
+  kv_assert_defend(err == KERN_SUCCESS, return 0;);
+  return data;
 }
 
 internal f32

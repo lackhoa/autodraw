@@ -38,6 +38,7 @@ CUSTOM=f'{HOME}/4ed/code/custom'
 AUTODRAW=f'{HOME}/AutoDraw'
 SOURCE=f'{HERE}/4coder_kv.cpp'
 DEBUG_MODE = True
+DEBUG_MODE_01 = 1 if DEBUG_MODE else 0
 
 try:
     os.chdir(f'{FCODER_USER}')
@@ -50,7 +51,7 @@ try:
 
     INCLUDES=f'-I{HERE}/custom_patch -I{CUSTOM} -I{AUTODRAW}/libs -I{AUTODRAW}/4coder_kv/libs -I{AUTODRAW}/code'
     OPTIMIZATION='-O0' if DEBUG_MODE else '-O2'
-    SYMBOLS=f'-DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 -DKV_DEBUG_MODE={1 if DEBUG_MODE else 0}'
+    SYMBOLS=f'-DOS_MAC=1 -DOS_WINDOWS=0 -DOS_LINUX=0 -DKV_INTERNAL={DEBUG_MODE_01} -DKV_SLOW={DEBUG_MODE_01}'
     arch="-m64"
     debug="-g" if DEBUG_MODE else ""
     opts=f"-Wno-write-strings -Wno-null-dereference -Wno-comment -Wno-switch -Wno-missing-declarations -Wno-logical-op-parentheses {SYMBOLS} {debug} {INCLUDES} {OPTIMIZATION}"
@@ -75,7 +76,7 @@ try:
         sanitize_address = '-fsanitize=address' if ADDRESS_SANITIZER_ON else ''
         preproc_file="4coder_command_metadata.i"
         meta_macros="-DMETA_PASS"
-        if True:
+        if full_rebuild:
             print('preproc_file: Generate')
             run(f'clang++ -I{CUSTOM} {meta_macros} {arch} {opts} {debug} -std=c++11 "{SOURCE}" -E -o {preproc_file}')
             #
@@ -104,8 +105,9 @@ try:
 
         print('Build complete!')
 
-        print('Run verification script')
-        run(f'{AUTODRAW}/tools/find-todo.sh')
+        if full_rebuild:
+            print('Run verification script')
+            run(f'{AUTODRAW}/tools/find-todo.sh')
 
 except Exception as e:
     print(f'Error: {e}')

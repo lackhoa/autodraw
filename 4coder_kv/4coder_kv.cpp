@@ -4,14 +4,14 @@
 #include "4coder_kv_draw.cpp"
 #include "4coder_kv_vim_stuff.cpp"
 #include "4coder_kv_lang_list.h"
-#include "ad_editor.h"
+// #include "ad_editor.h"
 
 // note: Custom layer swapping for testing and trying out.
 // note: Please enable only one layer, or else it explodes!
-#if KV_DEBUG_MODE
-#    define USE_LAYER_kv               0
+#if KV_INTERNAL
+#    define USE_LAYER_kv               1
 #    define USE_LAYER_fleury_lite      0
-#    define USE_LAYER_fleury           1
+#    define USE_LAYER_fleury           0
 #    define USE_LAYER_default_bindings 0
 #else
 #    define USE_LAYER_kv               1
@@ -63,8 +63,7 @@ void kv_open_startup_files(Application_Links *app)
 #if USE_LAYER_fleury || USE_LAYER_fleury_lite
   char *startup_file = "~/AutoDraw/4coder_kv/4coder_fleury/4coder_fleury_plots_demo.cpp";
 #else
-  // char *startup_file = "~/notes/note.skm";
-  char *startup_file = "~/AutoDraw/4coder_kv/4coder_fleury/4coder_fleury_plots_demo.cpp";
+  char *startup_file = "~/notes/note.skm";
 #endif
 
   Buffer_ID buffer = create_buffer(app, SCu8(startup_file), 0);
@@ -167,17 +166,17 @@ function void kvInitQuailTable(Application_Links *app)
   QUAIL_DEFRULE(";;;", ";;");
   //
   QUAIL_DEFRULE("11", "!");
+  QUAIL_DEFRULE("22", "@");
   QUAIL_DEFRULE("33", "#");
   QUAIL_DEFRULE("44", "$");
   QUAIL_DEFRULE("55", "%");
   QUAIL_DEFRULE("77", "&");
   QUAIL_DEFRULE("88", "*");
-  //
   kv_quail_defrule(app, "99", "()", 1,0,1);
-  QUAIL_DEFRULE("00", ")");
+  // QUAIL_DEFRULE("00", /*(*/")");  // I wanna type "0"
   //
   kv_quail_defrule(app, "[", "[]", 0,0,1);
-  //
+  // {
   kv_quail_defrule(app, "[[", "{}", 1,1,1);
   QUAIL_DEFRULE("]]", "}");
   //
@@ -457,15 +456,18 @@ kv_custom_layer_init(Application_Links *app)
   F4_Index_Initialize();
   // NOTE(rjf): Register languages.
   F4_RegisterLanguages();
-  
+ 
+  /*
   {// AutoDraw code, which has to be run in a main thread unfortunately because it creates a window
     char *todo_autodraw_path = (char *)"/Users/khoa/AutoDraw/build";
     adMainFcoder(todo_autodraw_path);
   }
 
-  gb_mutex_init(&var_mutex);
+  // gb_mutex_init(&var_mutex);
+  */
 }
 
+/*
 CUSTOM_COMMAND_SIG(ad_toggle_test)
 CUSTOM_DOC("test ad integration")
 {
@@ -473,6 +475,7 @@ CUSTOM_DOC("test ad integration")
   ad_test_boolean = !ad_test_boolean;
   gb_mutex_unlock(&var_mutex);
 }
+*/
 
 void custom_layer_init(Application_Links *app)
 {

@@ -246,6 +246,26 @@ kv_render_buffer(Application_Links *app, Frame_Info frame_info, View_ID view_id,
   }
 }
 
+function void
+kv_draw_test_hud(Application_Links *app, Face_ID face_id, Text_Layout_ID text_layout_id, Rect_f32 rect)
+{
+  Face_Metrics face_metrics = get_face_metrics(app, face_id);
+  f32 line_height = face_metrics.line_height;
+  
+  draw_rectangle_fcolor(app, rect, 0.f, f_black);
+  
+  Scratch_Block scratch(app);
+  
+  Rect_f32 r = get_cursor_rect(app, text_layout_id);
+  Fancy_Line list = {};
+  push_fancy_stringf(scratch, &list, f_pink , "cursor dim: ");
+  push_fancy_stringf(scratch, &list, f_white, "[(%.0f, %.0f), (%.0f, %.0f)]; ",
+                     r.x0, r.y0, r.x1, r.y1);
+  
+  Vec2_f32 p = rect.p0;
+  draw_fancy_line(app, face_id, fcolor_zero(), &list, p);
+}
+
 function Render_Caller_Function kv_render_caller;
 function void
 kv_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
@@ -312,18 +332,27 @@ kv_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view)
 		block_copy_struct(&scroll.position, &delta.point);
 		view_set_buffer_scroll(app, view, scroll, SetBufferScroll_NoCursorChange);
 	}
-	if(delta.still_animating){ animate_in_n_milliseconds(app, 0); }
+	if(delta.still_animating)
+  {
+    animate_in_n_milliseconds(app, 0);
+  }
 	Buffer_Point buffer_point = scroll.position;
 	Text_Layout_ID text_layout_id = text_layout_create(app, buffer, region, buffer_point);
 
-	if(show_line_number_margins){
-      vim_draw_line_number_margin(app, view, buffer, face_id, text_layout_id, line_number_rect);
-	}else{
+	if(show_line_number_margins)
+    vim_draw_line_number_margin(app, view, buffer, face_id, text_layout_id, line_number_rect);
+	else
 		draw_rectangle_fcolor(app, line_number_rect, 0.f, fcolor_id(defcolor_back));
-	}
-
+	
 	kv_render_buffer(app, frame_info, view, face_id, buffer, text_layout_id, region);
 
+  if (KV_INTERNAL)
+  {// my test hud
+    Rect_f32_Pair pair = layout_fps_hud_on_bottom(region, line_height);
+		kv_draw_test_hud(app, face_id, text_layout_id, pair.max);
+		region = pair.min;
+  }
+  
 	text_layout_free(app, text_layout_id);
 	draw_set_clip(app, prev_clip);
 }
