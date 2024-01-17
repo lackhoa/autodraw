@@ -6,21 +6,22 @@ from subprocess import PIPE, STDOUT
 import sys
 import time
 
-def run(command, update_env={}):
-    # print(command)
+def run(command, timed=True, update_env={}):
+    print(command)
     begin = time.time()
     env = os.environ.copy()
     env.update(update_env)
     process = subprocess.run(command, shell=True, capture_output=True, env=env)
 
-    end = time.time()
-    print(f'Time taken: {end - begin:.3f} seconds')
     if len(process.stdout):
         print(process.stdout.decode("utf-8"))
     if len(process.stderr):
         print(process.stderr.decode("utf-8"))
     if process.returncode != 0:
         exit(1)
+    elif timed:
+        end = time.time()
+        print(f'Time taken: {end - begin:.3f} seconds')
     print()
     return process
 
@@ -34,7 +35,8 @@ def mtime(path):
 HOME=os.path.expanduser("~")
 HERE = os.path.dirname(os.path.realpath(__file__))
 FCODER_USER=f'{HOME}/4coder'
-CUSTOM=f'{HOME}/4ed/code/custom'
+FCODER_ROOT=f'{HOME}/4ed'
+CUSTOM=f'{FCODER_ROOT}/code/custom'
 AUTODRAW=f'{HOME}/AutoDraw'
 SOURCE=f'{HERE}/4coder_kv.cpp'
 DEBUG_MODE = True
@@ -88,20 +90,21 @@ try:
             print('Meta-generator: Run')
             run(f'"{CUSTOM}/metadata_generator" -R "{CUSTOM}" "{os.getcwd()}/{preproc_file}"')
 
-        print('custom_4coder.so: Compile & Link')
+        print('custom_4coder.o: Compile')
         run(f'ccache clang++ -c "{SOURCE}" -I"{CUSTOM}" {arch} {opts} {debug} -std=c++11 -fPIC -o custom_4coder.o {sanitize_address}')
-        #
-        FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
-        run(f'clang++ "custom_4coder.o" "{AUTODRAW}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
+        # todo: #removeme no need to link produce so anymore
+        # FRAMEWORKS="-framework Metal -framework Cocoa -framework QuartzCore"
+        # run(f'clang++ "custom_4coder.o" "{AUTODRAW}/build/autodraw.o" -shared -o "custom_4coder.so" {FRAMEWORKS} {sanitize_address}')
         if not DEBUG_MODE:
             print(f'Move binary to stable')
-            run(f'mv custom_4coder.so ~/4coder_stable/')
+            run(f'mv custom_4coder.o ~/4coder_stable/')
 
         print("NOTE: Setup 4coder config files")
-        run(f'ln -sf "{HERE}/config.4coder" "{FCODER_USER}/config.4coder"')
-        run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_USER}/themes/theme-kv.4coder"')
+        run(f'ln -sf "{HERE}/config.4coder" "{FCODER_USER}/config.4coder"', timed=False)
+        run(f'ln -sf "{HERE}/theme-kv.4coder" "{FCODER_USER}/themes/theme-kv.4coder"', timed=False)
 
-        run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')
+        print("NOTE: trigger 4ed rebuild")
+        run(f'{FCODER_ROOT}/code/kv-build.py')
 
         print('Build complete!')
 
@@ -111,3 +114,5 @@ try:
 
 except Exception as e:
     print(f'Error: {e}')
+finally:
+    run(f'rm -f "{CUSTOM}/metadata_generator.o" "{CUSTOM}/metadata_generator" {preproc_file}')

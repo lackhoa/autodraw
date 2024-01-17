@@ -25,17 +25,14 @@ BUFFER_HOOK_SIG(kv_new_file)
 	return 0;
 }
 
-inline void 
-kv_test_cursor(Application_Links *app)
+#if KV_INTERNAL
+inline void
+kv_fiddle(Application_Links *app)
 {
-  if (0)
-  {
-    // NOTE(kv): test cursor
-    GET_VIEW_AND_BUFFER;
-    u64 roundness = (u64)gb_clamp(get_current_column(app), 0, 50);
-    def_set_config_u64(app, vars_save_string_lit("cursor_roundness"), roundness);
-  }
+  f32 linum = get_current_line(app);
+  // kv_set_fiddle_value(linum);
 }
+#endif
 
 function Tick_Function kv_tick;
 function void kv_tick(Application_Links *app, Frame_Info frame_info)
@@ -92,8 +89,11 @@ function void kv_tick(Application_Links *app, Frame_Info frame_info)
     }
   }
  
-  if (KV_INTERNAL)
-    kv_test_cursor(app);
+#if KV_INTERNAL
+ 
+  kv_fiddle(app);
+  
+#endif
 }
 
 BUFFER_HOOK_SIG(kv_begin_buffer)

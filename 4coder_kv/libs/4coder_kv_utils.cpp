@@ -1,6 +1,8 @@
 #pragma once
 
-#include "kv.h"
+#define KV_IMPLEMENTATION
+#    include "kv.h"
+#undef KV_IMPLEMENTATION
 #include "4coder_default_include.cpp"
 
 #define GET_VIEW_AND_BUFFER \

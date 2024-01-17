@@ -54,7 +54,7 @@ function void kvInitShiftedTable()
 #undef INSERT
 }
 
-void kv_open_startup_files(Application_Links *app)
+function void kv_open_startup_files(Application_Links *app)
 {
   set_hot_directory(app, SCu8("/Users/khoa/AutoDraw/4coder_kv/"));
   load_project(app);
@@ -386,7 +386,8 @@ function void kv_vim_bindings(Application_Links *app)
 #undef BIND
 }
 
-void default_bindings_custom_layer_init(Application_Links *app)
+function void 
+default_bindings_custom_layer_init(Application_Links *app)
 {
     Thread_Context *tctx = get_thread_context(app);
     
@@ -477,7 +478,8 @@ CUSTOM_DOC("test ad integration")
 }
 */
 
-void custom_layer_init(Application_Links *app)
+extern "C" void
+custom_layer_init(Application_Links *app)
 {
 #if USE_LAYER_kv
   kv_custom_layer_init(app);
